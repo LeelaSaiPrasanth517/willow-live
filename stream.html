@@ -72,7 +72,7 @@ body {
 
 
 /* =========================================================
-   MATCH HEADER
+   MATCH
    ========================================================= */
 
 .match-head {
@@ -105,13 +105,13 @@ body {
     font-weight: 700;
 }
 
-.upcoming-badge {
+.status-badge {
     display: inline-block;
     margin-top: 12px;
     padding: 6px 10px;
     border-radius: 20px;
-    background: #1e2b39;
-    color: #8fc7ff;
+    background: #222;
+    color: #aaa;
     font-size: 11px;
     font-weight: 700;
 }
@@ -162,9 +162,16 @@ body {
     background: #000;
 }
 
+.player video {
+    width: 100%;
+    display: block;
+    background: #000;
+    max-height: 70vh;
+}
+
 
 /* =========================================================
-   STREAM SECTION
+   STREAMS
    ========================================================= */
 
 .streams {
@@ -203,6 +210,12 @@ body {
     margin-top: 4px;
 }
 
+.stream-type {
+    color: #666;
+    font-size: 10px;
+    margin-top: 4px;
+}
+
 .watch {
     border: 0;
     background: #5865f2;
@@ -224,20 +237,20 @@ body {
 
 
 /* =========================================================
-   STATUS
+   PLAYER MESSAGE
    ========================================================= */
 
 .player-message {
-    padding: 14px;
+    padding: 12px 14px;
     color: #aaa;
-    font-size: 13px;
+    font-size: 12px;
     border-top: 1px solid #222;
     background: #080808;
 }
 
 
 /* =========================================================
-   EMPTY / ERROR
+   EMPTY
    ========================================================= */
 
 .empty {
@@ -254,7 +267,7 @@ body {
    MOBILE
    ========================================================= */
 
-@media(max-width: 600px) {
+@media(max-width:600px) {
 
     .header {
         height: 60px;
@@ -281,10 +294,6 @@ body {
 
     .watch {
         width: 100%;
-    }
-
-    .player-header {
-        gap: 10px;
     }
 
 }
@@ -327,7 +336,7 @@ body {
 
 
     <!-- =====================================================
-         MATCH
+         MATCH HEADER
          ===================================================== -->
 
     <section
@@ -343,7 +352,7 @@ body {
 
 
     <!-- =====================================================
-         VIDEO PLAYER
+         PLAYER
          ===================================================== -->
 
     <section
@@ -373,7 +382,7 @@ body {
 
 
         <iframe
-            id="video"
+            id="videoFrame"
             title="Cricketive Stream"
             allowfullscreen
             allow="
@@ -384,6 +393,13 @@ body {
             "
             referrerpolicy="no-referrer-when-downgrade"
         ></iframe>
+
+
+        <video
+            id="videoPlayer"
+            controls
+            playsinline
+        ></video>
 
 
         <div
@@ -471,9 +487,7 @@ async function load() {
         );
 
 
-    if (
-        !matchId
-    ) {
+    if (!matchId) {
 
         matchEl.innerHTML =
             `
@@ -490,7 +504,7 @@ async function load() {
     try {
 
         /* =================================================
-           LOAD MATCH
+           MATCH
            ================================================= */
 
         const {
@@ -506,30 +520,17 @@ async function load() {
             .maybeSingle();
 
 
-        if (
-            matchError
-        ) {
-
+        if (matchError) {
             throw matchError;
-
         }
 
 
-        if (
-            !match
-        ) {
+        if (!match) {
 
             matchEl.innerHTML =
                 `
                     <div class="empty">
                         Match not found.
-                    </div>
-                `;
-
-            streamEl.innerHTML =
-                `
-                    <div class="empty">
-                        No streams available.
                     </div>
                 `;
 
@@ -542,11 +543,7 @@ async function load() {
             `${match.team1} vs ${match.team2} | Cricketive`;
 
 
-        /* =================================================
-           MATCH HEADER
-           ================================================= */
-
-        const startTime =
+        const time =
             match.start_time
                 ? formatDate(
                     match.start_time
@@ -594,12 +591,10 @@ async function load() {
                     )}
 
                     ${
-                        startTime
+                        time
                             ? `
                                 <br>
-                                ${esc(
-                                    startTime
-                                )}
+                                ${esc(time)}
                               `
                             : ""
                     }
@@ -620,21 +615,17 @@ async function load() {
 
                 ${
                     isLive
-
                         ? `
                             <span class="live-badge">
                                 🔴 LIVE
                             </span>
                           `
-
                         : `
-                            <span class="upcoming-badge">
-                                ${
-                                    esc(
-                                        match.status ||
-                                        "MATCH"
-                                    )
-                                }
+                            <span class="status-badge">
+                                ${esc(
+                                    match.status ||
+                                    "MATCH"
+                                )}
                             </span>
                           `
                 }
@@ -643,7 +634,7 @@ async function load() {
 
 
         /* =================================================
-           LOAD STREAMS
+           STREAMS
            ================================================= */
 
         const {
@@ -651,9 +642,7 @@ async function load() {
             error: streamError
         } = await db
             .from("streams")
-            .select(
-                "*"
-            )
+            .select("*")
             .eq(
                 "match_id",
                 matchId
@@ -670,12 +659,8 @@ async function load() {
             );
 
 
-        if (
-            streamError
-        ) {
-
+        if (streamError) {
             throw streamError;
-
         }
 
 
@@ -699,10 +684,6 @@ async function load() {
         }
 
 
-        /* =================================================
-           RENDER STREAMS
-           ================================================= */
-
         streamEl.innerHTML =
             streams
                 .map(
@@ -710,7 +691,7 @@ async function load() {
                         stream,
                         index
                     ) =>
-                        createStream(
+                        createStreamRow(
                             stream,
                             index
                         )
@@ -718,29 +699,10 @@ async function load() {
                 .join("");
 
 
-        /*
-         * If there is exactly one stream,
-         * automatically select it.
-         *
-         * This makes the WATCH MATCH flow smoother.
-         */
-
-        if (
-            streams.length === 1
-        ) {
-
-            playStream(
-                streams[0],
-                0
-            );
-
-        }
-
-
     } catch (error) {
 
         console.error(
-            "Stream page error:",
+            "Cricketive stream error:",
             error
         );
 
@@ -766,22 +728,39 @@ async function load() {
 
 
 /* =========================================================
-   CREATE STREAM ROW
+   STREAM ROW
    ========================================================= */
 
-function createStream(
+function createStreamRow(
     stream,
     index
 ) {
 
-    const language =
-        stream.language ||
-        "Unknown";
+    const url =
+        String(
+            stream.embed_url ||
+            ""
+        ).trim();
 
 
-    const name =
-        stream.stream_name ||
-        "Stream";
+    const type =
+        detectStreamType(
+            url
+        );
+
+
+    let buttonText =
+        "▶ WATCH";
+
+
+    if (
+        type === "direct"
+    ) {
+
+        buttonText =
+            "▶ OPEN STREAM";
+
+    }
 
 
     return `
@@ -797,7 +776,8 @@ function createStream(
                 <div class="stream-language">
 
                     ${esc(
-                        language
+                        stream.language ||
+                        "Unknown"
                     )}
 
                 </div>
@@ -806,7 +786,19 @@ function createStream(
                 <div class="stream-name">
 
                     ${esc(
-                        name
+                        stream.stream_name ||
+                        "Stream"
+                    )}
+
+                </div>
+
+
+                <div class="stream-type">
+
+                    ${esc(
+                        getStreamTypeLabel(
+                            type
+                        )
                     )}
 
                 </div>
@@ -817,13 +809,13 @@ function createStream(
             <button
                 class="watch"
                 type="button"
-                onclick='playStream(
+                onclick='openStream(
                     ${JSON.stringify(stream)},
                     ${index}
                 )'
             >
 
-                ▶ WATCH
+                ${buttonText}
 
             </button>
 
@@ -836,86 +828,605 @@ function createStream(
 
 
 /* =========================================================
-   PLAY STREAM
+   OPEN STREAM
    ========================================================= */
 
-function playStream(
+function openStream(
     stream,
     index
 ) {
 
-    const embedUrl =
+    const url =
         String(
             stream.embed_url ||
             ""
         ).trim();
 
 
-    if (
-        !embedUrl
-    ) {
+    if (!url) {
 
-        document.getElementById(
-            "playerMessage"
-        ).textContent =
-            "This stream does not have a valid embed URL.";
-
-        document.getElementById(
-            "player"
-        ).style.display =
-            "block";
+        showPlayerMessage(
+            "This stream does not have a valid URL."
+        );
 
         return;
 
     }
 
 
+    const type =
+        detectStreamType(
+            url
+        );
+
+
+    /* =====================================================
+       DIRECT WEBPAGE
+       ===================================================== */
+
+    if (
+        type === "direct"
+    ) {
+
+        /*
+         * Open external player/webpage directly.
+         */
+
+        window.location.href =
+            url;
+
+        return;
+
+    }
+
+
+    /* =====================================================
+       YOUTUBE
+       ===================================================== */
+
+    if (
+        type === "youtube"
+    ) {
+
+        const embedUrl =
+            youtubeEmbedUrl(
+                url
+            );
+
+
+        if (!embedUrl) {
+
+            window.location.href =
+                url;
+
+            return;
+
+        }
+
+
+        showIframe(
+            embedUrl,
+            stream.stream_name ||
+            "YouTube Stream"
+        );
+
+
+        setActiveButton(
+            index
+        );
+
+        return;
+
+    }
+
+
+    /* =====================================================
+       MP4
+       ===================================================== */
+
+    if (
+        type === "mp4"
+    ) {
+
+        showVideo(
+            url,
+            stream.stream_name ||
+            "Video Stream"
+        );
+
+
+        setActiveButton(
+            index
+        );
+
+        return;
+
+    }
+
+
+    /* =====================================================
+       HLS
+       ===================================================== */
+
+    if (
+        type === "hls"
+    ) {
+
+        /*
+         * Native HLS support exists on Safari/iOS.
+         *
+         * For other browsers, use the iframe/direct
+         * fallback rather than pretending it will work.
+         */
+
+        const video =
+            document.getElementById(
+                "videoPlayer"
+            );
+
+
+        if (
+            video.canPlayType(
+                "application/vnd.apple.mpegurl"
+            )
+        ) {
+
+            showVideo(
+                url,
+                stream.stream_name ||
+                "Live Stream"
+            );
+
+
+            setActiveButton(
+                index
+            );
+
+        } else {
+
+            window.location.href =
+                url;
+
+        }
+
+        return;
+
+    }
+
+
+    /* =====================================================
+       EMBED
+       ===================================================== */
+
+    showIframe(
+        url,
+        stream.stream_name ||
+        "Cricketive Stream"
+    );
+
+
+    setActiveButton(
+        index
+    );
+
+}
+
+
+/* =========================================================
+   DETECT STREAM TYPE
+   ========================================================= */
+
+function detectStreamType(
+    url
+) {
+
+    const value =
+        String(
+            url ||
+            ""
+        )
+        .trim()
+        .toLowerCase();
+
+
+    /* YouTube */
+
+    if (
+        value.includes(
+            "youtube.com"
+        ) ||
+        value.includes(
+            "youtu.be"
+        )
+    ) {
+
+        return "youtube";
+
+    }
+
+
+    /* HLS */
+
+    if (
+        value.includes(
+            ".m3u8"
+        )
+    ) {
+
+        return "hls";
+
+    }
+
+
+    /* MP4 */
+
+    if (
+        value.includes(
+            ".mp4"
+        )
+    )
+    ) {
+
+        return "mp4";
+
+    }
+
+
+    /*
+     * Known webpage-style stream pages.
+     *
+     * We open these directly because they are not
+     * reliable iframe targets.
+     */
+
+    if (
+        value.includes(
+            "blogspot.com"
+        ) ||
+        value.includes(
+            "blogger.com"
+        ) ||
+        value.includes(
+            "ckdlive"
+        )
+    ) {
+
+        return "direct";
+
+    }
+
+
+    /*
+     * Everything else is treated as an embed.
+     */
+
+    return "embed";
+
+}
+
+
+/* =========================================================
+   STREAM TYPE LABEL
+   ========================================================= */
+
+function getStreamTypeLabel(
+    type
+) {
+
+    switch (type) {
+
+        case "youtube":
+            return "YouTube";
+
+        case "hls":
+            return "HLS";
+
+        case "mp4":
+            return "MP4";
+
+        case "direct":
+            return "External Player";
+
+        case "embed":
+            return "Embedded Player";
+
+        default:
+            return "Stream";
+
+    }
+
+}
+
+
+/* =========================================================
+   YOUTUBE EMBED
+   ========================================================= */
+
+function youtubeEmbedUrl(
+    value
+) {
+
+    try {
+
+        const url =
+            new URL(
+                value
+            );
+
+
+        let videoId =
+            "";
+
+
+        /*
+         * youtube.com/watch?v=
+         */
+
+        if (
+            url.hostname.includes(
+                "youtube.com"
+            )
+        ) {
+
+            videoId =
+                url.searchParams.get(
+                    "v"
+                ) || "";
+
+        }
+
+
+        /*
+         * youtu.be/VIDEO_ID
+         */
+
+        if (
+            url.hostname ===
+            "youtu.be"
+        ) {
+
+            videoId =
+                url.pathname
+                    .replace(
+                        /^\//,
+                        ""
+                    )
+                    .split("/")[0];
+
+        }
+
+
+        /*
+         * youtube.com/embed/VIDEO_ID
+         */
+
+        if (
+            url.pathname.includes(
+                "/embed/"
+            )
+        ) {
+
+            videoId =
+                url.pathname
+                    .split("/embed/")[1]
+                    .split("/")[0];
+
+        }
+
+
+        if (
+            !videoId
+        ) {
+
+            return null;
+
+        }
+
+
+        return (
+            "https://www.youtube.com/embed/" +
+            encodeURIComponent(
+                videoId
+            ) +
+            "?autoplay=1"
+        );
+
+
+    } catch {
+
+        return null;
+
+    }
+
+}
+
+
+/* =========================================================
+   SHOW IFRAME
+   ========================================================= */
+
+function showIframe(
+    url,
+    title
+) {
+
     const player =
         document.getElementById(
             "player"
         );
 
-    const video =
+    const frame =
         document.getElementById(
-            "video"
+            "videoFrame"
         );
 
-    const title =
+    const video =
+        document.getElementById(
+            "videoPlayer"
+        );
+
+    const playerTitle =
         document.getElementById(
             "playerTitle"
         );
 
-    const message =
-        document.getElementById(
-            "playerMessage"
-        );
+
+    video.pause();
+    video.removeAttribute(
+        "src"
+    );
+    video.style.display =
+        "none";
 
 
-    /*
-     * Set the player source.
-     */
+    frame.src =
+        url;
 
-    video.src =
-        embedUrl;
-
-
-    title.textContent =
-        stream.stream_name ||
-        stream.language ||
-        "Cricketive Player";
+    frame.style.display =
+        "block";
 
 
-    message.textContent =
-        "Loading stream...";
+    playerTitle.textContent =
+        title;
 
 
     player.style.display =
         "block";
 
 
-    /*
-     * Highlight selected stream.
-     */
+    player.scrollIntoView({
+        behavior:
+            "smooth",
+        block:
+            "center"
+    });
+
+
+    showPlayerMessage(
+        "Loading stream..."
+    );
+
+}
+
+
+/* =========================================================
+   SHOW VIDEO
+   ========================================================= */
+
+function showVideo(
+    url,
+    title
+) {
+
+    const player =
+        document.getElementById(
+            "player"
+        );
+
+    const frame =
+        document.getElementById(
+            "videoFrame"
+        );
+
+    const video =
+        document.getElementById(
+            "videoPlayer"
+        );
+
+    const playerTitle =
+        document.getElementById(
+            "playerTitle"
+        );
+
+
+    frame.src =
+        "about:blank";
+
+    frame.style.display =
+        "none";
+
+
+    video.src =
+        url;
+
+    video.style.display =
+        "block";
+
+
+    playerTitle.textContent =
+        title;
+
+
+    player.style.display =
+        "block";
+
+
+    video.play().catch(
+        () => {}
+    );
+
+
+    player.scrollIntoView({
+        behavior:
+            "smooth",
+        block:
+            "center"
+    });
+
+
+    showPlayerMessage(
+        "Loading stream..."
+    );
+
+}
+
+
+/* =========================================================
+   CLOSE PLAYER
+   ========================================================= */
+
+function closePlayer() {
+
+    const player =
+        document.getElementById(
+            "player"
+        );
+
+    const frame =
+        document.getElementById(
+            "videoFrame"
+        );
+
+    const video =
+        document.getElementById(
+            "videoPlayer"
+        );
+
+
+    frame.src =
+        "about:blank";
+
+
+    video.pause();
+
+    video.removeAttribute(
+        "src"
+    );
+
+
+    player.style.display =
+        "none";
+
+}
+
+
+/* =========================================================
+   ACTIVE BUTTON
+   ========================================================= */
+
+function setActiveButton(
+    index
+) {
 
     document
         .querySelectorAll(
@@ -938,7 +1449,9 @@ function playStream(
         );
 
 
-    if (row) {
+    if (
+        row
+    ) {
 
         const button =
             row.querySelector(
@@ -946,7 +1459,9 @@ function playStream(
             );
 
 
-        if (button) {
+        if (
+            button
+        ) {
 
             button.classList.add(
                 "active"
@@ -956,60 +1471,25 @@ function playStream(
 
     }
 
-
-    /*
-     * Scroll to player.
-     */
-
-    player.scrollIntoView({
-        behavior:
-            "smooth",
-
-        block:
-            "center"
-    });
-
-
-    /*
-     * Give iframe a moment to load.
-     */
-
-    setTimeout(
-        () => {
-
-            message.textContent =
-                "If the player does not load, the stream embed may not allow iframe playback.";
-
-        },
-        2500
-    );
-
 }
 
 
 /* =========================================================
-   CLOSE PLAYER
+   PLAYER MESSAGE
    ========================================================= */
 
-function closePlayer() {
+function showPlayerMessage(
+    message
+) {
 
-    const player =
+    const element =
         document.getElementById(
-            "player"
-        );
-
-    const video =
-        document.getElementById(
-            "video"
+            "playerMessage"
         );
 
 
-    video.src =
-        "about:blank";
-
-
-    player.style.display =
-        "none";
+    element.textContent =
+        message;
 
 }
 
@@ -1054,7 +1534,7 @@ function formatDate(
 
 
 /* =========================================================
-   HTML ESCAPE
+   ESCAPE HTML
    ========================================================= */
 
 function esc(
