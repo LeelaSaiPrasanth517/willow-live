@@ -121,6 +121,8 @@ async function fetchFixtures(apiToken) {
     api_token: apiToken,
     "filter[starts_between]":
       `${startDate},${endDate}`,
+  "filter[leagues]":
+    "3,5,10",
     include:
       "localteam,visitorteam,venue"
   });
