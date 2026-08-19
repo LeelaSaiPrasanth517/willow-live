@@ -4,9 +4,7 @@ export default async (request) => {
 
     if (!apiToken) {
       return json(
-        {
-          error: "SPORTMONKS_API_TOKEN is missing."
-        },
+        { error: "SPORTMONKS_API_TOKEN is missing." },
         500
       );
     }
@@ -14,49 +12,34 @@ export default async (request) => {
     const url = new URL(request.url);
     const mode = url.searchParams.get("mode") || "matches";
 
-
     /* =========================================================
-       MATCHES
+       FIXTURES
        ========================================================= */
 
     if (mode === "matches") {
+      const matches = await fetchFixtures(apiToken);
 
-      const matches = await fetchCurrentFixtures(apiToken);
-
-      return json({
-        matches
-      });
+      return json({ matches });
     }
-
 
     /* =========================================================
        LIVE SCORES
        ========================================================= */
 
     if (mode === "scores") {
+      const matches = await fetchLivescores(apiToken);
 
-      const matches =
-        await fetchLiveFixtures(apiToken);
-
-      return json({
-        matches
-      });
+      return json({ matches });
     }
 
-
     return json(
-      {
-        error: "Unknown mode."
-      },
+      { error: "Unknown mode." },
       400
     );
 
   } catch (error) {
 
-    console.error(
-      "Cricketive Sportmonks error:",
-      error
-    );
+    console.error(error);
 
     return json(
       {
@@ -71,17 +54,10 @@ export default async (request) => {
 
 
 /* =============================================================
-   FETCH CURRENT + UPCOMING FIXTURES
+   UPCOMING FIXTURES
    ============================================================= */
 
-async function fetchCurrentFixtures(apiToken) {
-
-  /*
-   * Current date.
-   *
-   * We request a window around today instead of downloading
-   * the entire historical fixture database.
-   */
+async function fetchFixtures(apiToken) {
 
   const now = new Date();
 
@@ -101,28 +77,17 @@ async function fetchCurrentFixtures(apiToken) {
       )
     );
 
-
-  const allFixtures = [];
-
-
-  /*
-   * Sportmonks paginates fixture results.
-   */
+  const fixtures = [];
 
   let page = 1;
 
   const maxPages = 20;
-
 
   for (
     let i = 0;
     i < maxPages;
     i++
   ) {
-
-    const endpoint =
-      "https://cricket.sportmonks.com/api/v2.0/fixtures";
-
 
     const params =
       new URLSearchParams({
@@ -141,119 +106,68 @@ async function fetchCurrentFixtures(apiToken) {
 
       });
 
-
     const response =
       await fetch(
-        `${endpoint}?${params.toString()}`
+        `https://cricket.sportmonks.com/api/v2.0/fixtures?${params}`
       );
-
 
     if (!response.ok) {
 
       throw new Error(
-        `Sportmonks returned HTTP ${response.status}`
+        `Sportmonks fixtures returned HTTP ${response.status}`
       );
     }
-
 
     const result =
       await response.json();
 
-
-    if (!result.data) {
-
-      throw new Error(
-        result.message ||
-        "Sportmonks returned no fixture data."
-      );
+    if (!Array.isArray(result.data)) {
+      break;
     }
 
-
-    /*
-     * Sportmonks can return either an array or,
-     * depending on the endpoint response, a single object.
-     */
-
-    const fixtures =
-      Array.isArray(result.data)
-        ? result.data
-        : [result.data];
-
-
-    allFixtures.push(
-      ...fixtures
+    fixtures.push(
+      ...result.data
     );
-
-
-    /*
-     * Stop when there are no more pages.
-     */
 
     const meta =
       result.meta;
 
-
     if (
       !meta ||
-      !meta.current_page ||
-      !meta.last_page ||
       meta.current_page >= meta.last_page
     ) {
-
       break;
     }
-
 
     page++;
   }
 
 
   /*
-   * Convert Sportmonks fixtures into the format
-   * already used by Cricketive.
+   * IMPORTANT:
+   *
+   * Fixtures are NOT allowed to determine Live status.
+   *
+   * Everything returned here is Upcoming unless
+   * it is clearly finished.
    */
 
-  const normalized =
-    allFixtures
-      .map(normalizeSportmonksFixture)
-      .filter(Boolean)
-      .filter(
-        match =>
-          !isPlaceholder(match.team1) &&
-          !isPlaceholder(match.team2)
-      );
-
-
-  /*
-   * Remove duplicates.
-   */
-
-  const unique =
-    new Map();
-
-
-  for (
-    const match of normalized
-  ) {
-
-    unique.set(
-      match.api_match_id,
-      match
+  return fixtures
+    .map(normalizeFixture)
+    .filter(Boolean)
+    .filter(
+      match =>
+        !isPlaceholder(match.team1) &&
+        !isPlaceholder(match.team2)
     );
-  }
-
-
-  return Array.from(
-    unique.values()
-  );
 }
 
 
 /* =============================================================
-   LIVE FIXTURES
+   LIVE SCORES
    ============================================================= */
 
-async function fetchLiveFixtures(apiToken) {
+async function fetchLivescores(apiToken) {
 
   const params =
     new URLSearchParams({
@@ -262,21 +176,21 @@ async function fetchLiveFixtures(apiToken) {
         apiToken,
 
       include:
-        "localteam,visitorteam,venue"
+        "runs,batting,bowling,localteam,visitorteam,venue"
 
     });
 
 
   const response =
     await fetch(
-      `https://cricket.sportmonks.com/api/v2.0/livescores?${params.toString()}`
+      `https://cricket.sportmonks.com/api/v2.0/livescores?${params}`
     );
 
 
   if (!response.ok) {
 
     throw new Error(
-      `Sportmonks returned HTTP ${response.status}`
+      `Sportmonks livescores returned HTTP ${response.status}`
     );
   }
 
@@ -285,227 +199,265 @@ async function fetchLiveFixtures(apiToken) {
     await response.json();
 
 
-  const fixtures =
-    Array.isArray(result.data)
-      ? result.data
-      : [];
+  if (!Array.isArray(result.data)) {
+
+    return [];
+  }
 
 
-  return fixtures
-    .map(normalizeSportmonksFixture)
+  return result.data
+    .map(normalizeLiveMatch)
     .filter(Boolean);
 }
 
 
 /* =============================================================
-   NORMALIZE SPORTMONKS FIXTURE
+   NORMALIZE FIXTURE
    ============================================================= */
 
-function normalizeSportmonksFixture(fixture) {
+function normalizeFixture(fixture) {
 
   if (
     !fixture ||
-    !fixture.id
+    !fixture.id ||
+    !fixture.starting_at
   ) {
-
     return null;
   }
 
 
-  /*
-   * Sportmonks may return team information through
-   * the included localteam / visitorteam objects.
-   */
-
   const localTeam =
-    getIncludedTeam(
+    getTeam(
       fixture.localteam
     );
 
 
   const visitorTeam =
-    getIncludedTeam(
+    getTeam(
       fixture.visitorteam
     );
 
 
   const team1 =
     localTeam.name ||
-    fixture.localteam_name ||
     "";
 
 
   const team2 =
     visitorTeam.name ||
-    fixture.visitorteam_name ||
     "";
 
-
-  /*
-   * If the API didn't provide team names,
-   * don't create a broken database record.
-   */
 
   if (
     !team1 ||
     !team2
   ) {
-
     return null;
   }
 
 
-  const startTime =
-    fixture.starting_at ||
-    null;
+  const rawStatus =
+    String(
+      fixture.status ||
+      ""
+    ).toLowerCase();
 
 
-  if (!startTime) {
+  /*
+   * A fixture marked finished stays Finished.
+   *
+   * Otherwise it is Upcoming.
+   *
+   * We deliberately DO NOT use fixture.live.
+   */
 
-    return null;
+  let status =
+    "Upcoming";
+
+
+  if (
+    rawStatus.includes("finished") ||
+    rawStatus.includes("completed") ||
+    rawStatus.includes("abandoned") ||
+    rawStatus.includes("cancelled")
+  ) {
+
+    status = "Finished";
   }
-
-
-  const status =
-    getMatchStatus(
-      fixture
-    );
-
-
-  const competition =
-    fixture.league_name ||
-    fixture.league?.name ||
-    "Cricket";
-
-
-  const venue =
-    fixture.venue?.name ||
-    fixture.venue_name ||
-    "";
 
 
   return {
 
-    /*
-     * This is the value your Supabase
-     * api_match_id column will use.
-     */
-
     api_match_id:
       String(fixture.id),
 
-
     title:
       `${team1} vs ${team2}`,
-
 
     team1,
 
     team2,
 
+    competition:
+      fixture.league?.name ||
+      fixture.league_name ||
+      "Cricket",
 
-    competition,
-
-
-    venue,
-
+    venue:
+      fixture.venue?.name ||
+      fixture.venue_name ||
+      "",
 
     start_time:
-      startTime,
-
+      fixture.starting_at,
 
     match_time:
-      startTime,
-
+      fixture.starting_at,
 
     status,
 
-
     team1_logo:
       localTeam.image_path ||
-      localTeam.logo_url ||
       "",
-
 
     team2_logo:
       visitorTeam.image_path ||
-      visitorTeam.logo_url ||
       "",
 
-
-    /*
-     * Streams are managed separately.
-     */
-
-    embed_url: ""
+    embed_url:
+      ""
   };
 }
 
 
 /* =============================================================
-   GET TEAM OBJECT
+   NORMALIZE LIVE MATCH
    ============================================================= */
 
-function getIncludedTeam(team) {
+function normalizeLiveMatch(fixture) {
 
-  if (!team) {
-
-    return {};
+  if (
+    !fixture ||
+    !fixture.id
+  ) {
+    return null;
   }
 
 
-  /*
-   * Depending on the API response,
-   * the included relationship can be
-   * returned as an object or array.
-   */
+  const localTeam =
+    getTeam(
+      fixture.localteam
+    );
 
-  if (Array.isArray(team)) {
 
-    return team[0] || {};
+  const visitorTeam =
+    getTeam(
+      fixture.visitorteam
+    );
+
+
+  const team1 =
+    localTeam.name ||
+    "";
+
+
+  const team2 =
+    visitorTeam.name ||
+    "";
+
+
+  if (
+    !team1 ||
+    !team2
+  ) {
+    return null;
   }
 
 
-  return team;
+  return {
+
+    api_match_id:
+      String(fixture.id),
+
+    title:
+      `${team1} vs ${team2}`,
+
+    team1,
+
+    team2,
+
+    competition:
+      fixture.league?.name ||
+      fixture.league_name ||
+      "Cricket",
+
+    venue:
+      fixture.venue?.name ||
+      fixture.venue_name ||
+      "",
+
+    start_time:
+      fixture.starting_at ||
+      null,
+
+    match_time:
+      fixture.starting_at ||
+      null,
+
+    status:
+      "Live",
+
+    team1_logo:
+      localTeam.image_path ||
+      "",
+
+    team2_logo:
+      visitorTeam.image_path ||
+      "",
+
+    /*
+     * Keep the raw live information available.
+     * We'll use this when building the score display.
+     */
+
+    live:
+      true,
+
+    score:
+      fixture.runs ||
+      [],
+
+    innings:
+      fixture.runs ||
+      [],
+
+    note:
+      fixture.note ||
+      "",
+
+    match_status:
+      fixture.status ||
+      ""
+
+  };
 }
 
 
 /* =============================================================
-   MATCH STATUS
+   TEAM HELPER
    ============================================================= */
 
-function getMatchStatus(fixture) {
+function getTeam(team) {
 
-  /*
-   * Sportmonks provides a live boolean.
-   */
-
-  if (
-    fixture.live === true
-  ) {
-
-    return "Live";
+  if (!team) {
+    return {};
   }
 
-
-  const status =
-    String(
-      fixture.status || ""
-    ).toLowerCase();
-
-
-  if (
-    status.includes("finished") ||
-    status.includes("completed") ||
-    status.includes("abandoned") ||
-    status.includes("cancelled")
-  ) {
-
-    return "Finished";
+  if (Array.isArray(team)) {
+    return team[0] || {};
   }
 
-
-  return "Upcoming";
+  return team;
 }
 
 
@@ -516,10 +468,8 @@ function getMatchStatus(fixture) {
 function isPlaceholder(value) {
 
   if (!value) {
-
     return true;
   }
-
 
   return /^(tbc|tbd|to be confirmed|to be decided)$/i
     .test(
@@ -537,18 +487,15 @@ function formatDate(date) {
   const year =
     date.getUTCFullYear();
 
-
   const month =
     String(
       date.getUTCMonth() + 1
     ).padStart(2, "0");
 
-
   const day =
     String(
       date.getUTCDate()
     ).padStart(2, "0");
-
 
   return `${year}-${month}-${day}`;
 }
@@ -573,7 +520,7 @@ function json(
           "application/json",
 
         "cache-control":
-          "public, max-age=60"
+          "public, max-age=30"
       }
     }
   );
