@@ -56,13 +56,21 @@ async function handleCricketAPI(request, env) {
 
     // Upcoming / scheduled matches
     if (mode === "matches") {
-      const matches = await fetchFixtures(apiToken);
 
-      return json({
-        matches
-      });
-    }
+  const response = await fetch(
+    `https://cricket.sportmonks.com/api/v2.0/fixtures?api_token=${encodeURIComponent(apiToken)}&filter[leagues]=3,5,10&include=localteam,visitorteam,venue`
+  );
 
+  const result = await response.json();
+
+  return json({
+    status: response.status,
+    data: result.data || [],
+    meta: result.meta || null,
+    message: result.message || null,
+    info: result.info || null
+  });
+}
 
     // Live matches
     if (mode === "scores") {
