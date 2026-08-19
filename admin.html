@@ -549,8 +549,8 @@
 
             <p class="sync-note">
 
-                Matches are loaded from
-                Sportmonks.
+                Matches are loaded automatically from
+                SportScore.
 
                 You only need to add stream
                 links.
@@ -812,39 +812,32 @@ function showAdmin() {
 
 async function syncMatches() {
 
-
     const message =
-        document
-            .getElementById("syncMessage");
-
+        document.getElementById("syncMessage");
 
     const button =
-        document
-            .getElementById("syncButton");
+        document.getElementById("syncButton");
 
 
     message.textContent =
-        "Syncing matches...";
-
+        "Syncing SportScore matches...";
 
     button.disabled = true;
-
-
-    button.textContent =
-        "SYNCING...";
+    button.textContent = "SYNCING...";
 
 
     try {
 
-
-        /* -----------------------------------------------
-           Fetch Sportmonks fixtures
-           ----------------------------------------------- */
-
+        /* =================================================
+           FETCH SPORTScore DATA
+           ================================================= */
 
         const response =
             await fetch(
-                "/api/cricket-matches?mode=matches"
+                "/api/cricket-matches?mode=matches",
+                {
+                    cache: "no-store"
+                }
             );
 
 
@@ -852,9 +845,7 @@ async function syncMatches() {
             await response.json();
 
 
-        if (
-            !response.ok
-        ) {
+        if (!response.ok) {
 
             throw new Error(
                 payload.error ||
@@ -865,225 +856,375 @@ async function syncMatches() {
 
 
         const matches =
-            payload.matches || [];
+            Array.isArray(payload.matches)
+                ? payload.matches
+                : [];
 
 
-        if (
-            !matches.length
-        ) {
+        if (!matches.length) {
 
             message.textContent =
-                "No current or upcoming matches returned.";
-
-            await cleanStaleMatches();
+                "No matches returned from SportScore.";
 
             await loadMatches();
 
             return;
+
         }
 
 
+        /* =================================================
+           GET EXISTING MATCHES
+           ================================================= */
 
-        /* -----------------------------------------------
-           Convert API matches to Supabase rows
-           ----------------------------------------------- */
-
-
-        const rows =
-            matches
-
-                .filter(match => {
-
-                    if (
-                        !match ||
-                        !match.api_match_id ||
-                        !match.team1 ||
-                        !match.team2 ||
-                        !match.start_time
-                    ) {
-
-                        return false;
-
-                    }
+        const {
+            data: existingMatches,
+            error: existingError
+        } = await client
+            .from("Matches")
+            .select("*");
 
 
-                    if (
-                        isPlaceholder(
-                            match.team1
-                        ) ||
-                        isPlaceholder(
-                            match.team2
-                        )
-                    ) {
-
-                        return false;
-
-                    }
+        if (existingError) {
+            throw existingError;
+        }
 
 
-                    return true;
-
-                })
-
-
-                .map(match => ({
-
-                    api_match_id:
-                        String(
-                            match.api_match_id
-                        ),
+        const existing =
+            existingMatches || [];
 
 
-                    title:
-                        match.title ||
-                        `${match.team1} vs ${match.team2}`,
+        /*
+         * Match existing rows using:
+         *
+         * 1. sportscore_url
+         * 2. team names
+         *
+         * This preserves existing UUIDs and therefore
+         * preserves Streams.match_id relationships.
+         */
+
+        const bySportScoreUrl = {};
+        const byTeams = {};
 
 
-                    team1:
-                        match.team1,
+        existing.forEach(match => {
+
+            if (match.sportscore_url) {
+
+                bySportScoreUrl[
+                    match.sportscore_url
+                ] = match;
+
+            }
 
 
-                    team2:
-                        match.team2,
+            const teamKey =
+                makeTeamKey(
+                    match.team1,
+                    match.team2
+                );
 
 
-                    competition:
-                        match.competition ||
-                        "Cricket",
+            if (teamKey) {
+
+                byTeams[
+                    teamKey
+                ] = match;
+
+            }
+
+        });
 
 
-                    match_time:
-                        match.start_time,
+        /* =================================================
+           CONVERT SPORTScore MATCHES
+           ================================================= */
+
+        const rows = [];
 
 
-                    start_time:
-                        match.start_time,
+        for (const match of matches) {
+
+            if (
+                !match ||
+                !match.home ||
+                !match.away ||
+                !match.time
+            ) {
+                continue;
+            }
 
 
-                    venue:
-                        match.venue ||
-                        "",
+            if (
+                isPlaceholder(
+                    match.home
+                ) ||
+                isPlaceholder(
+                    match.away
+                )
+            ) {
+                continue;
+            }
 
 
-                    team1_logo:
-                        match.team1_logo ||
-                        "",
+            /*
+             * SportScore gives relative URLs such as:
+             *
+             * /cricket/match/england-vs-pakistan/
+             */
+
+            const sportscoreUrl =
+                match.url
+                    ? (
+                        match.url.startsWith("http")
+                            ? match.url
+                            : `https://sportscore.com${match.url}`
+                      )
+                    : null;
 
 
-                    team2_logo:
-                        match.team2_logo ||
-                        "",
+            const teamKey =
+                makeTeamKey(
+                    match.home,
+                    match.away
+                );
 
 
-                    /*
-                     * The fixture endpoint does NOT
-                     * determine Live status.
-                     *
-                     * Live matches will be handled
-                     * separately through the scores
-                     * endpoint.
-                     */
+            /*
+             * Try to find an existing row.
+             */
+
+            let existingMatch = null;
 
 
-                    status:
-                        match.status === "Finished"
-                            ? "Finished"
-                            : "Upcoming",
+            if (sportscoreUrl) {
+
+                existingMatch =
+                    bySportScoreUrl[
+                        sportscoreUrl
+                    ] || null;
+
+            }
 
 
-                    /*
-                     * Do NOT overwrite stream URLs
-                     * during a match sync.
-                     *
-                     * Streams live in their own table.
-                     */
+            /*
+             * If this match was already in the database
+             * before SportScore was introduced, fall back
+             * to team names.
+             */
 
-                    embed_url:
-                        ""
+            if (!existingMatch && teamKey) {
 
-                }));
+                existingMatch =
+                    byTeams[
+                        teamKey
+                    ] || null;
+
+            }
 
 
+            /*
+             * Convert SportScore status to Cricketive
+             * database status.
+             */
 
-        if (
-            !rows.length
-        ) {
+            const status =
+                normalizeSportScoreStatus(
+                    match.status
+                );
+
+
+            /*
+             * Use SportScore URL as the new stable API ID.
+             */
+
+            const apiMatchId =
+                sportscoreUrl
+                    ? `sportscore:${sportscoreUrl}`
+                    : `sportscore:${teamKey}`;
+
+
+            const row = {
+
+                api_match_id:
+                    apiMatchId,
+
+
+                title:
+                    `${match.home} vs ${match.away}`,
+
+
+                team1:
+                    match.home,
+
+
+                team2:
+                    match.away,
+
+
+                competition:
+                    match.competition ||
+                    "Cricket",
+
+
+                match_time:
+                    match.time,
+
+
+                start_time:
+                    match.time,
+
+
+                venue:
+                    "",
+
+
+                status:
+                    status,
+
+
+                embed_url:
+                    "",
+
+
+                team1_logo:
+                    match.home_logo ||
+                    "",
+
+
+                team2_logo:
+                    match.away_logo ||
+                    "",
+
+
+                sportscore_url:
+                    sportscoreUrl
+
+            };
+
+
+            /*
+             * IMPORTANT:
+             *
+             * If this match already exists, include its
+             * existing UUID.
+             *
+             * That means Streams.match_id remains valid.
+             */
+
+            if (existingMatch) {
+
+                row.id =
+                    existingMatch.id;
+
+            }
+
+
+            rows.push(row);
+
+        }
+
+
+        if (!rows.length) {
 
             message.textContent =
                 "No valid matches returned.";
 
-            await cleanStaleMatches();
-
             await loadMatches();
 
             return;
-        }
-
-
-
-        /* -----------------------------------------------
-           Upsert matches
-           ----------------------------------------------- */
-
-
-        const { error } =
-            await client
-                .from("Matches")
-                .upsert(
-
-                    rows,
-
-                    {
-                        onConflict:
-                            "api_match_id"
-                    }
-
-                );
-
-
-        if (
-            error
-        ) {
-
-            throw error;
 
         }
 
 
+        /* =================================================
+           UPSERT
+           =================================================
 
-        /* -----------------------------------------------
-           CLEAN STALE LIVE MATCHES
-           ----------------------------------------------- */
+           We use the primary key because matched rows
+           already contain their existing UUID.
+
+           New rows don't contain id, so Supabase creates
+           a new UUID automatically.
+        */
+
+        const {
+            error: upsertError
+        } = await client
+            .from("Matches")
+            .upsert(
+                rows,
+                {
+                    onConflict: "id"
+                }
+            );
 
 
-        await cleanStaleMatches();
+        if (upsertError) {
+            throw upsertError;
+        }
 
 
+        /* =================================================
+           MESSAGE
+           ================================================= */
 
-        /* -----------------------------------------------
-           Done
-           ----------------------------------------------- */
-
-
-        message.textContent =
-            `Synced ${rows.length} match${
-                rows.length === 1
-                    ? ""
-                    : "es"
-            }.`;
+        const liveCount =
+            rows.filter(
+                match =>
+                    match.status === "Live"
+            ).length;
 
 
+        const upcomingCount =
+            rows.filter(
+                match =>
+                    match.status === "Upcoming"
+            ).length;
+
+
+        const finishedCount =
+            rows.filter(
+                match =>
+                    match.status === "Finished"
+            ).length;
+
+
+        message.innerHTML =
+            `
+                Synced
+                <strong>${rows.length}</strong>
+                matches.
+
+                <br>
+
+                🔴 Live:
+                ${liveCount}
+
+                &nbsp;·&nbsp;
+
+                📅 Upcoming:
+                ${upcomingCount}
+
+                &nbsp;·&nbsp;
+
+                ✅ Finished:
+                ${finishedCount}
+            `;
+
+
+        /* =================================================
+           RELOAD ADMIN MATCH LIST
+           ================================================= */
 
         await loadMatches();
 
 
-    } catch (
-        error
-    ) {
-
+    } catch (error) {
 
         console.error(
-            "Sync error:",
+            "SportScore sync error:",
             error
         );
 
@@ -1096,10 +1237,8 @@ async function syncMatches() {
 
     } finally {
 
-
         button.disabled =
             false;
-
 
         button.textContent =
             "SYNC MATCHES";
@@ -1108,6 +1247,88 @@ async function syncMatches() {
 
 }
 
+
+/* =========================================================
+   SPORTScore STATUS
+   ========================================================= */
+
+function normalizeSportScoreStatus(
+    status
+) {
+
+    const value =
+        String(
+            status || ""
+        )
+            .trim()
+            .toLowerCase();
+
+
+    if (
+        value === "live" ||
+        value === "in_progress" ||
+        value === "in progress"
+    ) {
+
+        return "Live";
+
+    }
+
+
+    if (
+        value === "finished" ||
+        value === "ended" ||
+        value === "completed"
+    ) {
+
+        return "Finished";
+
+    }
+
+
+    return "Upcoming";
+
+}
+
+
+/* =========================================================
+   TEAM KEY
+   ========================================================= */
+
+function makeTeamKey(
+    team1,
+    team2
+) {
+
+    if (
+        !team1 ||
+        !team2
+    ) {
+
+        return "";
+
+    }
+
+
+    return (
+
+        String(team1)
+            .trim()
+            .toLowerCase()
+
+        +
+
+        "|"
+
+        +
+
+        String(team2)
+            .trim()
+            .toLowerCase()
+
+    );
+
+}
 
 
 /* =========================================================
