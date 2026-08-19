@@ -818,64 +818,37 @@ async function syncMatches() {
     const button =
         document.getElementById("syncButton");
 
-
-    message.textContent =
-        "Syncing SportScore matches...";
-
+    message.textContent = "Syncing SportScore matches...";
     button.disabled = true;
     button.textContent = "SYNCING...";
 
-
     try {
-
-        /* =================================================
-           FETCH SPORTScore DATA
-           ================================================= */
 
         const response =
             await fetch(
                 "/api/cricket-matches?mode=matches",
-                {
-                    cache: "no-store"
-                }
+                { cache: "no-store" }
             );
 
-
-        const payload =
-            await response.json();
-
+        const payload = await response.json();
 
         if (!response.ok) {
-
             throw new Error(
-                payload.error ||
-                "Could not fetch matches."
+                payload.error || "Could not fetch matches."
             );
-
         }
-
 
         const matches =
             Array.isArray(payload.matches)
                 ? payload.matches
                 : [];
 
-
         if (!matches.length) {
-
             message.textContent =
                 "No matches returned from SportScore.";
-
             await loadMatches();
-
             return;
-
         }
-
-
-        /* =================================================
-           GET EXISTING MATCHES
-           ================================================= */
 
         const {
             data: existingMatches,
@@ -884,410 +857,178 @@ async function syncMatches() {
             .from("Matches")
             .select("*");
 
+        if (existingError) throw existingError;
 
-        if (existingError) {
-            throw existingError;
-        }
-
-
-        const existing =
-            existingMatches || [];
-
-
-        /*
-         * Match existing rows using:
-         *
-         * 1. sportscore_url
-         * 2. team names
-         *
-         * This preserves existing UUIDs and therefore
-         * preserves Streams.match_id relationships.
-         */
-
+        const existing = existingMatches || [];
         const bySportScoreUrl = {};
         const byTeams = {};
 
-
         existing.forEach(match => {
-
             if (match.sportscore_url) {
-
-                bySportScoreUrl[
-                    match.sportscore_url
-                ] = match;
-
+                bySportScoreUrl[normalizeUrl(match.sportscore_url)] = match;
             }
 
+            const teamKey = makeTeamKey(match.team1, match.team2);
 
-            const teamKey =
-                makeTeamKey(
-                    match.team1,
-                    match.team2
-                );
-
-
-            if (teamKey) {
-
-                byTeams[
-                    teamKey
-                ] = match;
-
+            if (teamKey && !byTeams[teamKey]) {
+                byTeams[teamKey] = match;
             }
-
         });
 
-
-        /* =================================================
-           CONVERT SPORTScore MATCHES
-           ================================================= */
-
         const rows = [];
-
+        const matchedExistingIds = new Set();
 
         for (const match of matches) {
 
-            if (
-                !match ||
-                !match.home ||
-                !match.away ||
-                !match.time
-            ) {
-                continue;
-            }
+            const team1 = String(match.home || "").trim();
+            const team2 = String(match.away || "").trim();
+            const startTime = match.time || null;
 
+            if (!team1 || !team2 || !startTime) continue;
+            if (isPlaceholder(team1) || isPlaceholder(team2)) continue;
 
-            if (
-                isPlaceholder(
-                    match.home
-                ) ||
-                isPlaceholder(
-                    match.away
+            const sportscoreUrl = match.url
+                ? normalizeUrl(
+                    match.url.startsWith("http")
+                        ? match.url
+                        : `https://sportscore.com${match.url}`
                 )
-            ) {
-                continue;
-            }
+                : null;
 
+            const teamKey = makeTeamKey(team1, team2);
 
-            /*
-             * SportScore gives relative URLs such as:
-             *
-             * /cricket/match/england-vs-pakistan/
-             */
-
-            const sportscoreUrl =
-                match.url
-                    ? (
-                        match.url.startsWith("http")
-                            ? match.url
-                            : `https://sportscore.com${match.url}`
-                      )
+            let existingMatch =
+                sportscoreUrl
+                    ? (bySportScoreUrl[sportscoreUrl] || null)
                     : null;
 
-
-            const teamKey =
-                makeTeamKey(
-                    match.home,
-                    match.away
-                );
-
-
-            /*
-             * Try to find an existing row.
-             */
-
-            let existingMatch = null;
-
-
-            if (sportscoreUrl) {
-
-                existingMatch =
-                    bySportScoreUrl[
-                        sportscoreUrl
-                    ] || null;
-
-            }
-
-
-            /*
-             * If this match was already in the database
-             * before SportScore was introduced, fall back
-             * to team names.
-             */
-
             if (!existingMatch && teamKey) {
-
-                existingMatch =
-                    byTeams[
-                        teamKey
-                    ] || null;
-
+                existingMatch = byTeams[teamKey] || null;
             }
 
-
-            /*
-             * Convert SportScore status to Cricketive
-             * database status.
-             */
-
-            const status =
-                normalizeSportScoreStatus(
-                    match.status
-                );
-
-
-            /*
-             * Use SportScore URL as the new stable API ID.
-             */
-
-            const apiMatchId =
-                sportscoreUrl
-                    ? `sportscore:${sportscoreUrl}`
-                    : `sportscore:${teamKey}`;
-
+            if (existingMatch?.id) {
+                matchedExistingIds.add(existingMatch.id);
+            }
 
             const row = {
-
-                api_match_id:
-                    apiMatchId,
-
-
-                title:
-                    `${match.home} vs ${match.away}`,
-
-
-                team1:
-                    match.home,
-
-
-                team2:
-                    match.away,
-
-
-                competition:
-                    match.competition ||
-                    "Cricket",
-
-
-                match_time:
-                    match.time,
-
-
-                start_time:
-                    match.time,
-
-
-                venue:
-                    "",
-
-
-                status:
-                    status,
-
-
-                embed_url:
-                    "",
-
-
-                team1_logo:
-                    match.home_logo ||
-                    "",
-
-
-                team2_logo:
-                    match.away_logo ||
-                    "",
-
-
-                sportscore_url:
-                    sportscoreUrl
-
+                api_match_id: sportscoreUrl
+                    ? `sportscore:${sportscoreUrl}`
+                    : `sportscore:${teamKey}`,
+                title: `${team1} vs ${team2}`,
+                team1,
+                team2,
+                competition: match.competition || "Cricket",
+                match_time: startTime,
+                start_time: startTime,
+                venue: "",
+                status: normalizeSportScoreStatus(match.status),
+                embed_url: "",
+                team1_logo: match.home_logo || "",
+                team2_logo: match.away_logo || "",
+                sportscore_url: sportscoreUrl
             };
 
-
-            /*
-             * IMPORTANT:
-             *
-             * If this match already exists, include its
-             * existing UUID.
-             *
-             * That means Streams.match_id remains valid.
-             */
-
-            if (existingMatch) {
-
-                row.id =
-                    existingMatch.id;
-
+            if (existingMatch?.id) {
+                row.id = existingMatch.id;
             }
 
-
             rows.push(row);
-
         }
-
 
         if (!rows.length) {
-
             message.textContent =
-                "No valid matches returned.";
-
+                "SportScore returned matches, but none could be converted.";
             await loadMatches();
-
             return;
-
         }
 
-
-        /* =================================================
-           UPSERT
-           =================================================
-
-           We use the primary key because matched rows
-           already contain their existing UUID.
-
-           New rows don't contain id, so Supabase creates
-           a new UUID automatically.
-        */
-
-        const {
-            error: upsertError
-        } = await client
+        const { error: saveError } = await client
             .from("Matches")
-            .upsert(
-                rows,
-                {
-                    onConflict: "id"
-                }
-            );
+            .upsert(rows, { onConflict: "id" });
 
+        if (saveError) throw saveError;
 
-        if (upsertError) {
-            throw upsertError;
+        // Mark old API matches that are already past as Finished.
+        const now = new Date();
+
+        const legacyIds = existing
+            .filter(match =>
+                match.api_match_id &&
+                !String(match.api_match_id).startsWith("sportscore:") &&
+                match.start_time &&
+                new Date(match.start_time) < now &&
+                !matchedExistingIds.has(match.id)
+            )
+            .map(match => match.id);
+
+        if (legacyIds.length) {
+            const { error: cleanupError } = await client
+                .from("Matches")
+                .update({ status: "Finished" })
+                .in("id", legacyIds);
+
+            if (cleanupError) {
+                console.warn(
+                    "Could not clean legacy matches:",
+                    cleanupError
+                );
+            }
         }
 
+        const liveCount = rows.filter(m => m.status === "Live").length;
+        const upcomingCount = rows.filter(m => m.status === "Upcoming").length;
+        const finishedCount = rows.filter(m => m.status === "Finished").length;
 
-        /* =================================================
-           MESSAGE
-           ================================================= */
-
-        const liveCount =
-            rows.filter(
-                match =>
-                    match.status === "Live"
-            ).length;
-
-
-        const upcomingCount =
-            rows.filter(
-                match =>
-                    match.status === "Upcoming"
-            ).length;
-
-
-        const finishedCount =
-            rows.filter(
-                match =>
-                    match.status === "Finished"
-            ).length;
-
-
-        message.innerHTML =
-            `
-                Synced
-                <strong>${rows.length}</strong>
-                matches.
-
-                <br>
-
-                🔴 Live:
-                ${liveCount}
-
-                &nbsp;·&nbsp;
-
-                📅 Upcoming:
-                ${upcomingCount}
-
-                &nbsp;·&nbsp;
-
-                ✅ Finished:
-                ${finishedCount}
-            `;
-
-
-        /* =================================================
-           RELOAD ADMIN MATCH LIST
-           ================================================= */
+        message.innerHTML = `
+            Synced <strong>${rows.length}</strong> matches.
+            <br>
+            🔴 Live: ${liveCount}
+            &nbsp;·&nbsp;
+            📅 Upcoming: ${upcomingCount}
+            &nbsp;·&nbsp;
+            ✅ Finished: ${finishedCount}
+        `;
 
         await loadMatches();
 
-
     } catch (error) {
 
-        console.error(
-            "SportScore sync error:",
-            error
-        );
-
-
-        message.textContent =
-            `Sync failed: ${
-                error.message
-            }`;
-
+        console.error("SportScore sync error:", error);
+        message.textContent = `Sync failed: ${error.message}`;
 
     } finally {
 
-        button.disabled =
-            false;
-
-        button.textContent =
-            "SYNC MATCHES";
-
+        button.disabled = false;
+        button.textContent = "SYNC MATCHES";
     }
-
 }
 
 
 /* =========================================================
-   SPORTScore STATUS
+   SPORT SCORE STATUS
    ========================================================= */
 
-function normalizeSportScoreStatus(
-    status
-) {
+function normalizeSportScoreStatus(status) {
 
-    const value =
-        String(
-            status || ""
-        )
-            .trim()
-            .toLowerCase();
-
+    const value = String(status || "").trim().toLowerCase();
 
     if (
         value === "live" ||
         value === "in_progress" ||
         value === "in progress"
     ) {
-
         return "Live";
-
     }
-
 
     if (
         value === "finished" ||
         value === "ended" ||
         value === "completed"
     ) {
-
         return "Finished";
-
     }
 
-
     return "Upcoming";
-
 }
 
 
@@ -1295,46 +1036,45 @@ function normalizeSportScoreStatus(
    TEAM KEY
    ========================================================= */
 
-function makeTeamKey(
-    team1,
-    team2
-) {
+function makeTeamKey(team1, team2) {
 
-    if (
-        !team1 ||
-        !team2
-    ) {
-
-        return "";
-
-    }
-
+    if (!team1 || !team2) return "";
 
     return (
-
-        String(team1)
-            .trim()
-            .toLowerCase()
-
-        +
-
-        "|"
-
-        +
-
-        String(team2)
-            .trim()
-            .toLowerCase()
-
+        String(team1).trim().toLowerCase() +
+        "|" +
+        String(team2).trim().toLowerCase()
     );
+}
 
+
+/* =========================================================
+   NORMALIZE SPORT SCORE URL
+   ========================================================= */
+
+function normalizeUrl(url) {
+
+    if (!url) return null;
+
+    const value = String(url).trim();
+
+    if (!value) return null;
+
+    if (value.startsWith("http://")) {
+        return value.replace("http://", "https://");
+    }
+
+    if (value.startsWith("/")) {
+        return `https://sportscore.com${value}`;
+    }
+
+    return value;
 }
 
 
 /* =========================================================
    CLEAN STALE LIVE MATCHES
    ========================================================= */
-
 
 async function cleanStaleMatches() {
 
