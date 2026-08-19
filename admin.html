@@ -167,6 +167,22 @@
             display: none !important;
         }
 
+
+        .toolbar { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+        .match-header { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+        .stream-box { margin-top:16px; padding-top:14px; border-top:1px solid #292929; }
+        .stream-row { display:grid; grid-template-columns:120px 1fr 150px auto; gap:8px; align-items:center; margin-top:8px; }
+        .stream-row input, .stream-row select { margin:0; }
+        .stream-list { margin-top:12px; }
+        .empty { color:#888; padding:10px 0; }
+        .badge-live { background:#8b1e1e; }
+        .badge-upcoming { background:#234d2d; }
+        .sync-note { color:#999; font-size:12px; line-height:1.5; margin-top:8px; }
+        @media (max-width:700px) {
+            .stream-row { grid-template-columns:1fr; }
+            .match-header { flex-direction:column; }
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 20px 12px;
@@ -373,491 +389,294 @@
 
 
 <script>
-
-    /*
-     * ==========================================
-     * SUPABASE CONFIGURATION
-     * ==========================================
-     */
-
-    const SUPABASE_URL =
-        "https://qkzwzdyahwzcwtqgcbud.supabase.co";
-
-    const SUPABASE_ANON_KEY =
-        "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
-
-
-    const client =
-        supabase.createClient(
-            SUPABASE_URL,
-            SUPABASE_ANON_KEY
-        );
-
-
-    /*
-     * ==========================================
-     * LOGIN
-     * ==========================================
-     */
+    const SUPABASE_URL = "https://qkzwzdyahwzcwtqgcbud.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     async function login() {
-
-        const email =
-            document.getElementById("email").value.trim();
-
-        const password =
-            document.getElementById("password").value;
-
-        const message =
-            document.getElementById("loginMessage");
-
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+        const message = document.getElementById("loginMessage");
 
         if (!email || !password) {
-
-            message.textContent =
-                "Enter your email and password.";
-
+            message.textContent = "Enter your email and password.";
             return;
         }
-
 
         message.textContent = "Signing in...";
-
-
-        const { data, error } =
-            await client.auth.signInWithPassword({
-                email: email,
-                password: password
-            });
-
+        const { error } = await client.auth.signInWithPassword({ email, password });
 
         if (error) {
-
-            message.textContent =
-                error.message;
-
+            message.textContent = error.message;
             return;
         }
-
-
         showAdmin();
-
     }
-
-
-    /*
-     * ==========================================
-     * LOGOUT
-     * ==========================================
-     */
 
     async function logout() {
-
         await client.auth.signOut();
-
-        document.getElementById("adminPanel")
-            .style.display = "none";
-
-        document.getElementById("loginPanel")
-            .classList.remove("hidden");
-
+        document.getElementById("adminPanel").style.display = "none";
+        document.getElementById("loginPanel").classList.remove("hidden");
     }
-
-
-    /*
-     * ==========================================
-     * CHECK LOGIN
-     * ==========================================
-     */
 
     async function checkSession() {
-
-        const { data } =
-            await client.auth.getSession();
-
-
-        if (data.session) {
-
-            showAdmin();
-
-        }
-
+        const { data } = await client.auth.getSession();
+        if (data.session) showAdmin();
     }
-
 
     function showAdmin() {
-
-        document.getElementById("loginPanel")
-            .classList.add("hidden");
-
-        document.getElementById("adminPanel")
-            .style.display = "block";
-
+        document.getElementById("loginPanel").classList.add("hidden");
+        document.getElementById("adminPanel").style.display = "block";
         loadMatches();
-
     }
 
+    async function syncMatches() {
+        const message = document.getElementById("syncMessage");
+        message.textContent = "Syncing matches...";
 
-    /*
-     * ==========================================
-     * LOAD MATCHES
-     * ==========================================
-     */
+        try {
+            const response = await fetch("/.netlify/functions/cricket-matches");
+            const payload = await response.json();
+
+            if (!response.ok) throw new Error(payload.error || "Could not fetch matches.");
+
+            const matches = payload.matches || [];
+            if (!matches.length) {
+                message.textContent = "No live or upcoming matches were returned.";
+                await loadMatches();
+                return;
+            }
+
+            const rows = matches.map(m => ({
+                api_match_id: m.id,
+                title: m.name || `${m.teams?.[0] || "Team 1"} vs ${m.teams?.[1] || "Team 2"}`,
+                team1: m.teams?.[0] || "",
+                team2: m.teams?.[1] || "",
+                competition: m.series_name || "",
+                match_time: m.dateTimeGMT ? new Date(m.dateTimeGMT).toLocaleString() : "",
+                start_time: m.dateTimeGMT || null,
+                venue: m.venue || "",
+                team1_logo: m.teamInfo?.[0]?.img || "",
+                team2_logo: m.teamInfo?.[1]?.img || "",
+                status: m.matchEnded ? "Finished" : (m.matchStarted ? "Live" : "Upcoming"),
+                embed_url: ""
+            }));
+
+            const { error } = await client.from("Matches").upsert(rows, { onConflict: "api_match_id" });
+            if (error) throw error;
+
+            message.textContent = `Synced ${rows.length} match${rows.length === 1 ? "" : "es"}.`;
+            await loadMatches();
+        } catch (error) {
+            console.error(error);
+            message.textContent = `Sync failed: ${error.message}`;
+        }
+    }
 
     async function loadMatches() {
+        const liveContainer = document.getElementById("liveMatches");
+        const upcomingContainer = document.getElementById("upcomingMatches");
+        liveContainer.innerHTML = "Loading...";
+        upcomingContainer.innerHTML = "Loading...";
 
-        const container =
-            document.getElementById("matches");
-
-        container.innerHTML = "Loading...";
-
-
-        const { data, error } =
-            await client
-                .from("Matches")
-                .select("*")
-                .order("created_at", {
-                    ascending: false
-                });
-
+        const { data, error } = await client
+            .from("Matches")
+            .select("*")
+            .in("status", ["Live", "Upcoming"])
+            .order("start_time", { ascending: true });
 
         if (error) {
-
-            container.innerHTML =
-                `<p style="color:#ff6666;">
-                    ${escapeHtml(error.message)}
-                </p>`;
-
+            const msg = `<p style="color:#ff6666;">${escapeHtml(error.message)}</p>`;
+            liveContainer.innerHTML = msg;
+            upcomingContainer.innerHTML = msg;
             return;
         }
 
+        const live = (data || []).filter(m => m.status === "Live");
+        const upcoming = (data || []).filter(m => m.status === "Upcoming");
 
-        if (!data || data.length === 0) {
+        renderMatchList(liveContainer, live, "live");
+        renderMatchList(upcomingContainer, upcoming, "upcoming");
+    }
 
-            container.innerHTML =
-                `<p style="color:#888;">
-                    No matches added yet.
-                </p>`;
-
+    function renderMatchList(container, matches, type) {
+        if (!matches.length) {
+            container.innerHTML = `<div class="empty">No ${type} matches.</div>`;
             return;
         }
-
 
         container.innerHTML = "";
-
-
-        data.forEach(match => {
-
-            const div =
-                document.createElement("div");
-
+        matches.forEach(match => {
+            const div = document.createElement("div");
             div.className = "match";
 
-
             div.innerHTML = `
-
-                <div class="match-title">
-                    ${escapeHtml(match.title)}
+                <div class="match-header">
+                    <div>
+                        <div class="match-title">${escapeHtml(match.title)}</div>
+                        <div class="match-meta">
+                            ${escapeHtml(match.team1)} vs ${escapeHtml(match.team2)}
+                            ${match.competition ? `<br>${escapeHtml(match.competition)}` : ""}
+                            ${match.start_time ? `<br>${formatDate(match.start_time)}` : ""}
+                            ${match.venue ? `<br>${escapeHtml(match.venue)}` : ""}
+                        </div>
+                    </div>
+                    <span class="status ${type === "live" ? "badge-live" : "badge-upcoming"}">
+                        ${escapeHtml(match.status)}
+                    </span>
                 </div>
 
-                <div class="match-meta">
-
-                    ${escapeHtml(match.team1)}
-                    vs
-                    ${escapeHtml(match.team2)}
-
-                    <br>
-
-                    ${escapeHtml(match.competition || "")}
-
-                    <br>
-
-                    ${escapeHtml(match.match_time || "")}
-
-                </div>
-
-                <span class="status">
-                    ${escapeHtml(match.status)}
-                </span>
-
-                <div class="actions">
-
-                    <button
-                        class="secondary"
-                        onclick='editMatch(${JSON.stringify(match)})'>
-                        EDIT
-                    </button>
-
-                    <button
-                        class="danger"
-                        onclick="deleteMatch('${match.id}')">
-                        DELETE
-                    </button>
-
+                <div class="stream-box">
+                    <strong>Streams</strong>
+                    <div id="streams-${match.id}" class="stream-list">Loading streams...</div>
+                    <div class="toolbar">
+                        <button class="secondary" onclick="addStreamForm('${match.id}')">+ ADD STREAM</button>
+                    </div>
+                    <div id="add-stream-${match.id}"></div>
                 </div>
             `;
 
-
             container.appendChild(div);
-
+            loadStreams(match.id);
         });
-
     }
 
-
-    /*
-     * ==========================================
-     * ADD / UPDATE MATCH
-     * ==========================================
-     */
-
-    async function saveMatch() {
-
-        const editId =
-            document.getElementById("editId").value;
-
-
-        const match = {
-
-            title:
-                document.getElementById("title").value.trim(),
-
-            team1:
-                document.getElementById("team1").value.trim(),
-
-            team2:
-                document.getElementById("team2").value.trim(),
-
-            competition:
-                document.getElementById("competition").value.trim(),
-
-            match_time:
-                document.getElementById("match_time").value.trim(),
-
-            status:
-                document.getElementById("status").value,
-
-            embed_url:
-                document.getElementById("embed_url").value.trim()
-
-        };
-
-
-        const message =
-            document.getElementById("formMessage");
-
-
-        if (
-            !match.title ||
-            !match.team1 ||
-            !match.team2 ||
-            !match.embed_url
-        ) {
-
-            message.textContent =
-                "Fill in the title, teams and embed URL.";
-
-            return;
-        }
-
-
-        message.textContent = "Saving...";
-
-
-        let result;
-
-
-        if (editId) {
-
-            result =
-                await client
-                    .from("Matches")
-                    .update(match)
-                    .eq("id", editId);
-
-        } else {
-
-            result =
-                await client
-                    .from("Matches")
-                    .insert([match]);
-
-        }
-
-
-        if (result.error) {
-
-            message.textContent =
-                result.error.message;
-
-            return;
-        }
-
-
-        message.textContent =
-            "Saved successfully!";
-
-
-        resetForm();
-
-        loadMatches();
-
-    }
-
-
-    /*
-     * ==========================================
-     * EDIT MATCH
-     * ==========================================
-     */
-
-    function editMatch(match) {
-
-        document.getElementById("editId").value =
-            match.id;
-
-        document.getElementById("title").value =
-            match.title || "";
-
-        document.getElementById("team1").value =
-            match.team1 || "";
-
-        document.getElementById("team2").value =
-            match.team2 || "";
-
-        document.getElementById("competition").value =
-            match.competition || "";
-
-        document.getElementById("match_time").value =
-            match.match_time || "";
-
-        document.getElementById("status").value =
-            match.status || "Upcoming";
-
-        document.getElementById("embed_url").value =
-            match.embed_url || "";
-
-
-        document.getElementById("formTitle")
-            .textContent = "Edit Match";
-
-        document.getElementById("saveButton")
-            .textContent = "UPDATE MATCH";
-
-        document.getElementById("cancelButton")
-            .classList.remove("hidden");
-
-
-        window.scrollTo({
-            top: 0,
-            behavior: "smooth"
-        });
-
-    }
-
-
-    /*
-     * ==========================================
-     * RESET FORM
-     * ==========================================
-     */
-
-    function resetForm() {
-
-        document.getElementById("editId").value = "";
-
-        document.getElementById("title").value = "";
-
-        document.getElementById("team1").value = "";
-
-        document.getElementById("team2").value = "";
-
-        document.getElementById("competition").value = "";
-
-        document.getElementById("match_time").value = "";
-
-        document.getElementById("status").value =
-            "Upcoming";
-
-        document.getElementById("embed_url").value = "";
-
-
-        document.getElementById("formTitle")
-            .textContent = "Add Match";
-
-        document.getElementById("saveButton")
-            .textContent = "ADD MATCH";
-
-        document.getElementById("cancelButton")
-            .classList.add("hidden");
-
-        document.getElementById("formMessage")
-            .textContent = "";
-
-    }
-
-
-    /*
-     * ==========================================
-     * DELETE MATCH
-     * ==========================================
-     */
-
-    async function deleteMatch(id) {
-
-        if (!confirm(
-            "Are you sure you want to delete this match?"
-        )) {
-            return;
-        }
-
-
-        const { error } =
-            await client
-                .from("Matches")
-                .delete()
-                .eq("id", id);
-
+    async function loadStreams(matchId) {
+        const container = document.getElementById(`streams-${matchId}`);
+        if (!container) return;
+
+        const { data, error } = await client
+            .from("streams")
+            .select("*")
+            .eq("match_id", matchId)
+            .order("created_at", { ascending: true });
 
         if (error) {
-
-            alert(error.message);
-
+            container.innerHTML = `<span style="color:#ff6666;">${escapeHtml(error.message)}</span>`;
             return;
         }
 
+        if (!data || !data.length) {
+            container.innerHTML = `<span style="color:#888;">No streams added yet.</span>`;
+            return;
+        }
 
-        loadMatches();
-
+        container.innerHTML = data.map(stream => `
+            <div class="stream-row">
+                <select id="lang-${stream.id}">
+                    ${languageOption("English", stream.language)}
+                    ${languageOption("Hindi", stream.language)}
+                    ${languageOption("Telugu", stream.language)}
+                    ${languageOption("Tamil", stream.language)}
+                    ${languageOption("Malayalam", stream.language)}
+                    ${languageOption("Kannada", stream.language)}
+                    ${languageOption("Other", stream.language)}
+                </select>
+                <input id="url-${stream.id}" type="url" value="${escapeHtml(stream.embed_url)}" placeholder="https://...">
+                <input id="name-${stream.id}" type="text" value="${escapeHtml(stream.stream_name)}" placeholder="Stream name">
+                <div class="toolbar" style="margin:0;">
+                    <button class="secondary" onclick="updateStream('${stream.id}')">SAVE</button>
+                    <button class="danger" onclick="deleteStream('${stream.id}', '${matchId}')">DELETE</button>
+                </div>
+            </div>
+        `).join("");
     }
 
+    function addStreamForm(matchId) {
+        const container = document.getElementById(`add-stream-${matchId}`);
+        container.innerHTML = `
+            <div class="stream-row">
+                <select id="new-lang-${matchId}">
+                    ${languageOption("English", "English")}
+                    ${languageOption("Hindi", "")}
+                    ${languageOption("Telugu", "")}
+                    ${languageOption("Tamil", "")}
+                    ${languageOption("Malayalam", "")}
+                    ${languageOption("Kannada", "")}
+                    ${languageOption("Other", "")}
+                </select>
+                <input id="new-url-${matchId}" type="url" placeholder="https://your-embed-url...">
+                <input id="new-name-${matchId}" type="text" placeholder="Stream 1">
+                <button class="primary" style="margin-top:0;" onclick="createStream('${matchId}')">ADD</button>
+            </div>
+        `;
+    }
 
-    /*
-     * ==========================================
-     * BASIC HTML ESCAPING
-     * ==========================================
-     */
+    async function createStream(matchId) {
+        const language = document.getElementById(`new-lang-${matchId}`).value;
+        const embed_url = document.getElementById(`new-url-${matchId}`).value.trim();
+        const stream_name = document.getElementById(`new-name-${matchId}`).value.trim() || "Stream";
+
+        if (!embed_url) {
+            alert("Enter a stream embed URL.");
+            return;
+        }
+
+        const { error } = await client.from("streams").insert([{
+            match_id: matchId,
+            language,
+            stream_name,
+            embed_url,
+            active: true
+        }]);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        await loadStreams(matchId);
+        document.getElementById(`add-stream-${matchId}`).innerHTML = "";
+    }
+
+    async function updateStream(streamId) {
+        const language = document.getElementById(`lang-${streamId}`).value;
+        const embed_url = document.getElementById(`url-${streamId}`).value.trim();
+        const stream_name = document.getElementById(`name-${streamId}`).value.trim() || "Stream";
+
+        const { error } = await client.from("streams")
+            .update({ language, embed_url, stream_name })
+            .eq("id", streamId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        alert("Stream updated.");
+    }
+
+    async function deleteStream(streamId, matchId) {
+        if (!confirm("Delete this stream?")) return;
+
+        const { error } = await client.from("streams").delete().eq("id", streamId);
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        await loadStreams(matchId);
+    }
+
+    function languageOption(value, selected) {
+        return `<option value="${value}" ${value === selected ? "selected" : ""}>${value}</option>`;
+    }
+
+    function formatDate(value) {
+        const date = new Date(value);
+        return date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    }
 
     function escapeHtml(value) {
-
         return String(value ?? "")
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
-
     }
 
-
-    /*
-     * ==========================================
-     * START
-     * ==========================================
-     */
-
     checkSession();
-
 </script>
 
 </body>
