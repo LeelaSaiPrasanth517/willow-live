@@ -1,9 +1,12 @@
 export default {
   async fetch(request, env) {
+
     const url = new URL(request.url);
 
-    if (url.pathname === "/api/cricket-matches") {
-      return handleCricketAPI(request);
+    if (
+      url.pathname === "/api/cricket-matches"
+    ) {
+      return handleCricketAPI();
     }
 
     return env.ASSETS.fetch(request);
@@ -12,35 +15,12 @@ export default {
 
 
 /* =========================================================
-   MAIN CRICKET API
+   SPORTScore MATCH FEED
    ========================================================= */
 
-async function handleCricketAPI(request) {
+async function handleCricketAPI() {
 
   try {
-
-    const url =
-      new URL(request.url);
-
-    const mode =
-      url.searchParams.get("mode") || "matches";
-
-
-    if (mode !== "matches") {
-
-      return json(
-        {
-          error: "Unknown mode."
-        },
-        400
-      );
-
-    }
-
-
-    /* =====================================================
-       MAIN SPORTScore MATCH FEED
-       ===================================================== */
 
     const response =
       await fetch(
@@ -71,179 +51,59 @@ async function handleCricketAPI(request) {
 
 
     const matches =
-      Array.isArray(payload.matches)
+      Array.isArray(
+        payload.matches
+      )
         ? payload.matches
         : [];
 
 
-    /* =====================================================
-       ENRICH LIVE MATCHES
-       ===================================================== */
+    /*
+     * Return only the fields Cricketive needs.
+     *
+     * NO SCORE.
+     * NO MATCH-DETAIL API.
+     */
 
-    const enrichedMatches =
-      await Promise.all(
+    const normalized =
+      matches.map(
+        match => ({
 
-        matches.map(
-          async (match) => {
+          home:
+            match.home || "",
 
-            const status =
-              String(
-                match.status || ""
-              )
-                .trim()
-                .toLowerCase();
+          away:
+            match.away || "",
 
+          home_logo:
+            match.home_logo || "",
 
-            /*
-             * Only live matches need the detail request.
-             */
+          away_logo:
+            match.away_logo || "",
 
-            if (
-              status !== "live" ||
-              !match.url
-            ) {
+          status:
+            match.status || "",
 
-              return match;
+          status_text:
+            match.status_text || "",
 
-            }
+          time:
+            match.time || null,
 
+          competition:
+            match.competition ||
+            "Cricket",
 
-            const slug =
-              extractSlug(
-                match.url
-              );
+          competition_logo:
+            match.competition_logo ||
+            "",
 
+          url:
+            match.url || ""
 
-            if (!slug) {
-
-              return match;
-
-            }
-
-
-            try {
-
-              const detail =
-                await fetchMatchDetail(
-                  slug
-                );
-
-
-              /*
-               * Keep scores from the main endpoint
-               * only when they are real cricket scores.
-               */
-
-              let homeScore =
-                validCricketScore(
-                  match.home_score
-                )
-                  ? String(
-                      match.home_score
-                    )
-                  : null;
-
-
-              let awayScore =
-                validCricketScore(
-                  match.away_score
-                )
-                  ? String(
-                      match.away_score
-                    )
-                  : null;
-
-
-              /*
-               * Try the detailed match endpoint.
-               */
-
-              const detailScores =
-                extractValidScores(
-                  detail
-                );
-
-
-              if (
-                detailScores.home !== null
-              ) {
-
-                homeScore =
-                  detailScores.home;
-
-              }
-
-
-              if (
-                detailScores.away !== null
-              ) {
-
-                awayScore =
-                  detailScores.away;
-
-              }
-
-
-              const statusText =
-                extractStatusText(
-                  detail
-                ) ||
-                match.status_text ||
-                "";
-
-
-              return {
-
-                ...match,
-
-                home_score:
-                  homeScore,
-
-                away_score:
-                  awayScore,
-
-                status_text:
-                  statusText,
-
-                detail_loaded:
-                  true
-
-              };
-
-
-            } catch (error) {
-
-              console.error(
-                `SportScore detail lookup failed for ${slug}:`,
-                error
-              );
-
-
-              /*
-               * Don't break the whole feed because one
-               * detail request failed.
-               */
-
-              return {
-
-                ...match,
-
-                detail_loaded:
-                  false
-
-              };
-
-            }
-
-          }
-        )
-
+        })
       );
 
-
-    /* =====================================================
-       RESPONSE
-       ===================================================== */
 
     return json({
 
@@ -251,13 +111,13 @@ async function handleCricketAPI(request) {
         "cricket",
 
       count:
-        enrichedMatches.length,
+        normalized.length,
 
       updated:
         payload.updated || null,
 
       matches:
-        enrichedMatches
+        normalized
 
     });
 
@@ -274,527 +134,12 @@ async function handleCricketAPI(request) {
       {
         error:
           error.message ||
-          "Unexpected Worker error."
+          "Unable to load cricket matches."
       },
       500
     );
 
   }
-
-}
-
-
-/* =========================================================
-   MATCH DETAIL
-   ========================================================= */
-
-async function fetchMatchDetail(
-  slug
-) {
-
-  const url =
-    `https://sportscore.com/api/widget/match/?sport=cricket&slug=${encodeURIComponent(slug)}`;
-
-
-  const response =
-    await fetch(
-      url,
-      {
-        cf: {
-          cacheTtl: 60,
-          cacheEverything: true
-        }
-      }
-    );
-
-
-  if (!response.ok) {
-
-    const body =
-      await response.text();
-
-    throw new Error(
-      `SportScore detail returned HTTP ${response.status}: ${body}`
-    );
-
-  }
-
-
-  return await response.json();
-
-}
-
-
-/* =========================================================
-   EXTRACT MATCH SLUG
-   ========================================================= */
-
-function extractSlug(
-  value
-) {
-
-  if (!value) {
-    return null;
-  }
-
-
-  try {
-
-    const url =
-      new URL(
-        value,
-        "https://sportscore.com"
-      );
-
-
-    const parts =
-      url.pathname
-        .split("/")
-        .filter(Boolean);
-
-
-    const matchIndex =
-      parts.indexOf(
-        "match"
-      );
-
-
-    if (
-      matchIndex !== -1 &&
-      parts[matchIndex + 1]
-    ) {
-
-      return parts[
-        matchIndex + 1
-      ];
-
-    }
-
-
-    return (
-      parts[
-        parts.length - 1
-      ] || null
-    );
-
-  } catch {
-
-    return null;
-
-  }
-
-}
-
-
-/* =========================================================
-   EXTRACT VALID SCORES
-   ========================================================= */
-
-function extractValidScores(
-  detail
-) {
-
-  const result = {
-
-    home:
-      null,
-
-    away:
-      null
-
-  };
-
-
-  const containers = [
-
-    detail,
-
-    detail?.data,
-
-    detail?.match,
-
-    detail?.score,
-
-    detail?.scoreboard,
-
-    detail?.match?.score,
-
-    detail?.match?.scoreboard
-
-  ].filter(Boolean);
-
-
-  for (
-    const container of containers
-  ) {
-
-    if (
-      !container ||
-      typeof container !== "object"
-    ) {
-
-      continue;
-
-    }
-
-
-    /* -----------------------------------------------------
-       HOME SCORE
-       ----------------------------------------------------- */
-
-    const homeCandidates = [
-
-      container.home_score,
-
-      container.homeScore,
-
-      container.home_runs,
-
-      container.homeRuns,
-
-      container.local_score,
-
-      container.localScore
-
-    ];
-
-
-    for (
-      const value of homeCandidates
-    ) {
-
-      if (
-        validCricketScore(
-          value
-        )
-      ) {
-
-        result.home =
-          String(value);
-
-        break;
-
-      }
-
-    }
-
-
-    /* -----------------------------------------------------
-       AWAY SCORE
-       ----------------------------------------------------- */
-
-    const awayCandidates = [
-
-      container.away_score,
-
-      container.awayScore,
-
-      container.away_runs,
-
-      container.awayRuns,
-
-      container.visitor_score,
-
-      container.visitorScore
-
-    ];
-
-
-    for (
-      const value of awayCandidates
-    ) {
-
-      if (
-        validCricketScore(
-          value
-        )
-      ) {
-
-        result.away =
-          String(value);
-
-        break;
-
-      }
-
-    }
-
-
-    if (
-      result.home !== null &&
-      result.away !== null
-    ) {
-
-      break;
-
-    }
-
-  }
-
-
-  /*
-   * If explicit fields didn't work, inspect nested
-   * score structures.
-   */
-
-  if (
-    result.home === null
-  ) {
-
-    result.home =
-      findNestedCricketScore(
-        detail,
-        "home"
-      );
-
-  }
-
-
-  if (
-    result.away === null
-  ) {
-
-    result.away =
-      findNestedCricketScore(
-        detail,
-        "away"
-      );
-
-  }
-
-
-  return result;
-
-}
-
-
-/* =========================================================
-   NESTED SCORE SEARCH
-   ========================================================= */
-
-function findNestedCricketScore(
-  value,
-  side
-) {
-
-  if (
-    !value ||
-    typeof value !== "object"
-  ) {
-
-    return null;
-
-  }
-
-
-  /*
-   * Direct side object:
-   *
-   * home: {
-   *   score: "150/6"
-   * }
-   */
-
-  if (
-    value[side] &&
-    typeof value[side] === "object"
-  ) {
-
-    const team =
-      value[side];
-
-
-    const candidates = [
-
-      team.score,
-
-      team.runs,
-
-      team.value,
-
-      team.score_text,
-
-      team.scoreText
-
-    ];
-
-
-    for (
-      const candidate of candidates
-    ) {
-
-      if (
-        validCricketScore(
-          candidate
-        )
-      ) {
-
-        return String(
-          candidate
-        );
-
-      }
-
-    }
-
-  }
-
-
-  /*
-   * Recursively inspect nested objects.
-   */
-
-  for (
-    const key of Object.keys(value)
-  ) {
-
-    const child =
-      value[key];
-
-
-    if (
-      child &&
-      typeof child === "object"
-    ) {
-
-      const result =
-        findNestedCricketScore(
-          child,
-          side
-        );
-
-
-      if (
-        result !== null
-      ) {
-
-        return result;
-
-      }
-
-    }
-
-  }
-
-
-  return null;
-
-}
-
-
-/* =========================================================
-   VALID CRICKET SCORE
-   ========================================================= */
-
-function validCricketScore(
-  value
-) {
-
-  if (
-    value === null ||
-    value === undefined
-  ) {
-
-    return false;
-
-  }
-
-
-  if (
-    typeof value !== "string" &&
-    typeof value !== "number"
-  ) {
-
-    return false;
-
-  }
-
-
-  const text =
-    String(
-      value
-    ).trim();
-
-
-  if (
-    !text ||
-    text === "-"
-  ) {
-
-    return false;
-
-  }
-
-
-  /*
-   * Accept common cricket score formats:
-   *
-   * 150/6
-   * 228/5
-   * 95
-   * 0/0
-   * 150/6 (20 ov)
-   */
-
-  return /^\d+(?:\.\d+)?(?:\/\d+)?(?:\s*\(\s*\d+(?:\.\d+)?\s*ov\s*\))?$/i
-    .test(
-      text
-    );
-
-}
-
-
-/* =========================================================
-   STATUS TEXT
-   ========================================================= */
-
-function extractStatusText(
-  detail
-) {
-
-  const candidates = [
-
-    detail?.status_text,
-
-    detail?.statusText,
-
-    detail?.match?.status_text,
-
-    detail?.match?.statusText,
-
-    detail?.data?.status_text,
-
-    detail?.data?.statusText,
-
-    detail?.status?.text,
-
-    detail?.match?.status?.text
-
-  ];
-
-
-  for (
-    const value of candidates
-  ) {
-
-    if (
-      value !== null &&
-      value !== undefined &&
-      String(
-        value
-      ).trim()
-    ) {
-
-      return String(
-        value
-      );
-
-    }
-
-  }
-
-
-  return "";
 
 }
 
