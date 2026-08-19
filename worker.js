@@ -7,7 +7,7 @@ export default {
     }
 
     return new Response(
-      "Cricketive Worker is running.",
+      "CRICKETIVE WORKER V2",
       {
         status: 200,
         headers: {
