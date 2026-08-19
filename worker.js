@@ -55,10 +55,10 @@ async function handleCricketAPI(request, env) {
 
 
     // Upcoming / scheduled matches
-    if (mode === "matches") {
+  if (mode === "matches") {
 
   const response = await fetch(
-    `https://cricket.sportmonks.com/api/v2.0/fixtures?api_token=${encodeURIComponent(apiToken)}&filter[leagues]=3,5,10&include=localteam,visitorteam,venue`
+    `https://cricket.sportmonks.com/api/v2.0/fixtures?api_token=${encodeURIComponent(apiToken)}&include=localteam,visitorteam,venue`
   );
 
   const result = await response.json();
