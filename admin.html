@@ -429,6 +429,7 @@
                     <div id="streams-${match.id}" class="stream-list">Loading streams...</div>
                     <div class="toolbar">
                         <button class="secondary" onclick="addStreamForm('${match.id}')">+ ADD STREAM</button>
+                        ${!match.api_match_id ? `<button class="danger" onclick="deleteManualMatch('${match.id}')">DELETE MANUAL MATCH</button>` : ""}
                     </div>
                     <div id="add-stream-${match.id}"></div>
                 </div>
@@ -437,6 +438,38 @@
             container.appendChild(div);
             loadStreams(match.id);
         });
+    }
+
+    async function deleteManualMatch(matchId) {
+        const { data: match, error: fetchError } = await client
+            .from("Matches")
+            .select("id, api_match_id, title")
+            .eq("id", matchId)
+            .single();
+
+        if (fetchError) {
+            alert(fetchError.message);
+            return;
+        }
+
+        if (match.api_match_id) {
+            alert("API-synced matches cannot be deleted manually.");
+            return;
+        }
+
+        if (!confirm(`Delete manual match \"${match.title}\"?`)) return;
+
+        const { error } = await client
+            .from("Matches")
+            .delete()
+            .eq("id", matchId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        await loadMatches();
     }
 
     async function loadStreams(matchId) {
