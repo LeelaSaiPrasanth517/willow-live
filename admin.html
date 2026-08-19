@@ -262,125 +262,22 @@
         </div>
 
 
-        <!-- ADD / EDIT MATCH -->
-
+        <!-- MATCH SYNC -->
         <div class="card">
-
-            <h2 id="formTitle">
-                Add Match
-            </h2>
-
-            <input
-                id="editId"
-                type="hidden"
-            >
-
-            <label>Match Title</label>
-
-            <input
-                id="title"
-                type="text"
-                placeholder="India vs Sri Lanka"
-            >
-
-
-            <label>Team 1</label>
-
-            <input
-                id="team1"
-                type="text"
-                placeholder="India"
-            >
-
-
-            <label>Team 2</label>
-
-            <input
-                id="team2"
-                type="text"
-                placeholder="Sri Lanka"
-            >
-
-
-            <label>Competition</label>
-
-            <input
-                id="competition"
-                type="text"
-                placeholder="International Cricket"
-            >
-
-
-            <label>Match Time</label>
-
-            <input
-                id="match_time"
-                type="text"
-                placeholder="7:30 PM"
-            >
-
-
-            <label>Status</label>
-
-            <select id="status">
-
-                <option value="Upcoming">
-                    Upcoming
-                </option>
-
-                <option value="Live">
-                    Live
-                </option>
-
-                <option value="Finished">
-                    Finished
-                </option>
-
-            </select>
-
-
-            <label>Stream Embed URL</label>
-
-            <input
-                id="embed_url"
-                type="url"
-                placeholder="https://embed.st/..."
-            >
-
-
-            <button
-                id="saveButton"
-                class="primary"
-                onclick="saveMatch()">
-                ADD MATCH
-            </button>
-
-            <button
-                id="cancelButton"
-                class="secondary hidden"
-                onclick="resetForm()"
-                style="margin-left:8px;">
-                CANCEL
-            </button>
-
-            <div
-                id="formMessage"
-                class="message">
-            </div>
-
+            <h2>Match Schedule</h2>
+            <p class="sync-note">Matches are loaded from Cricket Data. You only need to add stream links.</p>
+            <button class="primary" onclick="syncMatches()">SYNC MATCHES</button>
+            <div id="syncMessage" class="message"></div>
         </div>
 
-
-        <!-- MATCH LIST -->
+        <div class="card">
+            <h2>🔴 Live Matches</h2>
+            <div id="liveMatches">Loading...</div>
+        </div>
 
         <div class="card">
-
-            <h2>Matches</h2>
-
-            <div id="matches">
-                Loading...
-            </div>
-
+            <h2>📅 Upcoming Matches</h2>
+            <div id="upcomingMatches">Loading...</div>
         </div>
 
     </div>
@@ -428,6 +325,7 @@
         document.getElementById("loginPanel").classList.add("hidden");
         document.getElementById("adminPanel").style.display = "block";
         loadMatches();
+        syncMatches();
     }
 
     async function syncMatches() {
