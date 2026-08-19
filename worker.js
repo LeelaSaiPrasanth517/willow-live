@@ -2,22 +2,24 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    /*
+     * API route
+     */
     if (url.pathname === "/api/cricket-matches") {
       return handleCricketAPI(request);
     }
 
-    return new Response("Cricketive Worker is running.", {
-      status: 200,
-      headers: {
-        "content-type": "text/plain"
-      }
-    });
+    /*
+     * Everything else is served from the static files
+     * in the project (index.html, admin.html, stream.html, etc.)
+     */
+    return env.ASSETS.fetch(request);
   }
 };
 
 
 /* =========================================================
-   MAIN API
+   CRICKET API
    ========================================================= */
 
 async function handleCricketAPI(request) {
@@ -28,11 +30,12 @@ async function handleCricketAPI(request) {
       url.searchParams.get("mode") || "matches";
 
 
-    /* -----------------------------------------------------
-       LIVE + RECENT MATCHES
-       ----------------------------------------------------- */
+    /* =====================================================
+       LIVE + RECENT + UPCOMING MATCHES
+       ===================================================== */
 
     if (mode === "matches") {
+
       const response = await fetch(
         "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50"
       );
@@ -45,9 +48,10 @@ async function handleCricketAPI(request) {
 
       const result = await response.json();
 
-      const matches = Array.isArray(result.matches)
-        ? result.matches
-        : [];
+      const matches =
+        Array.isArray(result.matches)
+          ? result.matches
+          : [];
 
       return json({
         sport: "cricket",
@@ -58,9 +62,9 @@ async function handleCricketAPI(request) {
     }
 
 
-    /* -----------------------------------------------------
+    /* =====================================================
        UNKNOWN MODE
-       ----------------------------------------------------- */
+       ===================================================== */
 
     return json(
       {
@@ -92,7 +96,11 @@ async function handleCricketAPI(request) {
    JSON RESPONSE
    ========================================================= */
 
-function json(data, status = 200) {
+function json(
+  data,
+  status = 200
+) {
+
   return new Response(
     JSON.stringify(data),
     {
@@ -104,11 +112,6 @@ function json(data, status = 200) {
 
         "cache-control":
           "public, max-age=15",
-
-        /*
-         * SportScore documents its API for browser use.
-         * Keep this endpoint accessible from Cricketive.
-         */
 
         "access-control-allow-origin":
           "*"
