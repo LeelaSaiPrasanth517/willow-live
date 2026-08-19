@@ -169,6 +169,14 @@ body {
     max-height: 70vh;
 }
 
+.player-message {
+    padding: 12px 14px;
+    color: #aaa;
+    font-size: 12px;
+    border-top: 1px solid #222;
+    background: #080808;
+}
+
 
 /* =========================================================
    STREAMS
@@ -237,20 +245,7 @@ body {
 
 
 /* =========================================================
-   PLAYER MESSAGE
-   ========================================================= */
-
-.player-message {
-    padding: 12px 14px;
-    color: #aaa;
-    font-size: 12px;
-    border-top: 1px solid #222;
-    background: #080808;
-}
-
-
-/* =========================================================
-   EMPTY
+   STATES
    ========================================================= */
 
 .empty {
@@ -260,6 +255,17 @@ body {
     border-radius: 10px;
     padding: 20px;
     margin-top: 12px;
+}
+
+.error-box {
+    color: #ff8b8b;
+    background: #210e0e;
+    border: 1px solid #4a2020;
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 12px;
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 
@@ -315,12 +321,9 @@ body {
             alt="Cricketive logo"
         >
 
-        <span>
-            CRICKETIVE
-        </span>
+        <span>CRICKETIVE</span>
 
     </div>
-
 
     <a
         class="back"
@@ -335,25 +338,15 @@ body {
 <main class="wrap">
 
 
-    <!-- =====================================================
-         MATCH
-         ===================================================== -->
-
     <section
         class="match-head"
         id="match"
     >
-
         <div class="empty">
             Loading match...
         </div>
-
     </section>
 
-
-    <!-- =====================================================
-         PLAYER
-         ===================================================== -->
 
     <section
         class="player"
@@ -368,7 +361,6 @@ body {
             >
                 Cricketive Player
             </div>
-
 
             <button
                 class="close-player"
@@ -385,13 +377,7 @@ body {
             id="videoFrame"
             title="Cricketive Stream"
             allowfullscreen
-            allow="
-                autoplay;
-                encrypted-media;
-                picture-in-picture;
-                fullscreen
-            "
-            referrerpolicy="no-referrer-when-downgrade"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
         ></iframe>
 
 
@@ -412,16 +398,11 @@ body {
     </section>
 
 
-    <!-- =====================================================
-         STREAMS
-         ===================================================== -->
-
     <section class="streams">
 
         <h2>
             🎥 Available Streams
         </h2>
-
 
         <div id="streamList">
 
@@ -460,13 +441,30 @@ const db =
    MATCH ID
    ========================================================= */
 
-const params =
+const matchId =
     new URLSearchParams(
         window.location.search
-    );
+    ).get("match");
 
-const matchId =
-    params.get("match");
+
+/* =========================================================
+   STREAM CACHE
+   ========================================================= */
+
+let streams = [];
+
+
+/* =========================================================
+   DOM HELPERS
+   ========================================================= */
+
+function matchElement() {
+    return document.getElementById("match");
+}
+
+function streamElement() {
+    return document.getElementById("streamList");
+}
 
 
 /* =========================================================
@@ -475,84 +473,54 @@ const matchId =
 
 async function load() {
 
-    const matchEl =
-        document.getElementById(
-            "match"
-        );
-
-    const streamEl =
-        document.getElementById(
-            "streamList"
-        );
-
-
-    if (!matchId) {
-
-        matchEl.innerHTML =
-            `
-                <div class="empty">
-                    No match selected.
-                </div>
-            `;
-
-        streamEl.innerHTML =
-            `
-                <div class="empty">
-                    No stream selected.
-                </div>
-            `;
-
-        return;
-
-    }
-
-
     try {
 
+        if (!matchId) {
+
+            throw new Error(
+                "No match ID was provided in the URL."
+            );
+
+        }
+
+
         /* =================================================
-           LOAD MATCH
+           GET MATCH
            ================================================= */
 
-        const {
-            data: match,
-            error: matchError
-        } = await db
-            .from("Matches")
-            .select("*")
-            .eq(
-                "id",
-                matchId
-            )
-            .maybeSingle();
+        const matchResult =
+            await db
+                .from("Matches")
+                .select("*")
+                .eq("id", matchId)
+                .maybeSingle();
 
 
-        if (matchError) {
+        if (matchResult.error) {
 
-            throw matchError;
+            throw new Error(
+                `Match query failed: ${matchResult.error.message}`
+            );
 
         }
 
 
-        if (!match) {
+        if (!matchResult.data) {
 
-            matchEl.innerHTML =
-                `
-                    <div class="empty">
-                        Match not found.
-                    </div>
-                `;
-
-            streamEl.innerHTML =
-                `
-                    <div class="empty">
-                        No streams available.
-                    </div>
-                `;
-
-            return;
+            throw new Error(
+                `No match exists for ID: ${matchId}`
+            );
 
         }
 
+
+        const match =
+            matchResult.data;
+
+
+        /* =================================================
+           RENDER MATCH
+           ================================================= */
 
         document.title =
             `${match.team1 || "Team 1"} vs ${match.team2 || "Team 2"} | Cricketive`;
@@ -560,12 +528,9 @@ async function load() {
 
         const time =
             match.start_time
-                ? formatDate(
-                    match.start_time
-                )
+                ? formatDate(match.start_time)
                 : (
-                    match.match_time ||
-                    ""
+                    match.match_time || ""
                 );
 
 
@@ -575,25 +540,22 @@ async function load() {
             )
                 .trim()
                 .toLowerCase()
-            ===
-            "live";
+            === "live";
 
 
-        matchEl.innerHTML =
+        matchElement().innerHTML =
             `
 
                 <div class="title">
 
                     ${esc(
-                        match.team1 ||
-                        ""
+                        match.team1 || ""
                     )}
 
                     vs
 
                     ${esc(
-                        match.team2 ||
-                        ""
+                        match.team2 || ""
                     )}
 
                 </div>
@@ -619,9 +581,7 @@ async function load() {
                         match.venue
                             ? `
                                 <br>
-                                ${esc(
-                                    match.venue
-                                )}
+                                ${esc(match.venue)}
                               `
                             : ""
                     }
@@ -631,13 +591,11 @@ async function load() {
 
                 ${
                     isLive
-
                         ? `
                             <span class="live-badge">
                                 🔴 LIVE
                             </span>
                           `
-
                         : `
                             <span class="status-badge">
                                 ${esc(
@@ -652,47 +610,46 @@ async function load() {
 
 
         /* =================================================
-           LOAD ACTIVE STREAMS
+           GET STREAMS
            ================================================= */
 
-        const {
-            data: streams,
-            error: streamError
-        } = await db
-            .from("streams")
-            .select("*")
-            .eq(
-                "match_id",
-                matchId
-            )
-            .eq(
-                "active",
-                true
-            )
-            .order(
-                "created_at",
-                {
-                    ascending: true
-                }
+        const streamResult =
+            await db
+                .from("streams")
+                .select("*")
+                .eq("match_id", matchId)
+                .eq("active", true)
+                .order(
+                    "created_at",
+                    {
+                        ascending: true
+                    }
+                );
+
+
+        if (streamResult.error) {
+
+            throw new Error(
+                `Stream query failed: ${streamResult.error.message}`
             );
-
-
-        if (streamError) {
-
-            throw streamError;
 
         }
 
 
-        if (
-            !streams ||
-            streams.length === 0
-        ) {
+        streams =
+            streamResult.data || [];
 
-            streamEl.innerHTML =
+
+        /* =================================================
+           RENDER STREAMS
+           ================================================= */
+
+        if (!streams.length) {
+
+            streamElement().innerHTML =
                 `
                     <div class="empty">
-                        ⏳ No stream is available
+                        ⏳ No active stream is available
                         for this match yet.
                     </div>
                 `;
@@ -702,11 +659,7 @@ async function load() {
         }
 
 
-        /* =================================================
-           RENDER
-           ================================================= */
-
-        streamEl.innerHTML =
+        streamElement().innerHTML =
             streams
                 .map(
                     (
@@ -724,23 +677,41 @@ async function load() {
     } catch (error) {
 
         console.error(
-            "Cricketive stream error:",
+            "Cricketive stream page error:",
             error
         );
 
 
-        matchEl.innerHTML =
+        matchElement().innerHTML =
             `
-                <div class="empty">
-                    Unable to load match.
+                <div class="error-box">
+
+                    <strong>
+                        Unable to load match
+                    </strong>
+
+                    <br><br>
+
+                    ${esc(
+                        error.message
+                    )}
+
                 </div>
             `;
 
 
-        streamEl.innerHTML =
+        streamElement().innerHTML =
             `
-                <div class="empty">
-                    Unable to load streams.
+                <div class="error-box">
+
+                    <strong>
+                        Unable to load streams
+                    </strong>
+
+                    <br><br>
+
+                    Check the browser console for details.
+
                 </div>
             `;
 
@@ -750,7 +721,7 @@ async function load() {
 
 
 /* =========================================================
-   CREATE STREAM ROW
+   STREAM ROW
    ========================================================= */
 
 function createStreamRow(
@@ -760,27 +731,18 @@ function createStreamRow(
 
     const url =
         String(
-            stream.embed_url ||
-            ""
+            stream.embed_url || ""
         ).trim();
 
 
     const type =
-        detectStreamType(
-            url
-        );
+        detectStreamType(url);
 
 
-    let buttonText =
-        "▶ WATCH";
-
-
-    if (type === "direct") {
-
-        buttonText =
-            "▶ OPEN STREAM";
-
-    }
+    const buttonText =
+        type === "direct"
+            ? "▶ OPEN STREAM"
+            : "▶ WATCH";
 
 
     return `
@@ -799,7 +761,6 @@ function createStreamRow(
                     )}
                 </div>
 
-
                 <div class="stream-name">
                     ${esc(
                         stream.stream_name ||
@@ -807,12 +768,9 @@ function createStreamRow(
                     )}
                 </div>
 
-
                 <div class="stream-type">
                     ${esc(
-                        getStreamTypeLabel(
-                            type
-                        )
+                        getStreamTypeLabel(type)
                     )}
                 </div>
 
@@ -822,7 +780,7 @@ function createStreamRow(
             <button
                 class="watch"
                 type="button"
-                onclick="openStreamByIndex(${index})"
+                onclick="openStream(${index})"
             >
                 ${buttonText}
             </button>
@@ -834,107 +792,36 @@ function createStreamRow(
 
 
 /* =========================================================
-   OPEN STREAM BY INDEX
-   ========================================================= */
-
-let loadedStreams = [];
-
-
-async function openStreamByIndex(
-    index
-) {
-
-    try {
-
-        const {
-            data: streams,
-            error
-        } = await db
-            .from("streams")
-            .select("*")
-            .eq(
-                "match_id",
-                matchId
-            )
-            .eq(
-                "active",
-                true
-            )
-            .order(
-                "created_at",
-                {
-                    ascending: true
-                }
-            );
-
-
-        if (error) {
-            throw error;
-        }
-
-
-        loadedStreams =
-            streams || [];
-
-
-        const stream =
-            loadedStreams[index];
-
-
-        if (!stream) {
-
-            showPlayerMessage(
-                "Stream not found."
-            );
-
-            return;
-
-        }
-
-
-        openStream(
-            stream,
-            index
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "Unable to open stream:",
-            error
-        );
-
-
-        showPlayerMessage(
-            "Unable to load this stream."
-        );
-
-    }
-
-}
-
-
-/* =========================================================
    OPEN STREAM
    ========================================================= */
 
-function openStream(
-    stream,
-    index
-) {
+function openStream(index) {
+
+    const stream =
+        streams[index];
+
+
+    if (!stream) {
+
+        showPlayerMessage(
+            "Stream not found."
+        );
+
+        return;
+
+    }
+
 
     const url =
         String(
-            stream.embed_url ||
-            ""
+            stream.embed_url || ""
         ).trim();
 
 
     if (!url) {
 
         showPlayerMessage(
-            "This stream does not have a valid URL."
+            "This stream has no URL."
         );
 
         return;
@@ -943,22 +830,19 @@ function openStream(
 
 
     const type =
-        detectStreamType(
-            url
-        );
+        detectStreamType(url);
+
+
+    setActiveButton(index);
 
 
     /* =====================================================
-       EXTERNAL PAGE
+       DIRECT PAGE
        ===================================================== */
 
     if (
         type === "direct"
     ) {
-
-        /*
-         * Use same tab.
-         */
 
         window.location.href =
             url;
@@ -977,9 +861,7 @@ function openStream(
     ) {
 
         const embedUrl =
-            youtubeEmbedUrl(
-                url
-            );
+            youtubeEmbedUrl(url);
 
 
         if (!embedUrl) {
@@ -995,12 +877,7 @@ function openStream(
         showIframe(
             embedUrl,
             stream.stream_name ||
-            "YouTube Stream"
-        );
-
-
-        setActiveButton(
-            index
+            "YouTube"
         );
 
         return;
@@ -1022,33 +899,28 @@ function openStream(
             "Video Stream"
         );
 
-
-        setActiveButton(
-            index
-        );
-
         return;
 
     }
 
 
     /* =====================================================
-       M3U8
+       HLS
        ===================================================== */
 
     if (
         type === "hls"
     ) {
 
-        /*
-         * Native browser HLS support.
-         */
-
         const video =
             document.getElementById(
                 "videoPlayer"
             );
 
+
+        /*
+         * Native browser HLS.
+         */
 
         if (
             video.canPlayType(
@@ -1062,17 +934,11 @@ function openStream(
                 "Live Stream"
             );
 
-
-            setActiveButton(
-                index
-            );
-
         } else {
 
             /*
-             * Browser doesn't support native HLS.
-             * Open the URL directly rather than showing
-             * a broken iframe.
+             * Browser cannot play raw HLS.
+             * Open the stream URL directly.
              */
 
             window.location.href =
@@ -1086,18 +952,13 @@ function openStream(
 
 
     /* =====================================================
-       NORMAL EMBED URL
+       NORMAL EMBED
        ===================================================== */
 
     showIframe(
         url,
         stream.stream_name ||
         "Cricketive Stream"
-    );
-
-
-    setActiveButton(
-        index
     );
 
 }
@@ -1107,9 +968,7 @@ function openStream(
    DETECT STREAM TYPE
    ========================================================= */
 
-function detectStreamType(
-    url
-) {
+function detectStreamType(url) {
 
     const value =
         String(
@@ -1126,17 +985,11 @@ function detectStreamType(
     }
 
 
-    /*
-     * YouTube
-     */
+    /* YouTube */
 
     if (
-        value.includes(
-            "youtube.com"
-        ) ||
-        value.includes(
-            "youtu.be"
-        )
+        value.includes("youtube.com") ||
+        value.includes("youtu.be")
     ) {
 
         return "youtube";
@@ -1144,14 +997,10 @@ function detectStreamType(
     }
 
 
-    /*
-     * HLS
-     */
+    /* HLS */
 
     if (
-        value.includes(
-            ".m3u8"
-        )
+        value.includes(".m3u8")
     ) {
 
         return "hls";
@@ -1159,14 +1008,10 @@ function detectStreamType(
     }
 
 
-    /*
-     * MP4
-     */
+    /* MP4 */
 
     if (
-        value.includes(
-            ".mp4"
-        )
+        value.includes(".mp4")
     ) {
 
         return "mp4";
@@ -1174,20 +1019,12 @@ function detectStreamType(
     }
 
 
-    /*
-     * Pages that should be opened directly.
-     */
+    /* External player pages */
 
     if (
-        value.includes(
-            "blogspot.com"
-        ) ||
-        value.includes(
-            "blogger.com"
-        ) ||
-        value.includes(
-            "ckdlive"
-        )
+        value.includes("blogspot.com") ||
+        value.includes("blogger.com") ||
+        value.includes("ckdlive")
     ) {
 
         return "direct";
@@ -1195,22 +1032,15 @@ function detectStreamType(
     }
 
 
-    /*
-     * Everything else is treated as an iframe embed.
-     */
-
     return "embed";
-
 }
 
 
 /* =========================================================
-   TYPE LABEL
+   STREAM TYPE LABEL
    ========================================================= */
 
-function getStreamTypeLabel(
-    type
-) {
+function getStreamTypeLabel(type) {
 
     switch (type) {
 
@@ -1231,109 +1061,75 @@ function getStreamTypeLabel(
 
         default:
             return "Stream";
-
     }
 
 }
 
 
 /* =========================================================
-   YOUTUBE EMBED URL
+   YOUTUBE EMBED
    ========================================================= */
 
-function youtubeEmbedUrl(
-    value
-) {
+function youtubeEmbedUrl(urlValue) {
 
     try {
 
         const url =
-            new URL(
-                value
-            );
+            new URL(urlValue);
 
 
-        let videoId =
-            "";
+        let id = "";
 
-
-        /*
-         * youtube.com/watch?v=
-         */
 
         if (
-            url.hostname.includes(
-                "youtube.com"
-            )
+            url.hostname.includes("youtube.com")
         ) {
 
-            videoId =
-                url.searchParams.get(
-                    "v"
-                ) || "";
+            id =
+                url.searchParams.get("v") || "";
+
+
+            if (
+                !id &&
+                url.pathname.startsWith("/live/")
+            ) {
+
+                id =
+                    url.pathname
+                        .split("/live/")[1]
+                        .split("/")[0];
+
+            }
+
+
+            if (
+                !id &&
+                url.pathname.includes("/embed/")
+            ) {
+
+                id =
+                    url.pathname
+                        .split("/embed/")[1]
+                        .split("/")[0];
+
+            }
 
         }
 
 
-        /*
-         * youtube.com/live/VIDEO_ID
-         */
-
         if (
-            url.pathname.startsWith(
-                "/live/"
-            )
+            url.hostname === "youtu.be"
         ) {
 
-            videoId =
+            id =
                 url.pathname
-                    .split("/live/")[1]
+                    .replace(/^\//, "")
                     .split("/")[0];
 
         }
 
 
-        /*
-         * youtube.com/embed/VIDEO_ID
-         */
-
-        if (
-            url.pathname.includes(
-                "/embed/"
-            )
-        ) {
-
-            videoId =
-                url.pathname
-                    .split("/embed/")[1]
-                    .split("/")[0];
-
-        }
-
-
-        /*
-         * youtu.be/VIDEO_ID
-         */
-
-        if (
-            url.hostname ===
-            "youtu.be"
-        ) {
-
-            videoId =
-                url.pathname
-                    .replace(
-                        /^\//,
-                        ""
-                    )
-                    .split("/")[0];
-
-        }
-
-
-        if (
-            !videoId
-        ) {
+        if (!id) {
 
             return null;
 
@@ -1342,9 +1138,7 @@ function youtubeEmbedUrl(
 
         return (
             "https://www.youtube.com/embed/" +
-            encodeURIComponent(
-                videoId
-            ) +
+            encodeURIComponent(id) +
             "?autoplay=1"
         );
 
@@ -1381,38 +1175,19 @@ function showIframe(
             "videoPlayer"
         );
 
-    const playerTitle =
-        document.getElementById(
-            "playerTitle"
-        );
-
-
-    /*
-     * Stop video player.
-     */
 
     video.pause();
-
-    video.removeAttribute(
-        "src"
-    );
-
-    video.style.display =
-        "none";
+    video.removeAttribute("src");
+    video.style.display = "none";
 
 
-    /*
-     * Show iframe.
-     */
-
-    frame.style.display =
-        "block";
-
-    frame.src =
-        url;
+    frame.src = url;
+    frame.style.display = "block";
 
 
-    playerTitle.textContent =
+    document.getElementById(
+        "playerTitle"
+    ).textContent =
         title;
 
 
@@ -1426,12 +1201,9 @@ function showIframe(
 
 
     player.scrollIntoView({
-        behavior:
-            "smooth",
-
-        block:
-            "center"
-    );
+        behavior: "smooth",
+        block: "center"
+    });
 
 }
 
@@ -1460,15 +1232,6 @@ function showVideo(
             "videoPlayer"
         );
 
-    const playerTitle =
-        document.getElementById(
-            "playerTitle"
-        );
-
-
-    /*
-     * Hide iframe.
-     */
 
     frame.src =
         "about:blank";
@@ -1477,18 +1240,16 @@ function showVideo(
         "none";
 
 
-    /*
-     * Show video.
-     */
+    video.src =
+        url;
 
     video.style.display =
         "block";
 
-    video.src =
-        url;
 
-
-    playerTitle.textContent =
+    document.getElementById(
+        "playerTitle"
+    ).textContent =
         title;
 
 
@@ -1501,25 +1262,15 @@ function showVideo(
     );
 
 
-    /*
-     * Autoplay may be blocked by browser.
-     * That is okay.
-     */
-
-    video
-        .play()
-        .catch(
-            () => {}
-        );
+    video.play().catch(
+        () => {}
+    );
 
 
     player.scrollIntoView({
-        behavior:
-            "smooth",
-
-        block:
-            "center"
-    );
+        behavior: "smooth",
+        block: "center"
+    });
 
 }
 
@@ -1564,7 +1315,7 @@ function closePlayer() {
 
 
 /* =========================================================
-   SET ACTIVE BUTTON
+   ACTIVE BUTTON
    ========================================================= */
 
 function setActiveButton(
@@ -1592,25 +1343,22 @@ function setActiveButton(
         );
 
 
-    if (
-        row
-    ) {
-
-        const button =
-            row.querySelector(
-                ".watch"
-            );
+    if (!row) {
+        return;
+    }
 
 
-        if (
-            button
-        ) {
+    const button =
+        row.querySelector(
+            ".watch"
+        );
 
-            button.classList.add(
-                "active"
-            );
 
-        }
+    if (button) {
+
+        button.classList.add(
+            "active"
+        );
 
     }
 
@@ -1625,13 +1373,9 @@ function showPlayerMessage(
     message
 ) {
 
-    const element =
-        document.getElementById(
-            "playerMessage"
-        );
-
-
-    element.textContent =
+    document.getElementById(
+        "playerMessage"
+    ).textContent =
         message;
 
 }
@@ -1665,11 +1409,8 @@ function formatDate(
     return date.toLocaleString(
         [],
         {
-            dateStyle:
-                "medium",
-
-            timeStyle:
-                "short"
+            dateStyle: "medium",
+            timeStyle: "short"
         }
     );
 
@@ -1677,7 +1418,7 @@ function formatDate(
 
 
 /* =========================================================
-   HTML ESCAPE
+   ESCAPE HTML
    ========================================================= */
 
 function esc(
@@ -1687,31 +1428,11 @@ function esc(
     return String(
         value ?? ""
     )
-
-        .replace(
-            /&/g,
-            "&amp;"
-        )
-
-        .replace(
-            /</g,
-            "&lt;"
-        )
-
-        .replace(
-            />/g,
-            "&gt;"
-        )
-
-        .replace(
-            /"/g,
-            "&quot;"
-        )
-
-        .replace(
-            /'/g,
-            "&#039;"
-        );
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
 }
 
