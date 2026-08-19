@@ -1,10 +1,12 @@
 export default async (request) => {
   try {
-    const apiKey = process.env.CRICKET_API_KEY;
+    const apiToken = process.env.SPORTMONKS_API_TOKEN;
 
-    if (!apiKey) {
+    if (!apiToken) {
       return json(
-        { error: "CRICKET_API_KEY is missing." },
+        {
+          error: "SPORTMONKS_API_TOKEN is missing."
+        },
         500
       );
     }
@@ -14,12 +16,12 @@ export default async (request) => {
 
 
     /* =========================================================
-       SCHEDULE / MATCH LIST
+       MATCHES
        ========================================================= */
 
     if (mode === "matches") {
 
-      const matches = await fetchAllMatches(apiKey);
+      const matches = await fetchCurrentFixtures(apiToken);
 
       return json({
         matches
@@ -33,65 +35,8 @@ export default async (request) => {
 
     if (mode === "scores") {
 
-      const apiUrl =
-        `https://api.cricapi.com/v1/currentMatches?apikey=${encodeURIComponent(apiKey)}&offset=0`;
-
-      const response =
-        await fetch(apiUrl);
-
-
-      if (!response.ok) {
-
-        throw new Error(
-          `Cricket API returned HTTP ${response.status}`
-        );
-      }
-
-
-      const result =
-        await response.json();
-
-
-      if (result.status !== "success") {
-
-        throw new Error(
-          result.info ||
-          "Current Matches API failed."
-        );
-      }
-
-
       const matches =
-        (result.data || [])
-          .map(m => ({
-
-            id:
-              m.id,
-
-            name:
-              m.name,
-
-            teams:
-              m.teams || [],
-
-            status:
-              m.status || "",
-
-            score:
-              m.score || [],
-
-            matchStarted:
-              !!m.matchStarted,
-
-            matchEnded:
-              !!m.matchEnded,
-
-            dateTimeGMT:
-              m.dateTimeGMT || null
-
-          }))
-          .filter(m => m.id);
-
+        await fetchLiveFixtures(apiToken);
 
       return json({
         matches
@@ -101,16 +46,17 @@ export default async (request) => {
 
     return json(
       {
-        error:
-          "Unknown mode."
+        error: "Unknown mode."
       },
       400
     );
 
-
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "Cricketive Sportmonks error:",
+      error
+    );
 
     return json(
       {
@@ -125,59 +71,87 @@ export default async (request) => {
 
 
 /* =============================================================
-   FETCH ALL MATCHES
+   FETCH CURRENT + UPCOMING FIXTURES
    ============================================================= */
 
-async function fetchAllMatches(apiKey) {
-
-  const allMatches = [];
+async function fetchCurrentFixtures(apiToken) {
 
   /*
-   * Cricket Data's match list uses offset pagination.
+   * Current date.
    *
-   * Start at 0 and continue until the API gives us
-   * fewer results than the requested page size.
+   * We request a window around today instead of downloading
+   * the entire historical fixture database.
    */
 
-  const pageSize = 25;
+  const now = new Date();
 
-  let offset = 0;
+  const startDate =
+    formatDate(
+      new Date(
+        now.getTime() -
+        24 * 60 * 60 * 1000
+      )
+    );
 
-
-  /*
-   * Safety limit.
-   *
-   * Prevents an accidental infinite API loop.
-   */
-
-  const maxPages = 10;
-
-
-  for (
-    let page = 0;
-    page < maxPages;
-    page++
-  ) {
-
-    const apiUrl =
-      `https://api.cricapi.com/v1/matches` +
-      `?apikey=${encodeURIComponent(apiKey)}` +
-      `&offset=${offset}`;
-
-
-    console.log(
-      `Fetching matches offset ${offset}`
+  const endDate =
+    formatDate(
+      new Date(
+        now.getTime() +
+        14 * 24 * 60 * 60 * 1000
+      )
     );
 
 
+  const allFixtures = [];
+
+
+  /*
+   * Sportmonks paginates fixture results.
+   */
+
+  let page = 1;
+
+  const maxPages = 20;
+
+
+  for (
+    let i = 0;
+    i < maxPages;
+    i++
+  ) {
+
+    const endpoint =
+      "https://cricket.sportmonks.com/api/v2.0/fixtures";
+
+
+    const params =
+      new URLSearchParams({
+
+        api_token:
+          apiToken,
+
+        page:
+          String(page),
+
+        "filter[starts_between]":
+          `${startDate},${endDate}`,
+
+        include:
+          "localteam,visitorteam,venue"
+
+      });
+
+
     const response =
-      await fetch(apiUrl);
+      await fetch(
+        `${endpoint}?${params.toString()}`
+      );
 
 
     if (!response.ok) {
 
       throw new Error(
-        `Cricket API returned HTTP ${response.status}`
+        `Sportmonks returned HTTP ${response.status}`
       );
     }
 
@@ -186,67 +160,72 @@ async function fetchAllMatches(apiKey) {
       await response.json();
 
 
-    if (result.status !== "success") {
+    if (!result.data) {
 
       throw new Error(
-        result.info ||
-        "Matches API failed."
+        result.message ||
+        "Sportmonks returned no fixture data."
       );
     }
 
 
-    const pageMatches =
+    /*
+     * Sportmonks can return either an array or,
+     * depending on the endpoint response, a single object.
+     */
+
+    const fixtures =
       Array.isArray(result.data)
         ? result.data
-        : [];
+        : [result.data];
 
 
-    console.log(
-      `Received ${pageMatches.length} matches`
+    allFixtures.push(
+      ...fixtures
     );
 
 
     /*
-     * Normalize and filter this page.
+     * Stop when there are no more pages.
      */
 
-    const normalized =
-      pageMatches
-        .map(normalizeMatch)
-        .filter(Boolean)
-        .filter(
-          m =>
-            !isPlaceholder(m.team1) &&
-            !isPlaceholder(m.team2)
-        );
+    const meta =
+      result.meta;
 
-
-    allMatches.push(
-      ...normalized
-    );
-
-
-    /*
-     * If the API returned fewer records than
-     * the page size, we've reached the end.
-     */
 
     if (
-      pageMatches.length < pageSize
+      !meta ||
+      !meta.current_page ||
+      !meta.last_page ||
+      meta.current_page >= meta.last_page
     ) {
 
       break;
     }
 
 
-    offset += pageSize;
+    page++;
   }
 
 
   /*
-   * Remove duplicate matches.
-   *
-   * The API ID is the unique identifier.
+   * Convert Sportmonks fixtures into the format
+   * already used by Cricketive.
+   */
+
+  const normalized =
+    allFixtures
+      .map(normalizeSportmonksFixture)
+      .filter(Boolean)
+      .filter(
+        match =>
+          !isPlaceholder(match.team1) &&
+          !isPlaceholder(match.team2)
+      );
+
+
+  /*
+   * Remove duplicates.
    */
 
   const unique =
@@ -254,18 +233,13 @@ async function fetchAllMatches(apiKey) {
 
 
   for (
-    const match of allMatches
+    const match of normalized
   ) {
 
-    if (
-      match.api_match_id
-    ) {
-
-      unique.set(
-        match.api_match_id,
-        match
-      );
-    }
+    unique.set(
+      match.api_match_id,
+      match
+    );
   }
 
 
@@ -276,86 +250,267 @@ async function fetchAllMatches(apiKey) {
 
 
 /* =============================================================
-   NORMALIZE MATCH
+   LIVE FIXTURES
    ============================================================= */
 
-function normalizeMatch(m) {
+async function fetchLiveFixtures(apiToken) {
 
-  const teams =
-    Array.isArray(m.teams)
-      ? m.teams
+  const params =
+    new URLSearchParams({
+
+      api_token:
+        apiToken,
+
+      include:
+        "localteam,visitorteam,venue"
+
+    });
+
+
+  const response =
+    await fetch(
+      `https://cricket.sportmonks.com/api/v2.0/livescores?${params.toString()}`
+    );
+
+
+  if (!response.ok) {
+
+    throw new Error(
+      `Sportmonks returned HTTP ${response.status}`
+    );
+  }
+
+
+  const result =
+    await response.json();
+
+
+  const fixtures =
+    Array.isArray(result.data)
+      ? result.data
       : [];
 
 
-  const team1 =
-    teams[0] || "";
+  return fixtures
+    .map(normalizeSportmonksFixture)
+    .filter(Boolean);
+}
 
 
-  const team2 =
-    teams[1] || "";
+/* =============================================================
+   NORMALIZE SPORTMONKS FIXTURE
+   ============================================================= */
 
-
-  const startTime =
-    m.dateTimeGMT ||
-    m.dateTime ||
-    null;
-
-
-  /*
-   * Never create an incomplete match.
-   */
+function normalizeSportmonksFixture(fixture) {
 
   if (
-    !m.id ||
-    !team1 ||
-    !team2 ||
-    !startTime
+    !fixture ||
+    !fixture.id
   ) {
 
     return null;
   }
 
 
+  /*
+   * Sportmonks may return team information through
+   * the included localteam / visitorteam objects.
+   */
+
+  const localTeam =
+    getIncludedTeam(
+      fixture.localteam
+    );
+
+
+  const visitorTeam =
+    getIncludedTeam(
+      fixture.visitorteam
+    );
+
+
+  const team1 =
+    localTeam.name ||
+    fixture.localteam_name ||
+    "";
+
+
+  const team2 =
+    visitorTeam.name ||
+    fixture.visitorteam_name ||
+    "";
+
+
+  /*
+   * If the API didn't provide team names,
+   * don't create a broken database record.
+   */
+
+  if (
+    !team1 ||
+    !team2
+  ) {
+
+    return null;
+  }
+
+
+  const startTime =
+    fixture.starting_at ||
+    null;
+
+
+  if (!startTime) {
+
+    return null;
+  }
+
+
+  const status =
+    getMatchStatus(
+      fixture
+    );
+
+
+  const competition =
+    fixture.league_name ||
+    fixture.league?.name ||
+    "Cricket";
+
+
+  const venue =
+    fixture.venue?.name ||
+    fixture.venue_name ||
+    "";
+
+
   return {
 
+    /*
+     * This is the value your Supabase
+     * api_match_id column will use.
+     */
+
     api_match_id:
-      m.id,
+      String(fixture.id),
+
 
     title:
-      m.name ||
       `${team1} vs ${team2}`,
+
 
     team1,
 
     team2,
 
-    competition:
-      m.seriesName ||
-      m.matchType ||
-      "Cricket",
 
-    venue:
-      m.venue ||
-      "",
+    competition,
+
+
+    venue,
+
 
     start_time:
       startTime,
 
+
     match_time:
       startTime,
 
-    status:
-      m.matchEnded
-        ? "Finished"
-        : m.matchStarted
-          ? "Live"
-          : "Upcoming"
+
+    status,
+
+
+    team1_logo:
+      localTeam.image_path ||
+      localTeam.logo_url ||
+      "",
+
+
+    team2_logo:
+      visitorTeam.image_path ||
+      visitorTeam.logo_url ||
+      "",
+
+
+    /*
+     * Streams are managed separately.
+     */
+
+    embed_url: ""
   };
 }
 
 
 /* =============================================================
-   PLACEHOLDER MATCH CHECK
+   GET TEAM OBJECT
+   ============================================================= */
+
+function getIncludedTeam(team) {
+
+  if (!team) {
+
+    return {};
+  }
+
+
+  /*
+   * Depending on the API response,
+   * the included relationship can be
+   * returned as an object or array.
+   */
+
+  if (Array.isArray(team)) {
+
+    return team[0] || {};
+  }
+
+
+  return team;
+}
+
+
+/* =============================================================
+   MATCH STATUS
+   ============================================================= */
+
+function getMatchStatus(fixture) {
+
+  /*
+   * Sportmonks provides a live boolean.
+   */
+
+  if (
+    fixture.live === true
+  ) {
+
+    return "Live";
+  }
+
+
+  const status =
+    String(
+      fixture.status || ""
+    ).toLowerCase();
+
+
+  if (
+    status.includes("finished") ||
+    status.includes("completed") ||
+    status.includes("abandoned") ||
+    status.includes("cancelled")
+  ) {
+
+    return "Finished";
+  }
+
+
+  return "Upcoming";
+}
+
+
+/* =============================================================
+   PLACEHOLDER CHECK
    ============================================================= */
 
 function isPlaceholder(value) {
@@ -370,6 +525,32 @@ function isPlaceholder(value) {
     .test(
       String(value).trim()
     );
+}
+
+
+/* =============================================================
+   DATE FORMAT
+   ============================================================= */
+
+function formatDate(date) {
+
+  const year =
+    date.getUTCFullYear();
+
+
+  const month =
+    String(
+      date.getUTCMonth() + 1
+    ).padStart(2, "0");
+
+
+  const day =
+    String(
+      date.getUTCDate()
+    ).padStart(2, "0");
+
+
+  return `${year}-${month}-${day}`;
 }
 
 
