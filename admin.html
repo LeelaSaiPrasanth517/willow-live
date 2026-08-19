@@ -167,20 +167,78 @@
             display: none !important;
         }
 
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
 
-        .toolbar { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-        .match-header { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
-        .stream-box { margin-top:16px; padding-top:14px; border-top:1px solid #292929; }
-        .stream-row { display:grid; grid-template-columns:120px 1fr 150px auto; gap:8px; align-items:center; margin-top:8px; }
-        .stream-row input, .stream-row select { margin:0; }
-        .stream-list { margin-top:12px; }
-        .empty { color:#888; padding:10px 0; }
-        .badge-live { background:#8b1e1e; }
-        .badge-upcoming { background:#234d2d; }
-        .sync-note { color:#999; font-size:12px; line-height:1.5; margin-top:8px; }
-        @media (max-width:700px) {
-            .stream-row { grid-template-columns:1fr; }
-            .match-header { flex-direction:column; }
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .stream-box {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid #292929;
+        }
+
+        .stream-row {
+            display: grid;
+            grid-template-columns: 120px 1fr 150px auto;
+            gap: 8px;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .stream-row input,
+        .stream-row select {
+            margin: 0;
+        }
+
+        .stream-list {
+            margin-top: 12px;
+        }
+
+        .empty {
+            color: #888;
+            padding: 10px 0;
+        }
+
+        .badge-live {
+            background: #8b1e1e;
+        }
+
+        .badge-upcoming {
+            background: #234d2d;
+        }
+
+        .sync-note {
+            color: #999;
+            font-size: 12px;
+            line-height: 1.5;
+            margin-top: 8px;
+        }
+
+        .api-id {
+            color: #555;
+            font-size: 10px;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+
+        @media (max-width: 700px) {
+            .stream-row {
+                grid-template-columns: 1fr;
+            }
+
+            .match-header {
+                flex-direction: column;
+            }
         }
 
         @media (max-width: 600px) {
@@ -226,7 +284,7 @@
         <input
             id="password"
             type="password"
-            placeholder="Password"
+            placeholder="Admin password"
         >
 
         <button
@@ -263,21 +321,53 @@
 
 
         <!-- MATCH SYNC -->
+
         <div class="card">
+
             <h2>Match Schedule</h2>
-            <p class="sync-note">Matches are loaded from Cricket Data. You only need to add stream links.</p>
-            <button class="primary" onclick="syncMatches()">SYNC MATCHES</button>
-            <div id="syncMessage" class="message"></div>
+
+            <p class="sync-note">
+                Matches are loaded automatically from Cricket Data.
+                You only need to add stream links.
+            </p>
+
+            <button
+                class="primary"
+                onclick="syncMatches()">
+                SYNC MATCHES
+            </button>
+
+            <div
+                id="syncMessage"
+                class="message">
+            </div>
+
         </div>
 
+
+        <!-- LIVE MATCHES -->
+
         <div class="card">
+
             <h2>🔴 Live Matches</h2>
-            <div id="liveMatches">Loading...</div>
+
+            <div id="liveMatches">
+                Loading...
+            </div>
+
         </div>
 
+
+        <!-- UPCOMING MATCHES -->
+
         <div class="card">
+
             <h2>📅 Upcoming Matches</h2>
-            <div id="upcomingMatches">Loading...</div>
+
+            <div id="upcomingMatches">
+                Loading...
+            </div>
+
         </div>
 
     </div>
@@ -286,327 +376,1245 @@
 
 
 <script>
-    const SUPABASE_URL = "https://qkzwzdyahwzcwtqgcbud.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
-    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    /* =========================================================
+       SUPABASE
+    ========================================================= */
+
+    const SUPABASE_URL =
+        "https://qkzwzdyahwzcwtqgcbud.supabase.co";
+
+    const SUPABASE_ANON_KEY =
+        "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
+
+    const client =
+        supabase.createClient(
+            SUPABASE_URL,
+            SUPABASE_ANON_KEY
+        );
+
+
+    /* =========================================================
+       LOGIN
+    ========================================================= */
 
     async function login() {
-        const email = document.getElementById("email").value.trim();
-        const password = document.getElementById("password").value;
-        const message = document.getElementById("loginMessage");
+
+        const email =
+            document.getElementById("email").value.trim();
+
+        const password =
+            document.getElementById("password").value;
+
+        const message =
+            document.getElementById("loginMessage");
+
 
         if (!email || !password) {
-            message.textContent = "Enter your email and password.";
+
+            message.textContent =
+                "Enter your email and password.";
+
             return;
         }
 
-        message.textContent = "Signing in...";
-        const { error } = await client.auth.signInWithPassword({ email, password });
+
+        message.textContent =
+            "Signing in...";
+
+
+        const { error } =
+            await client.auth.signInWithPassword({
+                email,
+                password
+            });
+
 
         if (error) {
-            message.textContent = error.message;
+
+            message.textContent =
+                error.message;
+
             return;
         }
+
+
         showAdmin();
     }
 
+
+    /* =========================================================
+       LOGOUT
+    ========================================================= */
+
     async function logout() {
+
         await client.auth.signOut();
-        document.getElementById("adminPanel").style.display = "none";
-        document.getElementById("loginPanel").classList.remove("hidden");
+
+        document.getElementById(
+            "adminPanel"
+        ).style.display = "none";
+
+        document.getElementById(
+            "loginPanel"
+        ).classList.remove("hidden");
     }
+
+
+    /* =========================================================
+       SESSION
+    ========================================================= */
 
     async function checkSession() {
-        const { data } = await client.auth.getSession();
-        if (data.session) showAdmin();
+
+        const { data } =
+            await client.auth.getSession();
+
+
+        if (data.session) {
+
+            showAdmin();
+        }
     }
 
+
+    /* =========================================================
+       SHOW ADMIN
+       
+       IMPORTANT:
+       DO NOT AUTOMATICALLY SYNC.
+    ========================================================= */
+
     function showAdmin() {
-        document.getElementById("loginPanel").classList.add("hidden");
-        document.getElementById("adminPanel").style.display = "block";
+
+        document.getElementById(
+            "loginPanel"
+        ).classList.add("hidden");
+
+
+        document.getElementById(
+            "adminPanel"
+        ).style.display = "block";
+
+
         loadMatches();
     }
 
+
+    /* =========================================================
+       SYNC MATCHES
+       
+       Uses the NEW normalized response:
+       
+       api_match_id
+       title
+       team1
+       team2
+       competition
+       start_time
+       venue
+       status
+    ========================================================= */
+
     async function syncMatches() {
-        const message = document.getElementById("syncMessage");
-        message.textContent = "Syncing matches...";
+
+        const message =
+            document.getElementById("syncMessage");
+
+
+        message.textContent =
+            "Syncing matches...";
+
 
         try {
-            const response = await fetch("/.netlify/functions/cricket-matches");
-            const payload = await response.json();
 
-            if (!response.ok) throw new Error(payload.error || "Could not fetch matches.");
+            const response =
+                await fetch(
+                    "/.netlify/functions/cricket-matches?mode=matches"
+                );
 
-            const matches = payload.matches || [];
+
+            const payload =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    payload.error ||
+                    "Could not fetch matches."
+                );
+            }
+
+
+            const matches =
+                payload.matches || [];
+
+
             if (!matches.length) {
-                message.textContent = "No live or upcoming matches were returned.";
+
+                message.textContent =
+                    "No matches returned.";
+
                 await loadMatches();
+
                 return;
             }
 
-            const rows = matches.map(m => ({
-                api_match_id: m.id,
-                title: m.name || `${m.teams?.[0] || "Team 1"} vs ${m.teams?.[1] || "Team 2"}`,
-                team1: m.teams?.[0] || "",
-                team2: m.teams?.[1] || "",
-                competition: m.series_name || "",
-                match_time: m.dateTimeGMT ? new Date(m.dateTimeGMT).toLocaleString() : "",
-                start_time: m.dateTimeGMT || null,
-                venue: m.venue || "",
-                team1_logo: m.teamInfo?.[0]?.img || "",
-                team2_logo: m.teamInfo?.[1]?.img || "",
-                status: m.matchEnded ? "Finished" : (m.matchStarted ? "Live" : "Upcoming"),
-                embed_url: ""
-            }));
 
-            const { error } = await client.from("Matches").upsert(rows, { onConflict: "api_match_id" });
-            if (error) throw error;
+            /*
+             * Only accept complete API matches.
+             *
+             * This prevents:
+             * - empty rows
+             * - Team 1 / Team 2
+             * - TBC matches
+             * - records without API IDs
+             */
 
-            message.textContent = `Synced ${rows.length} match${rows.length === 1 ? "" : "es"}.`;
+            const rows =
+                matches
+                    .filter(match => {
+
+                        if (!match) {
+                            return false;
+                        }
+
+                        if (!match.api_match_id) {
+                            return false;
+                        }
+
+                        if (!match.team1) {
+                            return false;
+                        }
+
+                        if (!match.team2) {
+                            return false;
+                        }
+
+                        if (!match.start_time) {
+                            return false;
+                        }
+
+                        if (
+                            isPlaceholder(match.team1) ||
+                            isPlaceholder(match.team2)
+                        ) {
+                            return false;
+                        }
+
+                        return true;
+                    })
+
+
+                    .map(match => ({
+
+                        api_match_id:
+                            match.api_match_id,
+
+                        title:
+                            match.title ||
+                            `${match.team1} vs ${match.team2}`,
+
+                        team1:
+                            match.team1,
+
+                        team2:
+                            match.team2,
+
+                        competition:
+                            match.competition ||
+                            "Cricket",
+
+                        match_time:
+                            match.start_time,
+
+                        start_time:
+                            match.start_time,
+
+                        venue:
+                            match.venue || "",
+
+                        team1_logo:
+                            match.team1_logo || "",
+
+                        team2_logo:
+                            match.team2_logo || "",
+
+                        status:
+                            match.status ||
+                            "Upcoming",
+
+                        /*
+                         * Streams are stored separately.
+                         * Never overwrite an existing stream URL here.
+                         */
+                        embed_url: ""
+
+                    }));
+
+
+            if (!rows.length) {
+
+                message.textContent =
+                    "No valid matches returned.";
+
+                return;
+            }
+
+
+            /*
+             * Upsert using the UNIQUE api_match_id.
+             */
+
+            const { error } =
+                await client
+                    .from("Matches")
+                    .upsert(
+                        rows,
+                        {
+                            onConflict:
+                                "api_match_id"
+                        }
+                    );
+
+
+            if (error) {
+
+                throw error;
+            }
+
+
+            message.textContent =
+                `Synced ${rows.length} match${
+                    rows.length === 1
+                        ? ""
+                        : "es"
+                }.`;
+
+
+
             await loadMatches();
+
         } catch (error) {
+
             console.error(error);
-            message.textContent = `Sync failed: ${error.message}`;
+
+            message.textContent =
+                `Sync failed: ${error.message}`;
         }
     }
+
+
+    /* =========================================================
+       LOAD MATCHES FROM SUPABASE
+    ========================================================= */
 
     async function loadMatches() {
-        const liveContainer = document.getElementById("liveMatches");
-        const upcomingContainer = document.getElementById("upcomingMatches");
-        liveContainer.innerHTML = "Loading...";
-        upcomingContainer.innerHTML = "Loading...";
 
-        const { data, error } = await client
-            .from("Matches")
-            .select("*")
-            .in("status", ["Live", "Upcoming"])
-            .order("start_time", { ascending: true });
+        const liveContainer =
+            document.getElementById(
+                "liveMatches"
+            );
+
+
+        const upcomingContainer =
+            document.getElementById(
+                "upcomingMatches"
+            );
+
+
+        liveContainer.innerHTML =
+            "Loading...";
+
+
+        upcomingContainer.innerHTML =
+            "Loading...";
+
+
+        const { data, error } =
+            await client
+                .from("Matches")
+                .select("*")
+                .in(
+                    "status",
+                    [
+                        "Live",
+                        "Upcoming"
+                    ]
+                )
+                .order(
+                    "start_time",
+                    {
+                        ascending: true
+                    }
+                );
+
 
         if (error) {
-            const msg = `<p style="color:#ff6666;">${escapeHtml(error.message)}</p>`;
-            liveContainer.innerHTML = msg;
-            upcomingContainer.innerHTML = msg;
+
+            const msg =
+                `<p style="color:#ff6666;">
+                    ${escapeHtml(error.message)}
+                </p>`;
+
+
+            liveContainer.innerHTML =
+                msg;
+
+
+            upcomingContainer.innerHTML =
+                msg;
+
+
             return;
         }
 
-        const live = (data || []).filter(m => m.status === "Live");
-        const upcoming = (data || []).filter(m => m.status === "Upcoming");
 
-        renderMatchList(liveContainer, live, "live");
-        renderMatchList(upcomingContainer, upcoming, "upcoming");
+        /*
+         * Remove placeholder matches from display
+         * even if one somehow exists in the database.
+         */
+
+        const validMatches =
+            (data || []).filter(match => {
+
+                return (
+                    match.team1 &&
+                    match.team2 &&
+                    !isPlaceholder(match.team1) &&
+                    !isPlaceholder(match.team2)
+                );
+            });
+
+
+        const live =
+            validMatches.filter(
+                match =>
+                    match.status === "Live"
+            );
+
+
+        const upcoming =
+            validMatches.filter(
+                match =>
+                    match.status === "Upcoming"
+            );
+
+
+        renderMatchList(
+            liveContainer,
+            live,
+            "live"
+        );
+
+
+        renderMatchList(
+            upcomingContainer,
+            upcoming,
+            "upcoming"
+        );
     }
 
-    function renderMatchList(container, matches, type) {
+
+    /* =========================================================
+       RENDER MATCHES
+    ========================================================= */
+
+    function renderMatchList(
+        container,
+        matches,
+        type
+    ) {
+
         if (!matches.length) {
-            container.innerHTML = `<div class="empty">No ${type} matches.</div>`;
+
+            container.innerHTML =
+                `<div class="empty">
+                    No ${type} matches.
+                </div>`;
+
             return;
         }
 
+
         container.innerHTML = "";
+
+
         matches.forEach(match => {
-            const div = document.createElement("div");
-            div.className = "match";
+
+            const div =
+                document.createElement("div");
+
+
+            div.className =
+                "match";
+
 
             div.innerHTML = `
+
                 <div class="match-header">
+
                     <div>
-                        <div class="match-title">${escapeHtml(match.title)}</div>
-                        <div class="match-meta">
-                            ${escapeHtml(match.team1)} vs ${escapeHtml(match.team2)}
-                            ${match.competition ? `<br>${escapeHtml(match.competition)}` : ""}
-                            ${match.start_time ? `<br>${formatDate(match.start_time)}` : ""}
-                            ${match.venue ? `<br>${escapeHtml(match.venue)}` : ""}
+
+                        <div class="match-title">
+                            ${escapeHtml(
+                                match.title ||
+                                `${match.team1} vs ${match.team2}`
+                            )}
                         </div>
+
+
+                        <div class="match-meta">
+
+                            ${escapeHtml(
+                                match.team1
+                            )}
+                            vs
+                            ${escapeHtml(
+                                match.team2
+                            )}
+
+                            ${
+                                match.competition
+                                    ? `<br>${escapeHtml(
+                                        match.competition
+                                    )}`
+                                    : ""
+                            }
+
+                            ${
+                                match.start_time
+                                    ? `<br>${formatDate(
+                                        match.start_time
+                                    )}`
+                                    : ""
+                            }
+
+                            ${
+                                match.venue
+                                    ? `<br>${escapeHtml(
+                                        match.venue
+                                    )}`
+                                    : ""
+                            }
+
+                        </div>
+
+
+                        ${
+                            match.api_match_id
+                                ? `<div class="api-id">
+                                    API ID:
+                                    ${escapeHtml(
+                                        match.api_match_id
+                                    )}
+                                   </div>`
+                                : ""
+                        }
+
                     </div>
-                    <span class="status ${type === "live" ? "badge-live" : "badge-upcoming"}">
-                        ${escapeHtml(match.status)}
+
+
+                    <span
+                        class="status ${
+                            type === "live"
+                                ? "badge-live"
+                                : "badge-upcoming"
+                        }">
+
+                        ${escapeHtml(
+                            match.status
+                        )}
+
                     </span>
+
                 </div>
 
+
                 <div class="stream-box">
-                    <strong>Streams</strong>
-                    <div id="streams-${match.id}" class="stream-list">Loading streams...</div>
-                    <div class="toolbar">
-                        <button class="secondary" onclick="addStreamForm('${match.id}')">+ ADD STREAM</button>
-                        ${!match.api_match_id ? `<button class="danger" onclick="deleteManualMatch('${match.id}')">DELETE MANUAL MATCH</button>` : ""}
+
+                    <strong>
+                        Streams
+                    </strong>
+
+
+                    <div
+                        id="streams-${match.id}"
+                        class="stream-list">
+
+                        Loading streams...
+
                     </div>
-                    <div id="add-stream-${match.id}"></div>
+
+
+                    <div class="toolbar">
+
+                        <button
+                            class="secondary"
+                            onclick="addStreamForm('${match.id}')">
+
+                            + ADD STREAM
+
+                        </button>
+
+
+                        ${
+                            !match.api_match_id
+                                ? `
+                                    <button
+                                        class="danger"
+                                        onclick="deleteManualMatch('${match.id}')">
+
+                                        DELETE MANUAL MATCH
+
+                                    </button>
+                                  `
+                                : ""
+                        }
+
+                    </div>
+
+
+                    <div
+                        id="add-stream-${match.id}">
+                    </div>
+
                 </div>
             `;
 
+
             container.appendChild(div);
+
+
             loadStreams(match.id);
         });
     }
 
-    async function deleteManualMatch(matchId) {
-        const { data: match, error: fetchError } = await client
-            .from("Matches")
-            .select("id, api_match_id, title")
-            .eq("id", matchId)
-            .single();
+
+    /* =========================================================
+       PLACEHOLDER CHECK
+    ========================================================= */
+
+    function isPlaceholder(value) {
+
+        if (!value) {
+            return true;
+        }
+
+
+        return /^(tbc|tbd|to be confirmed|to be decided)$/i
+            .test(
+                String(value).trim()
+            );
+    }
+
+
+    /* =========================================================
+       DELETE MANUAL MATCH
+    ========================================================= */
+
+    async function deleteManualMatch(
+        matchId
+    ) {
+
+        const { data: match, error: fetchError } =
+            await client
+                .from("Matches")
+                .select(
+                    "id, api_match_id, title"
+                )
+                .eq("id", matchId)
+                .single();
+
 
         if (fetchError) {
-            alert(fetchError.message);
+
+            alert(
+                fetchError.message
+            );
+
             return;
         }
+
 
         if (match.api_match_id) {
-            alert("API-synced matches cannot be deleted manually.");
+
+            alert(
+                "API-synced matches cannot be deleted manually."
+            );
+
             return;
         }
 
-        if (!confirm(`Delete manual match \"${match.title}\"?`)) return;
 
-        const { error } = await client
-            .from("Matches")
-            .delete()
-            .eq("id", matchId);
+        if (
+            !confirm(
+                `Delete manual match "${match.title}"?`
+            )
+        ) {
+
+            return;
+        }
+
+
+        const { error } =
+            await client
+                .from("Matches")
+                .delete()
+                .eq(
+                    "id",
+                    matchId
+                );
+
 
         if (error) {
-            alert(error.message);
+
+            alert(
+                error.message
+            );
+
             return;
         }
+
 
         await loadMatches();
     }
 
-    async function loadStreams(matchId) {
-        const container = document.getElementById(`streams-${matchId}`);
-        if (!container) return;
 
-        const { data, error } = await client
-            .from("streams")
-            .select("*")
-            .eq("match_id", matchId)
-            .order("created_at", { ascending: true });
+    /* =========================================================
+       LOAD STREAMS
+    ========================================================= */
+
+    async function loadStreams(
+        matchId
+    ) {
+
+        const container =
+            document.getElementById(
+                `streams-${matchId}`
+            );
+
+
+        if (!container) {
+            return;
+        }
+
+
+        const { data, error } =
+            await client
+                .from("streams")
+                .select("*")
+                .eq(
+                    "match_id",
+                    matchId
+                )
+                .order(
+                    "created_at",
+                    {
+                        ascending: true
+                    }
+                );
+
 
         if (error) {
-            container.innerHTML = `<span style="color:#ff6666;">${escapeHtml(error.message)}</span>`;
+
+            container.innerHTML =
+                `<span style="color:#ff6666;">
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </span>`;
+
             return;
         }
 
-        if (!data || !data.length) {
-            container.innerHTML = `<span style="color:#888;">No streams added yet.</span>`;
+
+        if (
+            !data ||
+            !data.length
+        ) {
+
+            container.innerHTML =
+                `<span style="color:#888;">
+                    No streams added yet.
+                </span>`;
+
             return;
         }
 
-        container.innerHTML = data.map(stream => `
-            <div class="stream-row">
-                <select id="lang-${stream.id}">
-                    ${languageOption("English", stream.language)}
-                    ${languageOption("Hindi", stream.language)}
-                    ${languageOption("Telugu", stream.language)}
-                    ${languageOption("Tamil", stream.language)}
-                    ${languageOption("Malayalam", stream.language)}
-                    ${languageOption("Kannada", stream.language)}
-                    ${languageOption("Other", stream.language)}
-                </select>
-                <input id="url-${stream.id}" type="url" value="${escapeHtml(stream.embed_url)}" placeholder="https://...">
-                <input id="name-${stream.id}" type="text" value="${escapeHtml(stream.stream_name)}" placeholder="Stream name">
-                <div class="toolbar" style="margin:0;">
-                    <button class="secondary" onclick="updateStream('${stream.id}')">SAVE</button>
-                    <button class="danger" onclick="deleteStream('${stream.id}', '${matchId}')">DELETE</button>
+
+        container.innerHTML =
+            data.map(stream => `
+
+                <div class="stream-row">
+
+                    <select
+                        id="lang-${stream.id}">
+
+                        ${languageOption(
+                            "English",
+                            stream.language
+                        )}
+
+                        ${languageOption(
+                            "Hindi",
+                            stream.language
+                        )}
+
+                        ${languageOption(
+                            "Telugu",
+                            stream.language
+                        )}
+
+                        ${languageOption(
+                            "Tamil",
+                            stream.language
+                        )}
+
+                        ${languageOption(
+                            "Malayalam",
+                            stream.language
+                        )}
+
+                        ${languageOption(
+                            "Kannada",
+                            stream.language
+                        )}
+
+                        ${languageOption(
+                            "Other",
+                            stream.language
+                        )}
+
+                    </select>
+
+
+                    <input
+                        id="url-${stream.id}"
+                        type="url"
+                        value="${escapeHtml(
+                            stream.embed_url
+                        )}"
+                        placeholder="https://..."
+                    >
+
+
+                    <input
+                        id="name-${stream.id}"
+                        type="text"
+                        value="${escapeHtml(
+                            stream.stream_name
+                        )}"
+                        placeholder="Stream name"
+                    >
+
+
+                    <div
+                        class="toolbar"
+                        style="margin:0;">
+
+                        <button
+                            class="secondary"
+                            onclick="updateStream('${stream.id}')">
+
+                            SAVE
+
+                        </button>
+
+
+                        <button
+                            class="danger"
+                            onclick="deleteStream(
+                                '${stream.id}',
+                                '${matchId}'
+                            )">
+
+                            DELETE
+
+                        </button>
+
+                    </div>
+
                 </div>
-            </div>
-        `).join("");
+
+            `).join("");
     }
 
-    function addStreamForm(matchId) {
-        const container = document.getElementById(`add-stream-${matchId}`);
+
+    /* =========================================================
+       ADD STREAM FORM
+    ========================================================= */
+
+    function addStreamForm(
+        matchId
+    ) {
+
+        const container =
+            document.getElementById(
+                `add-stream-${matchId}`
+            );
+
+
         container.innerHTML = `
+
             <div class="stream-row">
-                <select id="new-lang-${matchId}">
-                    ${languageOption("English", "English")}
-                    ${languageOption("Hindi", "")}
-                    ${languageOption("Telugu", "")}
-                    ${languageOption("Tamil", "")}
-                    ${languageOption("Malayalam", "")}
-                    ${languageOption("Kannada", "")}
-                    ${languageOption("Other", "")}
+
+                <select
+                    id="new-lang-${matchId}">
+
+                    ${languageOption(
+                        "English",
+                        "English"
+                    )}
+
+                    ${languageOption(
+                        "Hindi",
+                        ""
+                    )}
+
+                    ${languageOption(
+                        "Telugu",
+                        ""
+                    )}
+
+                    ${languageOption(
+                        "Tamil",
+                        ""
+                    )}
+
+                    ${languageOption(
+                        "Malayalam",
+                        ""
+                    )}
+
+                    ${languageOption(
+                        "Kannada",
+                        ""
+                    )}
+
+                    ${languageOption(
+                        "Other",
+                        ""
+                    )}
+
                 </select>
-                <input id="new-url-${matchId}" type="url" placeholder="https://your-embed-url...">
-                <input id="new-name-${matchId}" type="text" placeholder="Stream 1">
-                <button class="primary" style="margin-top:0;" onclick="createStream('${matchId}')">ADD</button>
+
+
+                <input
+                    id="new-url-${matchId}"
+                    type="url"
+                    placeholder="https://your-embed-url..."
+                >
+
+
+                <input
+                    id="new-name-${matchId}"
+                    type="text"
+                    placeholder="Stream 1"
+                >
+
+
+                <button
+                    class="primary"
+                    style="margin-top:0;"
+                    onclick="createStream('${matchId}')">
+
+                    ADD
+
+                </button>
+
             </div>
+
         `;
     }
 
-    async function createStream(matchId) {
-        const language = document.getElementById(`new-lang-${matchId}`).value;
-        const embed_url = document.getElementById(`new-url-${matchId}`).value.trim();
-        const stream_name = document.getElementById(`new-name-${matchId}`).value.trim() || "Stream";
+
+    /* =========================================================
+       CREATE STREAM
+    ========================================================= */
+
+    async function createStream(
+        matchId
+    ) {
+
+        const language =
+            document.getElementById(
+                `new-lang-${matchId}`
+            ).value;
+
+
+        const embed_url =
+            document.getElementById(
+                `new-url-${matchId}`
+            ).value.trim();
+
+
+        const stream_name =
+            document.getElementById(
+                `new-name-${matchId}`
+            ).value.trim()
+            || "Stream";
+
 
         if (!embed_url) {
-            alert("Enter a stream embed URL.");
+
+            alert(
+                "Enter a stream embed URL."
+            );
+
             return;
         }
 
-        const { error } = await client.from("streams").insert([{
-            match_id: matchId,
-            language,
-            stream_name,
-            embed_url,
-            active: true
-        }]);
+
+        const { error } =
+            await client
+                .from("streams")
+                .insert([{
+
+                    match_id:
+                        matchId,
+
+                    language:
+                        language,
+
+                    stream_name:
+                        stream_name,
+
+                    embed_url:
+                        embed_url,
+
+                    active:
+                        true
+
+                }]);
+
 
         if (error) {
-            alert(error.message);
+
+            alert(
+                error.message
+            );
+
             return;
         }
 
-        await loadStreams(matchId);
-        document.getElementById(`add-stream-${matchId}`).innerHTML = "";
+
+        await loadStreams(
+            matchId
+        );
+
+
+        document.getElementById(
+            `add-stream-${matchId}`
+        ).innerHTML = "";
     }
 
-    async function updateStream(streamId) {
-        const language = document.getElementById(`lang-${streamId}`).value;
-        const embed_url = document.getElementById(`url-${streamId}`).value.trim();
-        const stream_name = document.getElementById(`name-${streamId}`).value.trim() || "Stream";
 
-        const { error } = await client.from("streams")
-            .update({ language, embed_url, stream_name })
-            .eq("id", streamId);
+    /* =========================================================
+       UPDATE STREAM
+    ========================================================= */
+
+    async function updateStream(
+        streamId
+    ) {
+
+        const language =
+            document.getElementById(
+                `lang-${streamId}`
+            ).value;
+
+
+        const embed_url =
+            document.getElementById(
+                `url-${streamId}`
+            ).value.trim();
+
+
+        const stream_name =
+            document.getElementById(
+                `name-${streamId}`
+            ).value.trim()
+            || "Stream";
+
+
+        const { error } =
+            await client
+                .from("streams")
+                .update({
+
+                    language,
+                    embed_url,
+                    stream_name
+
+                })
+                .eq(
+                    "id",
+                    streamId
+                );
+
 
         if (error) {
-            alert(error.message);
+
+            alert(
+                error.message
+            );
+
             return;
         }
 
-        alert("Stream updated.");
+
+        alert(
+            "Stream updated."
+        );
     }
 
-    async function deleteStream(streamId, matchId) {
-        if (!confirm("Delete this stream?")) return;
 
-        const { error } = await client.from("streams").delete().eq("id", streamId);
+    /* =========================================================
+       DELETE STREAM
+    ========================================================= */
+
+    async function deleteStream(
+        streamId,
+        matchId
+    ) {
+
+        if (
+            !confirm(
+                "Delete this stream?"
+            )
+        ) {
+
+            return;
+        }
+
+
+        const { error } =
+            await client
+                .from("streams")
+                .delete()
+                .eq(
+                    "id",
+                    streamId
+                );
+
+
         if (error) {
-            alert(error.message);
+
+            alert(
+                error.message
+            );
+
             return;
         }
 
-        await loadStreams(matchId);
+
+        await loadStreams(
+            matchId
+        );
     }
 
-    function languageOption(value, selected) {
-        return `<option value="${value}" ${value === selected ? "selected" : ""}>${value}</option>`;
+
+    /* =========================================================
+       LANGUAGE OPTION
+    ========================================================= */
+
+    function languageOption(
+        value,
+        selected
+    ) {
+
+        return `
+            <option
+                value="${escapeHtml(value)}"
+                ${
+                    value === selected
+                        ? "selected"
+                        : ""
+                }>
+
+                ${escapeHtml(value)}
+
+            </option>
+        `;
     }
 
-    function formatDate(value) {
-        const date = new Date(value);
-        return date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+
+    /* =========================================================
+       FORMAT DATE
+    ========================================================= */
+
+    function formatDate(
+        value
+    ) {
+
+        const date =
+            new Date(value);
+
+
+        if (
+            Number.isNaN(
+                date.getTime()
+            )
+        ) {
+
+            return "";
+        }
+
+
+        return date.toLocaleString(
+            [],
+            {
+                dateStyle:
+                    "medium",
+
+                timeStyle:
+                    "short"
+            }
+        );
     }
 
-    function escapeHtml(value) {
-        return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+
+    /* =========================================================
+       ESCAPE HTML
+    ========================================================= */
+
+    function escapeHtml(
+        value
+    ) {
+
+        return String(
+            value ?? ""
+        )
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
     }
+
+
+    /* =========================================================
+       START
+    ========================================================= */
 
     checkSession();
+
 </script>
 
 </body>
