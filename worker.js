@@ -2,17 +2,23 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    /*
+     * Cricket API
+     */
     if (url.pathname === "/api/cricket-matches") {
       return handleCricketAPI(request);
     }
 
+    /*
+     * Static site
+     */
     return env.ASSETS.fetch(request);
   }
 };
 
 
 /* =========================================================
-   MAIN API
+   MAIN CRICKET API
    ========================================================= */
 
 async function handleCricketAPI(request) {
@@ -30,7 +36,7 @@ async function handleCricketAPI(request) {
     if (mode === "matches") {
 
       /*
-       * First get the broad live/recent/upcoming feed.
+       * Get the main SportScore cricket feed.
        */
 
       const listResponse = await fetch(
@@ -68,22 +74,29 @@ async function handleCricketAPI(request) {
 
 
       /*
-       * Only live matches need the expensive/detail lookup.
+       * Enrich every LIVE match with the SportScore
+       * single-match detail endpoint.
        *
-       * Upcoming and finished matches can stay as returned
-       * by the main list endpoint.
+       * Upcoming/finished matches are left as returned
+       * by the main feed.
        */
 
       const enrichedMatches =
         await Promise.all(
           listMatches.map(
-            async match => {
+            async (match) => {
 
               const status =
                 String(
                   match.status || ""
-                ).toLowerCase();
+                )
+                  .trim()
+                  .toLowerCase();
 
+
+              /*
+               * Only fetch details for live matches.
+               */
 
               if (
                 status !== "live" ||
@@ -91,7 +104,6 @@ async function handleCricketAPI(request) {
               ) {
 
                 return match;
-
               }
 
 
@@ -104,7 +116,6 @@ async function handleCricketAPI(request) {
               if (!slug) {
 
                 return match;
-
               }
 
 
@@ -115,14 +126,6 @@ async function handleCricketAPI(request) {
                     slug
                   );
 
-
-                /*
-                 * Merge only the fields we care about.
-                 *
-                 * The original list match remains intact,
-                 * and the detail response can overwrite its
-                 * score/status information when available.
-                 */
 
                 const score =
                   extractScore(
@@ -165,13 +168,15 @@ async function handleCricketAPI(request) {
 
 
                 /*
-                 * Don't break the whole feed because one
-                 * match-detail request failed.
+                 * A failed detail request must not
+                 * break the entire match feed.
                  */
 
                 return {
                   ...match,
-                  detail_loaded: false
+
+                  detail_loaded:
+                    false
                 };
               }
 
@@ -202,7 +207,8 @@ async function handleCricketAPI(request) {
 
     return json(
       {
-        error: "Unknown mode."
+        error:
+          "Unknown mode."
       },
       400
     );
@@ -237,7 +243,8 @@ async function fetchMatchDetail(
 ) {
 
   const url =
-    `https://sportscore.com/api/widget/match/?sport=cricket&slug=${encodeURIComponent(slug)}`;
+    "https://sportscore.com/api/widget/match/" +
+    `?sport=cricket&slug=${encodeURIComponent(slug)}`;
 
 
   const response =
@@ -258,7 +265,7 @@ async function fetchMatchDetail(
       await response.text();
 
     throw new Error(
-      `Detail HTTP ${response.status}: ${body}`
+      `SportScore detail returned HTTP ${response.status}: ${body}`
     );
   }
 
@@ -268,7 +275,7 @@ async function fetchMatchDetail(
 
 
 /* =========================================================
-   EXTRACT SLUG FROM SportScore URL
+   EXTRACT SLUG
    ========================================================= */
 
 function extractSlug(
@@ -281,14 +288,6 @@ function extractSlug(
 
 
   try {
-
-    /*
-     * Handles:
-     *
-     * /cricket/match/england-vs-pakistan/
-     *
-     * https://sportscore.com/cricket/match/england-vs-pakistan/
-     */
 
     const url =
       new URL(
@@ -304,7 +303,9 @@ function extractSlug(
 
 
     const matchIndex =
-      parts.indexOf("match");
+      parts.indexOf(
+        "match"
+      );
 
 
     if (
@@ -315,24 +316,17 @@ function extractSlug(
       return parts[
         matchIndex + 1
       ];
-
     }
 
 
-    /*
-     * Fallback:
-     * use the final non-empty path segment.
-     */
-
     return (
-      parts[parts.length - 1] ||
-      null
+      parts[
+        parts.length - 1
+      ] || null
     );
 
 
-  } catch (
-    error
-  ) {
+  } catch (error) {
 
     return null;
   }
@@ -360,35 +354,49 @@ function extractScore(
   ].filter(Boolean);
 
 
+  /*
+   * IMPORTANT:
+   *
+   * Do NOT use "home" or "away" here.
+   * Those are team names/objects, not scores.
+   */
+
   let homeScore =
-    findFirstScore(
+    findScoreValue(
       containers,
       [
         "home_score",
         "homeScore",
-        "home"
+        "home_runs",
+        "homeRuns",
+        "local_score",
+        "localScore"
       ]
     );
 
 
   let awayScore =
-    findFirstScore(
+    findScoreValue(
       containers,
       [
         "away_score",
         "awayScore",
-        "away"
+        "away_runs",
+        "awayRuns",
+        "visitor_score",
+        "visitorScore"
       ]
     );
 
 
   /*
-   * Search common nested score structures.
+   * Search nested score structures.
    */
 
   if (
-    homeScore === null ||
-    homeScore === undefined
+    !hasUsableScore(
+      homeScore
+    )
   ) {
 
     homeScore =
@@ -396,13 +404,13 @@ function extractScore(
         detail,
         "home"
       );
-
   }
 
 
   if (
-    awayScore === null ||
-    awayScore === undefined
+    !hasUsableScore(
+      awayScore
+    )
   ) {
 
     awayScore =
@@ -410,13 +418,12 @@ function extractScore(
         detail,
         "away"
       );
-
   }
 
 
   /*
-   * If detail doesn't contain usable scores,
-   * preserve the list endpoint's values.
+   * If the detail endpoint doesn't contain a usable
+   * score, preserve the main-list score.
    */
 
   if (
@@ -428,7 +435,6 @@ function extractScore(
     homeScore =
       fallback?.home_score ??
       null;
-
   }
 
 
@@ -441,7 +447,6 @@ function extractScore(
     awayScore =
       fallback?.away_score ??
       null;
-
   }
 
 
@@ -460,10 +465,10 @@ function extractScore(
 
 
 /* =========================================================
-   FIND SIMPLE SCORE
+   FIND SCORE VALUE
    ========================================================= */
 
-function findFirstScore(
+function findScoreValue(
   containers,
   keys
 ) {
@@ -486,70 +491,60 @@ function findFirstScore(
     ) {
 
       if (
-        Object.prototype.hasOwnProperty.call(
+        !Object.prototype.hasOwnProperty.call(
           container,
           key
         )
       ) {
 
-        const value =
-          container[key];
-
-
-        /*
-         * Don't treat the team object itself as a score.
-         */
-
-        if (
-          typeof value !== "object"
-        ) {
-
-          if (
-            hasUsableScore(
-              value
-            )
-          ) {
-
-            return value;
-
-          }
-
-        }
-
-
-        /*
-         * If it's an object with a score-like
-         * property, inspect it.
-         */
-
-        if (
-          value &&
-          typeof value === "object"
-        ) {
-
-          const nested =
-            value.score ??
-            value.runs ??
-            value.value ??
-            null;
-
-
-          if (
-            hasUsableScore(
-              nested
-            )
-          ) {
-
-            return nested;
-
-          }
-
-        }
-
+        continue;
       }
 
-    }
 
+      const value =
+        container[key];
+
+
+      /*
+       * Direct primitive score.
+       */
+
+      if (
+        hasUsableScore(
+          value
+        )
+      ) {
+
+        return value;
+      }
+
+
+      /*
+       * Nested score object.
+       */
+
+      if (
+        value &&
+        typeof value === "object"
+      ) {
+
+        const nested =
+          value.score ??
+          value.runs ??
+          value.value ??
+          null;
+
+
+        if (
+          hasUsableScore(
+            nested
+          )
+        ) {
+
+          return nested;
+        }
+      }
+    }
   }
 
 
@@ -558,7 +553,7 @@ function findFirstScore(
 
 
 /* =========================================================
-   FIND NESTED TEAM SCORE
+   FIND NESTED SCORE
    ========================================================= */
 
 function findNestedScore(
@@ -576,7 +571,11 @@ function findNestedScore(
 
 
   /*
-   * Direct team object.
+   * Example:
+   *
+   * home: {
+   *     score: "150/6"
+   * }
    */
 
   if (
@@ -603,15 +602,12 @@ function findNestedScore(
 
       return direct;
     }
-
   }
 
 
   /*
-   * Recursively search nested objects.
-   *
-   * This is deliberately defensive because the
-   * detail schema can contain nested scoreboard data.
+   * Recursively inspect nested objects,
+   * accepting only actual score-like properties.
    */
 
   for (
@@ -642,9 +638,7 @@ function findNestedScore(
 
         return found;
       }
-
     }
-
   }
 
 
@@ -694,9 +688,7 @@ function extractStatusText(
       return String(
         value
       );
-
     }
-
   }
 
 
@@ -721,14 +713,34 @@ function hasUsableScore(
   }
 
 
+  /*
+   * Objects are never direct scores.
+   */
+
+  if (
+    typeof value === "object"
+  ) {
+
+    return false;
+  }
+
+
   const text =
-    String(value).trim();
+    String(
+      value
+    ).trim();
 
 
-  return (
-    text !== "" &&
-    text !== "-"
-  );
+  if (
+    !text ||
+    text === "-"
+  ) {
+
+    return false;
+  }
+
+
+  return true;
 }
 
 
@@ -753,7 +765,7 @@ function normalizeScoreValue(
     typeof value === "object"
   ) {
 
-    const runs =
+    const nested =
       value.runs ??
       value.score ??
       value.value ??
@@ -761,8 +773,8 @@ function normalizeScoreValue(
 
 
     if (
-      runs === null ||
-      runs === undefined
+      nested === null ||
+      nested === undefined
     ) {
 
       return null;
@@ -770,14 +782,15 @@ function normalizeScoreValue(
 
 
     return String(
-      runs
+      nested
     );
-
   }
 
 
   const text =
-    String(value).trim();
+    String(
+      value
+    ).trim();
 
 
   if (
@@ -810,6 +823,7 @@ function json(
       status,
 
       headers: {
+
         "content-type":
           "application/json",
 
@@ -818,6 +832,7 @@ function json(
 
         "access-control-allow-origin":
           "*"
+
       }
     }
   );
