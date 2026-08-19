@@ -1,89 +1,1159 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
 <title>Cricketive | Global Cricket Live</title>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
-*{box-sizing:border-box}body{margin:0;background:#050505;color:#fff;font-family:Arial,Helvetica,sans-serif}
-.header{height:70px;padding:0 28px;display:flex;align-items:center;justify-content:space-between;background:#090909;border-bottom:1px solid #222}
-.brand img{height:48px;width:48px;object-fit:cover;border-radius:8px;vertical-align:middle}.brand span{font-weight:800;font-size:21px;margin-left:9px;vertical-align:middle}
-.live{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700}.live-dot{width:9px;height:9px;background:#ff3030;border-radius:50%;box-shadow:0 0 10px rgba(255,48,48,.8)}
-.hero{text-align:center;padding:38px 15px 28px}.hero h1{margin:0;font-size:30px}.hero p{color:#999;font-size:14px}
-.matches{width:100%;max-width:1050px;margin:auto;padding:0 15px 35px}.section-title{font-size:20px;margin:20px 0 14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.match-card{background:#101010;border:1px solid #252525;border-radius:12px;padding:18px}
-.match-name{font-size:18px;font-weight:700}.match-info{color:#999;font-size:13px;margin-top:8px;line-height:1.55}
-.status{display:inline-block;margin-top:11px;padding:5px 9px;border-radius:20px;background:#222;font-size:11px}.live-status{background:#3a1010;color:#ff6666}
-.available{color:#72d38b;font-size:12px;margin-top:9px}.unavailable{color:#999;font-size:12px}
-.score-box{margin-top:13px;padding:12px;background:#080808;border:1px solid #222;border-radius:9px}.score-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:14px}.score-row strong{font-size:16px}.score-status{color:#999;font-size:12px;margin-top:7px}
-.watch-button{display:inline-block;margin-top:14px;padding:10px 16px;background:#5865f2;color:#fff;text-decoration:none;border-radius:7px;font-size:13px;font-weight:700}
-.empty{color:#777;text-align:center;padding:22px;background:#0b0b0b;border:1px solid #1d1d1d;border-radius:10px}
-.community{text-align:center;padding:38px 15px 48px;background:#090909}.community h2{margin:0}.community p{color:#999;font-size:14px}
-.community-button{display:inline-block;padding:12px 20px;background:#5865f2;color:#fff;text-decoration:none;border-radius:8px;font-weight:700}
-footer{text-align:center;padding:18px;background:#030303;color:#666;font-size:11px}@media(max-width:600px){.header{height:60px;padding:0 14px}.brand img{height:40px;width:40px}.brand span{font-size:18px}.hero h1{font-size:23px}}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #050505;
+    color: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.header {
+    height: 70px;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #090909;
+    border-bottom: 1px solid #222;
+}
+
+.brand img {
+    height: 48px;
+    width: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    vertical-align: middle;
+}
+
+.brand span {
+    font-weight: 800;
+    font-size: 21px;
+    margin-left: 9px;
+    vertical-align: middle;
+}
+
+.live {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.live-dot {
+    width: 9px;
+    height: 9px;
+    background: #ff3030;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(255,48,48,.8);
+}
+
+.hero {
+    text-align: center;
+    padding: 38px 15px 28px;
+}
+
+.hero h1 {
+    margin: 0;
+    font-size: 30px;
+}
+
+.hero p {
+    color: #999;
+    font-size: 14px;
+}
+
+.matches {
+    width: 100%;
+    max-width: 1050px;
+    margin: auto;
+    padding: 0 15px 35px;
+}
+
+.section-title {
+    font-size: 20px;
+    margin: 20px 0 14px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(280px, 1fr)
+        );
+    gap: 12px;
+}
+
+.match-card {
+    background: #101010;
+    border: 1px solid #252525;
+    border-radius: 12px;
+    padding: 18px;
+}
+
+.match-name {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.match-info {
+    color: #999;
+    font-size: 13px;
+    margin-top: 8px;
+    line-height: 1.55;
+}
+
+.status {
+    display: inline-block;
+    margin-top: 11px;
+    padding: 5px 9px;
+    border-radius: 20px;
+    background: #222;
+    font-size: 11px;
+}
+
+.live-status {
+    background: #3a1010;
+    color: #ff6666;
+}
+
+.available {
+    color: #72d38b;
+    font-size: 12px;
+    margin-top: 9px;
+}
+
+.unavailable {
+    color: #999;
+    font-size: 12px;
+    margin-top: 9px;
+}
+
+.score-box {
+    margin-top: 13px;
+    padding: 12px;
+    background: #080808;
+    border: 1px solid #222;
+    border-radius: 9px;
+}
+
+.score-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 14px;
+}
+
+.score-row strong {
+    font-size: 16px;
+}
+
+.score-status {
+    color: #999;
+    font-size: 12px;
+    margin-top: 7px;
+}
+
+.watch-button {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 10px 16px;
+    background: #5865f2;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.empty {
+    color: #777;
+    text-align: center;
+    padding: 22px;
+    background: #0b0b0b;
+    border: 1px solid #1d1d1d;
+    border-radius: 10px;
+}
+
+.community {
+    text-align: center;
+    padding: 38px 15px 48px;
+    background: #090909;
+}
+
+.community h2 {
+    margin: 0;
+}
+
+.community p {
+    color: #999;
+    font-size: 14px;
+}
+
+.community-button {
+    display: inline-block;
+    padding: 12px 20px;
+    background: #5865f2;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 700;
+}
+
+footer {
+    text-align: center;
+    padding: 18px;
+    background: #030303;
+    color: #666;
+    font-size: 11px;
+}
+
+@media(max-width:600px) {
+
+    .header {
+        height: 60px;
+        padding: 0 14px;
+    }
+
+    .brand img {
+        height: 40px;
+        width: 40px;
+    }
+
+    .brand span {
+        font-size: 18px;
+    }
+
+    .hero h1 {
+        font-size: 23px;
+    }
+}
+
 </style>
+
 </head>
+
+
 <body>
-<header class="header"><div class="brand"><img src="cricketive-logo.webp" alt="Cricketive logo"><span>CRICKETIVE</span></div><div class="live"><span class="live-dot"></span>LIVE</div></header>
-<section class="hero"><h1>🌍 Global Cricket Live</h1><p>Watch cricket from around the world</p></section>
-<main class="matches"><h2 class="section-title">🔴 Live Now</h2><div id="liveMatches"><div class="empty">Loading matches...</div></div>
-<h2 class="section-title">📅 Upcoming Matches</h2><div id="upcomingMatches"><div class="empty">Loading matches...</div></div></main>
-<section class="community"><h2>💬 Join Cricketive</h2><p>Talk cricket, follow matches and connect with fans worldwide.</p><a class="community-button" href="https://discord.gg/SYfPEKRrnQ" target="_blank" rel="noopener noreferrer">JOIN OUR DISCORD</a></section>
-<footer>© 2026 Cricketive • Global Cricket Community</footer>
+
+
+<header class="header">
+
+    <div class="brand">
+
+        <img
+            src="cricketive-logo.webp"
+            alt="Cricketive logo"
+        >
+
+        <span>
+            CRICKETIVE
+        </span>
+
+    </div>
+
+
+    <div class="live">
+
+        <span class="live-dot"></span>
+
+        LIVE
+
+    </div>
+
+</header>
+
+
+
+<section class="hero">
+
+    <h1>
+        🌍 Global Cricket Live
+    </h1>
+
+    <p>
+        Watch cricket from around the world
+    </p>
+
+</section>
+
+
+
+<main class="matches">
+
+
+    <h2 class="section-title">
+        🔴 Live Now
+    </h2>
+
+
+    <div id="liveMatches">
+
+        <div class="empty">
+            Loading matches...
+        </div>
+
+    </div>
+
+
+
+    <h2 class="section-title">
+        📅 Upcoming Matches
+    </h2>
+
+
+    <div id="upcomingMatches">
+
+        <div class="empty">
+            Loading matches...
+        </div>
+
+    </div>
+
+</main>
+
+
+
+<section class="community">
+
+    <h2>
+        💬 Join Cricketive
+    </h2>
+
+    <p>
+        Talk cricket, follow matches and connect with fans worldwide.
+    </p>
+
+    <a
+        class="community-button"
+        href="https://discord.gg/SYfPEKRrnQ"
+        target="_blank"
+        rel="noopener noreferrer"
+    >
+        JOIN OUR DISCORD
+    </a>
+
+</section>
+
+
+
+<footer>
+    © 2026 Cricketive • Global Cricket Community
+</footer>
+
+
+
 <script>
-const SUPABASE_URL="https://qkzwzdyahwzcwtqgcbud.supabase.co";
-const SUPABASE_ANON_KEY="sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
-const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
-async function loadMatches(){
-  const liveEl=document.getElementById("liveMatches"), upcomingEl=document.getElementById("upcomingMatches");
-  const {data:stored,error}=await db.from("Matches").select("*").order("start_time",{ascending:true});
-  if(error){liveEl.innerHTML='<div class="empty">Unable to load matches.</div>';upcomingEl.innerHTML="";return;}
 
-  let api=[];
-  try {
-    const r=await fetch("/.netlify/functions/cricket-matches?mode=scores");
-    if(r.ok){const p=await r.json();api=p.matches||[];}
-  } catch(e){console.warn("Cricket score feed unavailable",e);}
+/* =========================================================
+   SUPABASE
+   ========================================================= */
 
-  const byId={};api.forEach(m=>{if(m.api_match_id)byId[m.api_match_id]=m;});
+const SUPABASE_URL =
+    "https://qkzwzdyahwzcwtqgcbud.supabase.co";
 
-  // Use stored Matches for stream relationships, but use fresh eCricScore
-  // records for schedule/status/score.
-  const merged=[];
-  for(const m of (stored||[])){
-    const fresh=byId[m.api_match_id];
-    if(fresh) merged.push({...m,...fresh,id:m.id});
-  }
+const SUPABASE_ANON_KEY =
+    "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
 
-  // If sync hasn't run yet for a fresh fixture, show it only after it exists
-  // in Supabase; Admin sync is the authoritative persistence step.
-  const now=Date.now();
-  const live=merged.filter(m=>m.match_started&&!m.match_ended);
-  const upcoming=merged.filter(m=>{
-    const t=m.start_time?new Date(m.start_time).getTime():NaN;
-    return Number.isFinite(t)&&t>=now&&!m.match_started;
-  });
+const db =
+    supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+    );
 
-  const ids=merged.map(m=>m.id); let streams=[];
-  if(ids.length){const r=await db.from("streams").select("match_id,active").in("match_id",ids).eq("active",true);if(!r.error)streams=r.data||[];}
-  const count={};streams.forEach(s=>count[s.match_id]=(count[s.match_id]||0)+1);
 
-  render(liveEl,live,true,count);render(upcomingEl,upcoming,false,count);
+/* =========================================================
+   LOAD MATCHES
+   ========================================================= */
+
+async function loadMatches() {
+
+    const liveEl =
+        document.getElementById(
+            "liveMatches"
+        );
+
+    const upcomingEl =
+        document.getElementById(
+            "upcomingMatches"
+        );
+
+
+    try {
+
+        /* -------------------------------------------------
+           Get SportScore data
+           ------------------------------------------------- */
+
+        const response =
+            await fetch(
+                "/api/cricket-matches?mode=matches",
+                {
+                    cache: "no-store"
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Worker returned HTTP ${response.status}`
+            );
+
+        }
+
+
+        const result =
+            await response.json();
+
+
+        const matches =
+            Array.isArray(
+                result.matches
+            )
+                ? result.matches
+                : [];
+
+
+        /* -------------------------------------------------
+           Get existing Supabase matches
+           so we can preserve stream relationships.
+           ------------------------------------------------- */
+
+        const {
+            data: stored,
+            error
+        } = await db
+            .from("Matches")
+            .select("*");
+
+
+        if (error) {
+
+            throw error;
+
+        }
+
+
+        const storedMatches =
+            stored || [];
+
+
+        /*
+         * Map stored records by title.
+         *
+         * We'll replace this with a proper SportScore
+         * ID sync on the Admin side later.
+         */
+
+        const storedByTitle = {};
+
+        storedMatches.forEach(
+            match => {
+
+                const key =
+                    normalizeKey(
+                        match.team1,
+                        match.team2
+                    );
+
+                storedByTitle[key] =
+                    match;
+
+            }
+        );
+
+
+        /* -------------------------------------------------
+           Convert SportScore format
+           ------------------------------------------------- */
+
+        const normalized =
+            matches
+                .map(
+                    match => {
+
+                        const team1 =
+                            match.home ||
+                            "";
+
+                        const team2 =
+                            match.away ||
+                            "";
+
+
+                        if (
+                            !team1 ||
+                            !team2
+                        ) {
+
+                            return null;
+
+                        }
+
+
+                        const key =
+                            normalizeKey(
+                                team1,
+                                team2
+                            );
+
+
+                        const storedMatch =
+                            storedByTitle[
+                                key
+                            ] || null;
+
+
+                        return {
+
+                            sportscore:
+                                match,
+
+                            id:
+                                storedMatch
+                                    ? storedMatch.id
+                                    : null,
+
+                            team1,
+
+                            team2,
+
+                            competition:
+                                match.competition ||
+                                "Cricket",
+
+                            start_time:
+                                match.time ||
+                                null,
+
+                            venue:
+                                "",
+
+                            status:
+                                match.status,
+
+                            status_text:
+                                match.status_text,
+
+                            home_score:
+                                match.home_score,
+
+                            away_score:
+                                match.away_score,
+
+                            home_logo:
+                                match.home_logo,
+
+                            away_logo:
+                                match.away_logo,
+
+                            stream_count:
+                                0
+
+                        };
+
+                    }
+                )
+                .filter(Boolean);
+
+
+        /* -------------------------------------------------
+           Determine live / upcoming
+           ------------------------------------------------- */
+
+        const live =
+            normalized.filter(
+                match =>
+                    match.status === "live"
+            );
+
+
+        const upcoming =
+            normalized.filter(
+                match =>
+                    match.status === "upcoming"
+            );
+
+
+        /* -------------------------------------------------
+           Get stream counts
+           ------------------------------------------------- */
+
+        const storedIds =
+            normalized
+                .map(
+                    match => match.id
+                )
+                .filter(Boolean);
+
+
+        if (
+            storedIds.length
+        ) {
+
+            const {
+                data: streams
+            } = await db
+
+                .from("streams")
+
+                .select(
+                    "match_id"
+                )
+
+                .in(
+                    "match_id",
+                    storedIds
+                )
+
+                .eq(
+                    "active",
+                    true
+                );
+
+
+            const counts = {};
+
+
+            (
+                streams || []
+            ).forEach(
+                stream => {
+
+                    counts[
+                        stream.match_id
+                    ] =
+                        (
+                            counts[
+                                stream.match_id
+                            ] || 0
+                        ) + 1;
+
+                }
+            );
+
+
+            normalized.forEach(
+                match => {
+
+                    if (
+                        match.id
+                    ) {
+
+                        match.stream_count =
+                            counts[
+                                match.id
+                            ] || 0;
+
+                    }
+
+                }
+            );
+
+        }
+
+
+        render(
+            liveEl,
+            live,
+            true
+        );
+
+
+        render(
+            upcomingEl,
+            upcoming,
+            false
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "Cricketive load error:",
+            error
+        );
+
+
+        liveEl.innerHTML =
+            `
+                <div class="empty">
+                    Unable to load live matches.
+                </div>
+            `;
+
+
+        upcomingEl.innerHTML =
+            `
+                <div class="empty">
+                    Unable to load upcoming matches.
+                </div>
+            `;
+
+    }
+
 }
-function render(el,arr,isLive,count){
-  if(!arr.length){el.innerHTML=`<div class="empty">${isLive?"No matches are live right now.":"No upcoming matches listed."}</div>`;return;}
-  el.className="grid";
-  el.innerHTML=arr.map(m=>{
-    const n=count[m.id]||0,score=Array.isArray(m.score)?m.score:[];
-    const time=m.start_time?new Date(m.start_time).toLocaleString([], {dateStyle:"medium",timeStyle:"short"}):"";
-    const scoreHtml=isLive&&score.length?`<div class="score-box">${score.map(s=>`<div class="score-row"><span>${esc(s.inning||"Innings")}</span><strong>${esc((s.r??0)+"/"+(s.w??0))}${s.o!=null?" ("+esc(s.o)+" ov)":""}</strong></div>`).join("")}${m.live_status?`<div class="score-status">${esc(m.live_status)}</div>`:""}</div>`:"";
-    return `<article class="match-card"><div class="match-name">${esc(m.team1)} vs ${esc(m.team2)}</div><div class="match-info">${esc(m.competition||"Cricket")}<br>${esc(time)}${m.venue?"<br>"+esc(m.venue):""}</div><span class="status ${isLive?"live-status":""}">${isLive?"LIVE":"UPCOMING"}</span>${scoreHtml}${n?`<div class="available">🎥 ${n} stream${n===1?"":"s"} available</div>`:`<div class="unavailable">⏳ Stream unavailable</div>`}<a class="watch-button" href="stream.html?match=${encodeURIComponent(m.id)}">${isLive&&n?"▶ WATCH MATCH":"VIEW MATCH"}</a></article>`;
-  }).join("");
+
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+
+function render(
+    element,
+    matches,
+    isLive
+) {
+
+    if (
+        !matches.length
+    ) {
+
+        element.innerHTML =
+
+            `
+                <div class="empty">
+
+                    ${
+                        isLive
+                            ? "No matches are live right now."
+                            : "No upcoming matches listed."
+                    }
+
+                </div>
+            `;
+
+        element.className =
+            "";
+
+        return;
+
+    }
+
+
+    element.className =
+        "grid";
+
+
+    element.innerHTML =
+
+        matches
+            .map(
+                match =>
+                    createMatchCard(
+                        match,
+                        isLive
+                    )
+            )
+            .join("");
+
 }
-function esc(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}
-loadMatches();setInterval(loadMatches,60000);
+
+
+/* =========================================================
+   CREATE MATCH CARD
+   ========================================================= */
+
+function createMatchCard(
+    match,
+    isLive
+) {
+
+    const time =
+        match.start_time
+            ? formatDate(
+                match.start_time
+            )
+            : "";
+
+
+    const hasHomeScore =
+        match.home_score !== null &&
+        match.home_score !== undefined &&
+        match.home_score !== "" &&
+        match.home_score !== "-";
+
+
+    const hasAwayScore =
+        match.away_score !== null &&
+        match.away_score !== undefined &&
+        match.away_score !== "" &&
+        match.away_score !== "-";
+
+
+    const scoreHtml =
+
+        (
+            isLive &&
+            (
+                hasHomeScore ||
+                hasAwayScore
+            )
+        )
+
+            ? `
+
+                <div class="score-box">
+
+
+                    <div class="score-row">
+
+                        <span>
+                            ${esc(
+                                match.team1
+                            )}
+                        </span>
+
+                        <strong>
+                            ${esc(
+                                match.home_score ||
+                                "-"
+                            )}
+                        </strong>
+
+                    </div>
+
+
+                    <div class="score-row">
+
+                        <span>
+                            ${esc(
+                                match.team2
+                            )}
+                        </span>
+
+                        <strong>
+                            ${esc(
+                                match.away_score ||
+                                "-"
+                            )}
+                        </strong>
+
+                    </div>
+
+
+                    ${
+                        match.status_text
+                            ? `
+                                <div class="score-status">
+
+                                    ${esc(
+                                        match.status_text
+                                    )}
+
+                                </div>
+                            `
+                            : ""
+                    }
+
+                </div>
+
+            `
+
+            : "";
+
+
+    const streamHtml =
+
+        match.stream_count
+
+            ? `
+
+                <div class="available">
+
+                    🎥
+                    ${match.stream_count}
+                    stream${
+                        match.stream_count === 1
+                            ? ""
+                            : "s"
+                    }
+                    available
+
+                </div>
+
+              `
+
+            : `
+
+                <div class="unavailable">
+
+                    ⏳ Stream unavailable
+
+                </div>
+
+              `;
+
+
+    /*
+     * If the match has already been added to Supabase,
+     * use stream.html.
+     *
+     * Otherwise send the user to the SportScore match
+     * page temporarily.
+     */
+
+    const watchUrl =
+
+        match.id
+
+            ? `stream.html?match=${
+                encodeURIComponent(
+                    match.id
+                )
+              }`
+
+            : `https://sportscore.com${
+                match.sportscore.url
+            }`;
+
+
+    const buttonText =
+
+        match.id &&
+        isLive &&
+        match.stream_count
+
+            ? "▶ WATCH MATCH"
+
+            : "VIEW MATCH";
+
+
+    return `
+
+        <article class="match-card">
+
+
+            <div class="match-name">
+
+                ${esc(
+                    match.team1
+                )}
+
+                vs
+
+                ${esc(
+                    match.team2
+                )}
+
+            </div>
+
+
+            <div class="match-info">
+
+                ${esc(
+                    match.competition
+                )}
+
+                <br>
+
+                ${esc(
+                    time
+                )}
+
+            </div>
+
+
+            <span class="status ${
+                isLive
+                    ? "live-status"
+                    : ""
+            }">
+
+                ${
+                    isLive
+                        ? "LIVE"
+                        : "UPCOMING"
+                }
+
+            </span>
+
+
+            ${scoreHtml}
+
+
+            ${streamHtml}
+
+
+            <a
+                class="watch-button"
+                href="${esc(
+                    watchUrl
+                )}"
+                ${
+                    match.id
+                        ? ""
+                        : `
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          `
+                }
+            >
+
+                ${buttonText}
+
+            </a>
+
+
+        </article>
+
+    `;
+
+}
+
+
+/* =========================================================
+   NORMALIZE TEAM KEY
+   ========================================================= */
+
+function normalizeKey(
+    team1,
+    team2
+) {
+
+    return (
+
+        String(
+            team1 || ""
+        )
+            .trim()
+            .toLowerCase()
+
+            + "|"
+
+            +
+
+        String(
+            team2 || ""
+        )
+            .trim()
+            .toLowerCase()
+
+    );
+
+}
+
+
+/* =========================================================
+   DATE FORMAT
+   ========================================================= */
+
+function formatDate(
+    value
+) {
+
+    const date =
+        new Date(
+            value
+        );
+
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return "";
+
+    }
+
+
+    return date.toLocaleString(
+        [],
+        {
+            dateStyle:
+                "medium",
+
+            timeStyle:
+                "short"
+        }
+    );
+
+}
+
+
+/* =========================================================
+   ESCAPE HTML
+   ========================================================= */
+
+function esc(
+    value
+) {
+
+    return String(
+        value ?? ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
+}
+
+
+/* =========================================================
+   INITIAL LOAD
+   ========================================================= */
+
+loadMatches();
+
+
+/*
+ * Refresh every 60 seconds.
+ */
+
+setInterval(
+    loadMatches,
+    60000
+);
+
 </script>
+
 </body>
 </html>
