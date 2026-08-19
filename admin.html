@@ -870,22 +870,10 @@ async function syncMatches() {
             await response.json();
 
 
-        console.log(
-            "SportScore payload:",
-            payload
-        );
-
-
         const matches =
             Array.isArray(payload.matches)
                 ? payload.matches
                 : [];
-
-
-        console.log(
-            "SportScore matches:",
-            matches
-        );
 
 
         if (
@@ -941,7 +929,9 @@ async function syncMatches() {
                 ) {
 
                     bySportScoreUrl[
-                        match.sportscore_url
+                        normalizeUrl(
+                            match.sportscore_url
+                        )
                     ] = match;
 
                 }
@@ -968,7 +958,7 @@ async function syncMatches() {
 
 
         /* -----------------------------------------------
-           Convert SportScore matches to Supabase rows
+           Build rows
            ----------------------------------------------- */
 
 
@@ -978,12 +968,6 @@ async function syncMatches() {
         for (
             const match of matches
         ) {
-
-
-            /*
-             * Support both raw SportScore fields and
-             * normalized fields in case the Worker changes.
-             */
 
 
             const team1 =
@@ -1048,25 +1032,8 @@ async function syncMatches() {
 
             const sportscoreUrl =
                 rawUrl
-                    ? (
-                        String(rawUrl)
-                            .startsWith("http")
-                            ? String(rawUrl)
-                            : `https://sportscore.com${rawUrl}`
-                      )
+                    ? normalizeUrl(rawUrl)
                     : null;
-
-
-            /* -------------------------------------------
-               Team key
-               ------------------------------------------- */
-
-
-            const teamKey =
-                makeTeamKey(
-                    team1,
-                    team2
-                );
 
 
             /* -------------------------------------------
@@ -1090,35 +1057,29 @@ async function syncMatches() {
             }
 
 
-            /*
-             * Older CricketData/Sportmonks rows may not have
-             * sportscore_url yet. Match them by team names
-             * so their existing UUID and streams are preserved.
-             */
-
-
             if (
-                !existingMatch &&
-                teamKey
+                !existingMatch
             ) {
 
-                existingMatch =
-                    byTeams[
-                        teamKey
-                    ] || null;
+                const teamKey =
+                    makeTeamKey(
+                        team1,
+                        team2
+                    );
+
+
+                if (
+                    teamKey
+                ) {
+
+                    existingMatch =
+                        byTeams[
+                            teamKey
+                        ] || null;
+
+                }
 
             }
-
-
-            /* -------------------------------------------
-               Status
-               ------------------------------------------- */
-
-
-            const status =
-                normalizeSportScoreStatus(
-                    match.status
-                );
 
 
             /* -------------------------------------------
@@ -1129,28 +1090,21 @@ async function syncMatches() {
             const apiMatchId =
                 sportscoreUrl
                     ? `sportscore:${sportscoreUrl}`
-                    : `sportscore:${teamKey}`;
+                    : `sportscore:${makeTeamKey(
+                          team1,
+                          team2
+                      )}`;
 
 
             /* -------------------------------------------
-               Build row
+               Build row WITHOUT id by default.
+               Existing rows get their current id below.
+               New rows rely on PostgreSQL's
+               gen_random_uuid() default.
                ------------------------------------------- */
 
 
             const row = {
-
-
-                /*
-                 * Supabase requires Matches.id to be non-null.
-                 * Keep the existing UUID when this match already
-                 * exists; otherwise create a new UUID locally so
-                 * new matches can be inserted safely.
-                 */
-                id:
-                    (existingMatch && existingMatch.id)
-                        ? existingMatch.id
-                        : crypto.randomUUID(),
-
 
                 api_match_id:
                     apiMatchId,
@@ -1169,7 +1123,7 @@ async function syncMatches() {
 
 
                 competition:
-                    match.competition ??
+                    match.competition ||
                     "Cricket",
 
 
@@ -1182,12 +1136,14 @@ async function syncMatches() {
 
 
                 venue:
-                    match.venue ??
+                    match.venue ||
                     "",
 
 
                 status:
-                    status,
+                    normalizeSportScoreStatus(
+                        match.status
+                    ),
 
 
                 embed_url:
@@ -1195,14 +1151,14 @@ async function syncMatches() {
 
 
                 team1_logo:
-                    match.home_logo ??
-                    match.team1_logo ??
+                    match.home_logo ||
+                    match.team1_logo ||
                     "",
 
 
                 team2_logo:
-                    match.away_logo ??
-                    match.team2_logo ??
+                    match.away_logo ||
+                    match.team2_logo ||
                     "",
 
 
@@ -1212,13 +1168,10 @@ async function syncMatches() {
             };
 
 
-            /*
-             * IMPORTANT:
-             *
-             * Preserve the existing UUID whenever we find
-             * an existing match. Streams.match_id points to
-             * this UUID, so this keeps streams attached.
-             */
+            /* -------------------------------------------
+               Preserve existing UUIDs so existing streams
+               remain attached to the same match.
+               ------------------------------------------- */
 
 
             if (
@@ -1237,18 +1190,12 @@ async function syncMatches() {
         }
 
 
-        console.log(
-            "Prepared database rows:",
-            rows
-        );
-
-
         if (
             !rows.length
         ) {
 
             message.textContent =
-                `SportScore returned ${matches.length} matches, but none passed validation. Open the browser console for details.`;
+                `SportScore returned ${matches.length} matches, but none were valid.`;
 
             await loadMatches();
 
@@ -1258,33 +1205,87 @@ async function syncMatches() {
 
 
         /* -----------------------------------------------
-           Save matches
+           Separate existing vs new rows
            ----------------------------------------------- */
 
 
-        const {
-            error: saveError
-        } = await client
-            .from("Matches")
-            .upsert(
-                rows,
-                {
-                    onConflict: "id"
-                }
+        const existingRows =
+            rows.filter(
+                row =>
+                    Boolean(row.id)
             );
 
 
+        const newRows =
+            rows.filter(
+                row =>
+                    !row.id
+            );
+
+
+        /* -----------------------------------------------
+           UPDATE EXISTING MATCHES
+           ----------------------------------------------- */
+
+
         if (
-            saveError
+            existingRows.length
         ) {
 
-            throw saveError;
+            const {
+                error: updateError
+            } = await client
+                .from("Matches")
+                .upsert(
+                    existingRows,
+                    {
+                        onConflict: "id"
+                    }
+                );
+
+
+            if (
+                updateError
+            ) {
+
+                throw updateError;
+
+            }
 
         }
 
 
         /* -----------------------------------------------
-           Sync result
+           INSERT NEW MATCHES
+           ----------------------------------------------- */
+
+
+        if (
+            newRows.length
+        ) {
+
+            const {
+                error: insertError
+            } = await client
+                .from("Matches")
+                .insert(
+                    newRows
+                );
+
+
+            if (
+                insertError
+            ) {
+
+                throw insertError;
+
+            }
+
+        }
+
+
+        /* -----------------------------------------------
+           Result
            ----------------------------------------------- */
 
 
@@ -1331,7 +1332,10 @@ async function syncMatches() {
 
 
         message.textContent =
-            `Sync failed: ${error.message}`;
+            `Sync failed: ${
+                error.message ||
+                String(error)
+            }`;
 
 
     } finally {
@@ -1428,6 +1432,52 @@ function makeTeamKey(
 
 }
 
+
+/* =========================================================
+   URL NORMALIZATION
+   ========================================================= */
+
+
+function normalizeUrl(
+    value
+) {
+
+
+    if (!value) {
+        return "";
+    }
+
+
+    const url =
+        String(value)
+            .trim();
+
+
+    if (
+        url.startsWith("http")
+    ) {
+
+        return url.replace(
+            /\/+$/,
+            ""
+        );
+
+    }
+
+
+    return (
+        "https://sportscore.com" +
+        (
+            url.startsWith("/")
+                ? url
+                : `/${url}`
+        )
+    ).replace(
+        /\/+$/,
+        ""
+    );
+
+}
 
 
 /* =========================================================
