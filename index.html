@@ -38,38 +38,47 @@ const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 async function loadMatches(){
   const liveEl=document.getElementById("liveMatches"), upcomingEl=document.getElementById("upcomingMatches");
-  const {data,error}=await db.from("Matches").select("*").order("start_time",{ascending:true});
+  const {data:stored,error}=await db.from("Matches").select("*").order("start_time",{ascending:true});
   if(error){liveEl.innerHTML='<div class="empty">Unable to load matches.</div>';upcomingEl.innerHTML="";return;}
 
-  let current=[];
-  try{
+  let api=[];
+  try {
     const r=await fetch("/.netlify/functions/cricket-matches?mode=scores");
-    if(r.ok){const p=await r.json();current=p.matches||[];}
-  }catch(e){console.warn(e);}
-  const byId={}; current.forEach(m=>{if(m.id)byId[m.id]=m;});
+    if(r.ok){const p=await r.json();api=p.matches||[];}
+  } catch(e){console.warn("Cricket score feed unavailable",e);}
 
-  const ids=(data||[]).map(m=>m.id);
-  let streams=[];
+  const byId={};api.forEach(m=>{if(m.api_match_id)byId[m.api_match_id]=m;});
+
+  // Use stored Matches for stream relationships, but use fresh eCricScore
+  // records for schedule/status/score.
+  const merged=[];
+  for(const m of (stored||[])){
+    const fresh=byId[m.api_match_id];
+    if(fresh) merged.push({...m,...fresh,id:m.id});
+  }
+
+  // If sync hasn't run yet for a fresh fixture, show it only after it exists
+  // in Supabase; Admin sync is the authoritative persistence step.
+  const now=Date.now();
+  const live=merged.filter(m=>m.match_started&&!m.match_ended);
+  const upcoming=merged.filter(m=>{
+    const t=m.start_time?new Date(m.start_time).getTime():NaN;
+    return Number.isFinite(t)&&t>=now&&!m.match_started;
+  });
+
+  const ids=merged.map(m=>m.id); let streams=[];
   if(ids.length){const r=await db.from("streams").select("match_id,active").in("match_id",ids).eq("active",true);if(!r.error)streams=r.data||[];}
   const count={};streams.forEach(s=>count[s.match_id]=(count[s.match_id]||0)+1);
 
-  const now=Date.now(), live=[], upcoming=[];
-  (data||[]).forEach(m=>{
-    const c=byId[m.api_match_id];
-    const started=c ? c.matchStarted : (m.start_time && new Date(m.start_time).getTime()<=now);
-    const ended=c ? c.matchEnded : false;
-    if(started&&!ended)live.push({...m,current:c});
-    else if(m.start_time && new Date(m.start_time).getTime()>=now)upcoming.push({...m,current:c});
-  });
   render(liveEl,live,true,count);render(upcomingEl,upcoming,false,count);
 }
 function render(el,arr,isLive,count){
   if(!arr.length){el.innerHTML=`<div class="empty">${isLive?"No matches are live right now.":"No upcoming matches listed."}</div>`;return;}
   el.className="grid";
   el.innerHTML=arr.map(m=>{
-    const n=count[m.id]||0, score=m.current?.score||[];
+    const n=count[m.id]||0,score=Array.isArray(m.score)?m.score:[];
     const time=m.start_time?new Date(m.start_time).toLocaleString([], {dateStyle:"medium",timeStyle:"short"}):"";
-    const scoreHtml=isLive&&score.length?`<div class="score-box">${score.map(s=>`<div class="score-row"><span>${esc(s.inning||"Innings")}</span><strong>${esc((s.r??0)+"/"+(s.w??0))}${s.o!=null?" ("+esc(s.o)+" ov)":""}</strong></div>`).join("")}${m.current?.status?`<div class="score-status">${esc(m.current.status)}</div>`:""}</div>`:"";
+    const scoreHtml=isLive&&score.length?`<div class="score-box">${score.map(s=>`<div class="score-row"><span>${esc(s.inning||"Innings")}</span><strong>${esc((s.r??0)+"/"+(s.w??0))}${s.o!=null?" ("+esc(s.o)+" ov)":""}</strong></div>`).join("")}${m.live_status?`<div class="score-status">${esc(m.live_status)}</div>`:""}</div>`:"";
     return `<article class="match-card"><div class="match-name">${esc(m.team1)} vs ${esc(m.team2)}</div><div class="match-info">${esc(m.competition||"Cricket")}<br>${esc(time)}${m.venue?"<br>"+esc(m.venue):""}</div><span class="status ${isLive?"live-status":""}">${isLive?"LIVE":"UPCOMING"}</span>${scoreHtml}${n?`<div class="available">🎥 ${n} stream${n===1?"":"s"} available</div>`:`<div class="unavailable">⏳ Stream unavailable</div>`}<a class="watch-button" href="stream.html?match=${encodeURIComponent(m.id)}">${isLive&&n?"▶ WATCH MATCH":"VIEW MATCH"}</a></article>`;
   }).join("");
 }
