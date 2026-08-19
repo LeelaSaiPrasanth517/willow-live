@@ -3,64 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Willow Cricket Live</title>
+
+    <title>Cricketive | Sri Lanka vs India Live</title>
 
     <style>
         * {
             box-sizing: border-box;
         }
 
-        html, body {
+        body {
             margin: 0;
-            padding: 0;
+            background: #050505;
+            color: #fff;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        /* Header */
+        .header {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            background: #090909;
+            border-bottom: 1px solid #222;
+        }
+
+        .brand {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+
+        .brand span {
+            font-size: 20px;
+        }
+
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .live-dot {
+            width: 9px;
+            height: 9px;
+            background: #ff3030;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 48, 48, 0.8);
+        }
+
+        /* Match title */
+        .match-info {
+            text-align: center;
+            padding: 16px 10px;
+            background: #080808;
+        }
+
+        .match-title {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .match-subtitle {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* Player */
+        .player-container {
+            position: relative;
             width: 100%;
-            height: 100%;
+            aspect-ratio: 16 / 9;
+            max-height: calc(100vh - 170px);
             background: #000;
             overflow: hidden;
         }
 
-        .player {
-            position: relative;
-            width: 100%;
-            height: 100vh;
-        }
-
         iframe {
+            position: absolute;
             width: 100%;
             height: 100%;
-            border: none;
+            border: 0;
+            left: 0;
+            top: 0;
         }
 
+        /* Discord CTA */
         .discord-button {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: 18px;
+            right: 18px;
             z-index: 10;
 
-            background: #5865F2;
-            color: white;
-            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
 
-            padding: 12px 18px;
+            padding: 11px 16px;
+
+            background: #5865f2;
+            color: white;
+
+            text-decoration: none;
             border-radius: 8px;
 
-            font-family: Arial, sans-serif;
-            font-size: 14px;
-            font-weight: bold;
+            font-size: 13px;
+            font-weight: 700;
 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.45);
+
+            transition: transform 0.2s, background 0.2s;
         }
 
         .discord-button:hover {
-            background: #4752C4;
+            background: #4752c4;
+            transform: translateY(-2px);
         }
 
+        /* Bottom section */
+        .bottom {
+            text-align: center;
+            padding: 18px 10px 25px;
+            background: #090909;
+        }
+
+        .watching {
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+
+        .discord-text {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .discord-link {
+            color: #7289da;
+            text-decoration: none;
+        }
+
+        /* Mobile */
         @media (max-width: 600px) {
+
+            .header {
+                height: 54px;
+                padding: 0 14px;
+            }
+
+            .brand {
+                font-size: 18px;
+            }
+
+            .live-badge {
+                font-size: 11px;
+            }
+
+            .match-info {
+                padding: 11px 5px;
+            }
+
+            .match-title {
+                font-size: 16px;
+            }
+
+            .match-subtitle {
+                font-size: 10px;
+            }
+
+            .player-container {
+                aspect-ratio: 16 / 9;
+                max-height: none;
+            }
+
             .discord-button {
                 top: 10px;
                 right: 10px;
-                padding: 9px 12px;
-                font-size: 12px;
+                padding: 8px 11px;
+                font-size: 11px;
+            }
+
+            .bottom {
+                padding: 14px 8px 20px;
             }
         }
     </style>
@@ -68,26 +197,81 @@
 
 <body>
 
-<div class="player">
+    <!-- Header -->
+    <header class="header">
 
-    <iframe
-        title="Willow Cricket Player"
-        src="https://embed.st/embed/admin/admin-willow-cricket/1"
-        scrolling="no"
-        allowfullscreen
-        allow="encrypted-media; picture-in-picture;"
-        frameborder="0">
-    </iframe>
+        <div class="brand">
+            CRICKETIVE 🏏
+        </div>
 
-    <a
-        class="discord-button"
-        href="https://discord.gg/SYfPEKRrnQ"
-        target="_blank"
-        rel="noopener noreferrer">
-        💬 JOIN OUR DISCORD SERVER
-    </a>
+        <div class="live-badge">
+            <div class="live-dot"></div>
+            LIVE NOW
+        </div>
 
-</div>
+    </header>
+
+
+    <!-- Match information -->
+    <section class="match-info">
+
+        <div class="match-title">
+            🇱🇰 Sri Lanka vs India 🇮🇳
+        </div>
+
+        <div class="match-subtitle">
+            LIVE CRICKET STREAM
+        </div>
+
+    </section>
+
+
+    <!-- Video player -->
+    <main class="player-container">
+
+        <iframe
+            title="Willow Cricket Player"
+            src="https://embed.st/embed/admin/admin-willow-cricket/1"
+            scrolling="no"
+            allowfullscreen
+            allow="encrypted-media; picture-in-picture;"
+            frameborder="0">
+        </iframe>
+
+
+        <!-- Discord button -->
+        <a
+            class="discord-button"
+            href="https://discord.gg/SYfPEKRrnQ"
+            target="_blank"
+            rel="noopener noreferrer">
+
+            💬 JOIN DISCORD
+
+        </a>
+
+    </main>
+
+
+    <!-- Bottom -->
+    <section class="bottom">
+
+        <div class="watching">
+            🏏 You're watching Cricketive
+        </div>
+
+        <div class="discord-text">
+            Join the Cricketive community:
+            <a
+                class="discord-link"
+                href="https://discord.gg/SYfPEKRrnQ"
+                target="_blank"
+                rel="noopener noreferrer">
+                Discord
+            </a>
+        </div>
+
+    </section>
 
 </body>
 </html>
