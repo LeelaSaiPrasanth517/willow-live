@@ -345,7 +345,9 @@ footer {
 
 </head>
 
+
 <body>
+
 
 <header class="header">
 
@@ -474,9 +476,9 @@ async function loadMatches() {
 
     try {
 
-        /* -------------------------------------------------
-           1. SPORTScore = source of truth for matches
-           ------------------------------------------------- */
+        /* -----------------------------------------------
+           SPORTScore FEED
+        ----------------------------------------------- */
 
         const response =
             await fetch(
@@ -508,13 +510,13 @@ async function loadMatches() {
                 : [];
 
 
-        /* -------------------------------------------------
-           2. Get Cricketive matches
-           ------------------------------------------------- */
+        /* -----------------------------------------------
+           SUPABASE MATCHES
+        ----------------------------------------------- */
 
         const {
             data: storedMatches,
-            error: storedError
+            error: matchError
         } = await db
             .from("Matches")
             .select(
@@ -522,9 +524,9 @@ async function loadMatches() {
             );
 
 
-        if (storedError) {
+        if (matchError) {
 
-            throw storedError;
+            throw matchError;
 
         }
 
@@ -533,9 +535,9 @@ async function loadMatches() {
             storedMatches || [];
 
 
-        /* -------------------------------------------------
-           3. Get active streams
-           ------------------------------------------------- */
+        /* -----------------------------------------------
+           STREAMS
+        ----------------------------------------------- */
 
         const matchIds =
             stored
@@ -548,7 +550,9 @@ async function loadMatches() {
         let streamRows = [];
 
 
-        if (matchIds.length) {
+        if (
+            matchIds.length
+        ) {
 
             const {
                 data,
@@ -581,22 +585,18 @@ async function loadMatches() {
         }
 
 
-        /* -------------------------------------------------
-           4. Count streams by match
-           ------------------------------------------------- */
-
         const streamCounts = {};
 
 
         streamRows.forEach(
-            row => {
+            stream => {
 
                 streamCounts[
-                    row.match_id
+                    stream.match_id
                 ] =
                     (
                         streamCounts[
-                            row.match_id
+                            stream.match_id
                         ] || 0
                     ) + 1;
 
@@ -604,9 +604,9 @@ async function loadMatches() {
         );
 
 
-        /* -------------------------------------------------
-           5. Index Cricketive matches
-           ------------------------------------------------- */
+        /* -----------------------------------------------
+           INDEX MATCHES
+        ----------------------------------------------- */
 
         const byUrl = {};
         const byTeams = {};
@@ -647,31 +647,68 @@ async function loadMatches() {
         );
 
 
-        /* -------------------------------------------------
-           6. Match SportScore ↔ Cricketive
-           ------------------------------------------------- */
+        /* -----------------------------------------------
+           NORMALIZE SPORTScore MATCHES
+        ----------------------------------------------- */
 
         const normalized =
             sportScoreMatches
                 .map(
                     match => {
 
-                        const url =
-                            match.url
+                        /*
+                         * SUPPORT BOTH FORMATS
+                         *
+                         * SportScore:
+                         *     home / away
+                         *
+                         * Normalized:
+                         *     team1 / team2
+                         */
+
+                        const team1 =
+                            String(
+                                match.home ??
+                                match.team1 ??
+                                ""
+                            ).trim();
+
+
+                        const team2 =
+                            String(
+                                match.away ??
+                                match.team2 ??
+                                ""
+                            ).trim();
+
+
+                        const rawUrl =
+                            match.url ??
+                            match.sportscore_url ??
+                            null;
+
+
+                        const sportscoreUrl =
+                            rawUrl
                                 ? normalizeUrl(
-                                    match.url
-                                )
+                                    rawUrl
+                                  )
                                 : null;
 
 
                         let storedMatch =
-                            url
+                            sportscoreUrl
                                 ? (
-                                    byUrl[url] ||
-                                    null
-                                )
+                                    byUrl[
+                                        sportscoreUrl
+                                    ] || null
+                                  )
                                 : null;
 
+
+                        /*
+                         * TEAM NAME FALLBACK
+                         */
 
                         if (
                             !storedMatch
@@ -680,8 +717,8 @@ async function loadMatches() {
                             storedMatch =
                                 byTeams[
                                     makeTeamKey(
-                                        match.home,
-                                        match.away
+                                        team1,
+                                        team2
                                     )
                                 ] || null;
 
@@ -700,8 +737,12 @@ async function loadMatches() {
 
                         return {
 
-                            sportScore:
+                            source:
                                 match,
+
+                            team1,
+
+                            team2,
 
                             stored:
                                 storedMatch,
@@ -717,43 +758,39 @@ async function loadMatches() {
                 );
 
 
-        /* -------------------------------------------------
-           7. LIVE
-           ------------------------------------------------- */
+        /* -----------------------------------------------
+           LIVE
+        ----------------------------------------------- */
 
         const live =
-            normalized
-                .filter(
-                    item =>
-                        String(
-                            item.sportScore.status ||
-                            ""
-                        ).toLowerCase()
-                        ===
-                        "live"
-                );
+            normalized.filter(
+                item =>
+                    String(
+                        item.source.status ||
+                        ""
+                    ).toLowerCase()
+                    === "live"
+            );
 
 
-        /* -------------------------------------------------
-           8. UPCOMING
-           ------------------------------------------------- */
+        /* -----------------------------------------------
+           UPCOMING
+        ----------------------------------------------- */
 
         const upcoming =
-            normalized
-                .filter(
-                    item =>
-                        String(
-                            item.sportScore.status ||
-                            ""
-                        ).toLowerCase()
-                        ===
-                        "upcoming"
-                );
+            normalized.filter(
+                item =>
+                    String(
+                        item.source.status ||
+                        ""
+                    ).toLowerCase()
+                    === "upcoming"
+            );
 
 
-        /* -------------------------------------------------
-           9. STREAM MATCHES FIRST
-           ------------------------------------------------- */
+        /* -----------------------------------------------
+           STREAMS FIRST
+        ----------------------------------------------- */
 
         live.sort(
             (a, b) => {
@@ -780,11 +817,11 @@ async function loadMatches() {
 
                 return (
                     getTime(
-                        a.sportScore.time
+                        a.source.time
                     )
                     -
                     getTime(
-                        b.sportScore.time
+                        b.source.time
                     )
                 );
 
@@ -792,20 +829,16 @@ async function loadMatches() {
         );
 
 
-        /* -------------------------------------------------
-           10. UPCOMING CHRONOLOGICAL
-           ------------------------------------------------- */
-
         upcoming.sort(
             (a, b) => {
 
                 return (
                     getTime(
-                        a.sportScore.time
+                        a.source.time
                     )
                     -
                     getTime(
-                        b.sportScore.time
+                        b.source.time
                     )
                 );
 
@@ -836,12 +869,8 @@ async function loadMatches() {
                     )
                 }`;
 
-        } else {
-
-            updatedEl.textContent =
-                "";
-
         }
+
 
     } catch (error) {
 
@@ -866,15 +895,13 @@ async function loadMatches() {
                 </div>
             `;
 
-        updatedEl.textContent = "";
-
     }
 
 }
 
 
 /* =========================================================
-   LIVE
+   LIVE RENDER
    ========================================================= */
 
 function renderLive(
@@ -882,7 +909,9 @@ function renderLive(
     matches
 ) {
 
-    if (!matches.length) {
+    if (
+        !matches.length
+    ) {
 
         element.className = "";
 
@@ -900,41 +929,50 @@ function renderLive(
 
     const available =
         matches.filter(
-            item => item.hasStream
+            item =>
+                item.hasStream
         );
 
 
     const unavailable =
         matches.filter(
-            item => !item.hasStream
+            item =>
+                !item.hasStream
         );
 
 
     let html = "";
 
 
-    if (available.length) {
+    if (
+        available.length
+    ) {
 
         html +=
             `
                 <div class="group-title">
+
                     🎥 Available to Watch
+
                     <span class="group-count">
                         (${available.length})
                     </span>
+
                 </div>
 
                 <div class="grid">
 
-                    ${available
-                        .map(
-                            item =>
-                                createCard(
-                                    item,
-                                    true
-                                )
-                        )
-                        .join("")}
+                    ${
+                        available
+                            .map(
+                                item =>
+                                    createCard(
+                                        item,
+                                        true
+                                    )
+                            )
+                            .join("")
+                    }
 
                 </div>
             `;
@@ -942,28 +980,35 @@ function renderLive(
     }
 
 
-    if (unavailable.length) {
+    if (
+        unavailable.length
+    ) {
 
         html +=
             `
                 <div class="group-title">
+
                     🔴 Other Live Matches
+
                     <span class="group-count">
                         (${unavailable.length})
                     </span>
+
                 </div>
 
                 <div class="grid">
 
-                    ${unavailable
-                        .map(
-                            item =>
-                                createCard(
-                                    item,
-                                    true
-                                )
-                        )
-                        .join("")}
+                    ${
+                        unavailable
+                            .map(
+                                item =>
+                                    createCard(
+                                        item,
+                                        true
+                                    )
+                            )
+                            .join("")
+                    }
 
                 </div>
             `;
@@ -971,13 +1016,14 @@ function renderLive(
     }
 
 
-    element.innerHTML = html;
+    element.innerHTML =
+        html;
 
 }
 
 
 /* =========================================================
-   UPCOMING
+   UPCOMING RENDER
    ========================================================= */
 
 function renderUpcoming(
@@ -985,7 +1031,9 @@ function renderUpcoming(
     matches
 ) {
 
-    if (!matches.length) {
+    if (
+        !matches.length
+    ) {
 
         element.className = "";
 
@@ -1001,7 +1049,8 @@ function renderUpcoming(
     }
 
 
-    element.className = "grid";
+    element.className =
+        "grid";
 
 
     element.innerHTML =
@@ -1019,7 +1068,7 @@ function renderUpcoming(
 
 
 /* =========================================================
-   CARD
+   CREATE CARD
    ========================================================= */
 
 function createCard(
@@ -1028,23 +1077,25 @@ function createCard(
 ) {
 
     const match =
-        item.sportScore;
+        item.source;
 
 
-    const stored =
-        item.stored;
-
-
-    const streamCount =
-        item.streamCount;
-
+    /*
+     * FIXED TEAM MAPPING
+     */
 
     const team1 =
-        match.home || "";
+        item.team1 ||
+        match.home ||
+        match.team1 ||
+        "";
 
 
     const team2 =
-        match.away || "";
+        item.team2 ||
+        match.away ||
+        match.team2 ||
+        "";
 
 
     const homeScore =
@@ -1059,10 +1110,13 @@ function createCard(
         );
 
 
-    let scoreHtml = "";
+    let scoreHtml =
+        "";
 
 
-    if (isLive) {
+    if (
+        isLive
+    ) {
 
         scoreHtml =
             `
@@ -1088,15 +1142,23 @@ function createCard(
                             }
 
                             <span>
-                                ${esc(team1)}
+
+                                ${esc(
+                                    team1
+                                )}
+
                             </span>
 
                         </div>
 
+
                         <div class="score-value">
+
                             ${esc(
-                                homeScore ?? "-"
+                                homeScore ??
+                                "-"
                             )}
+
                         </div>
 
                     </div>
@@ -1122,15 +1184,23 @@ function createCard(
                             }
 
                             <span>
-                                ${esc(team2)}
+
+                                ${esc(
+                                    team2
+                                )}
+
                             </span>
 
                         </div>
 
+
                         <div class="score-value">
+
                             ${esc(
-                                awayScore ?? "-"
+                                awayScore ??
+                                "-"
                             )}
+
                         </div>
 
                     </div>
@@ -1140,9 +1210,11 @@ function createCard(
                         match.status_text
                             ? `
                                 <div class="score-status">
+
                                     ${esc(
                                         match.status_text
                                     )}
+
                                 </div>
                               `
                             : ""
@@ -1163,28 +1235,36 @@ function createCard(
 
 
     /*
-     * If a Cricketive Match exists, go to our stream page.
-     * Otherwise fall back to SportScore.
+     * IMPORTANT:
+     *
+     * If a Cricketive match exists:
+     *
+     *     go to stream.html in SAME TAB
+     *
+     * Otherwise:
+     *
+     *     go to SportScore in SAME TAB
      */
 
     let actionUrl;
 
-
     let actionText;
 
 
-    if (stored) {
+    if (
+        item.stored
+    ) {
 
         actionUrl =
             `stream.html?match=${
                 encodeURIComponent(
-                    stored.id
+                    item.stored.id
                 )
             }`;
 
 
         actionText =
-            streamCount
+            item.streamCount > 0
                 ? "▶ WATCH MATCH"
                 : "VIEW MATCH";
 
@@ -1203,21 +1283,32 @@ function createCard(
 
 
     return `
-        <article class="match-card ${
-            item.hasStream
-                ? "has-stream"
-                : ""
-        }">
+        <article
+            class="match-card ${
+                item.hasStream
+                    ? "has-stream"
+                    : ""
+            }"
+        >
 
             <div class="match-header">
 
                 <div>
 
                     <div class="match-name">
-                        ${esc(team1)}
+
+                        ${esc(
+                            team1
+                        )}
+
                         vs
-                        ${esc(team2)}
+
+                        ${esc(
+                            team2
+                        )}
+
                     </div>
+
 
                     <div class="match-info">
 
@@ -1228,18 +1319,22 @@ function createCard(
 
                         <br>
 
-                        ${esc(time)}
+                        ${esc(
+                            time
+                        )}
 
                     </div>
 
                 </div>
 
 
-                <span class="status ${
-                    isLive
-                        ? "live-status"
-                        : "upcoming-status"
-                }">
+                <span
+                    class="status ${
+                        isLive
+                            ? "live-status"
+                            : "upcoming-status"
+                    }"
+                >
 
                     ${
                         isLive
@@ -1256,22 +1351,28 @@ function createCard(
 
 
             ${
-                streamCount > 0
+                item.streamCount > 0
+
                     ? `
                         <div class="stream-badge">
+
                             🎥
-                            ${streamCount}
+                            ${item.streamCount}
                             STREAM${
-                                streamCount === 1
+                                item.streamCount === 1
                                     ? ""
                                     : "S"
                             }
                             AVAILABLE
+
                         </div>
                       `
+
                     : `
                         <div class="no-stream">
+
                             ⏳ Stream unavailable
+
                         </div>
                       `
             }
@@ -1279,39 +1380,18 @@ function createCard(
 
             <a
                 class="watch-button"
-                href="${esc(actionUrl)}"
-                ${
-                    stored
-                        ? ""
-                        : `
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          `
-                }
+                href="${esc(
+                    actionUrl
+                )}"
             >
+
                 ${actionText}
+
             </a>
-
-
-            ${
-                !stored && match.url
-                    ? `
-                        <br>
-
-                        <a
-                            class="source-link"
-                            href="https://sportscore.com${esc(match.url)}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            View score details on SportScore
-                        </a>
-                      `
-                    : ""
-            }
 
         </article>
     `;
+
 }
 
 
@@ -1324,16 +1404,26 @@ function makeTeamKey(
     team2
 ) {
 
-    if (!team1 || !team2) {
+    if (
+        !team1 ||
+        !team2
+    ) {
+
         return "";
+
     }
 
+
     return (
-        normalizeName(team1)
+        normalizeName(
+            team1
+        )
         +
         "|"
         +
-        normalizeName(team2)
+        normalizeName(
+            team2
+        )
     );
 
 }
@@ -1356,13 +1446,19 @@ function normalizeUrl(
     value
 ) {
 
-    if (!value) {
+    if (
+        !value
+    ) {
+
         return "";
+
     }
 
 
     const url =
-        String(value).trim();
+        String(
+            value
+        ).trim();
 
 
     if (
@@ -1403,11 +1499,14 @@ function cleanScore(
     ) {
 
         return null;
+
     }
 
 
     const score =
-        String(value).trim();
+        String(
+            value
+        ).trim();
 
 
     if (
@@ -1416,6 +1515,7 @@ function cleanScore(
     ) {
 
         return null;
+
     }
 
 
@@ -1460,6 +1560,7 @@ function formatDate(
     ) {
 
         return "";
+
     }
 
 
