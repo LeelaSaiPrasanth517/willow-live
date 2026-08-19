@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Cricketive | Match</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050505;color:#fff;font-family:Arial,Helvetica,sans-serif}
+.header{height:70px;padding:0 28px;display:flex;align-items:center;background:#090909;border-bottom:1px solid #222}.brand img{height:48px;width:48px;object-fit:cover;border-radius:8px;vertical-align:middle}.brand span{font-weight:800;font-size:21px;margin-left:9px;vertical-align:middle}.back{margin-left:auto;color:#fff;text-decoration:none;background:#222;padding:9px 13px;border-radius:7px;font-size:13px}
+.wrap{max-width:1050px;margin:auto;padding:28px 15px}.match-head{background:#101010;border:1px solid #252525;border-radius:12px;padding:20px}.title{font-size:24px;font-weight:800}.meta{color:#999;font-size:13px;line-height:1.6;margin-top:8px}
+.player{display:none;margin-top:18px;background:#000;border-radius:10px;overflow:hidden}.player iframe{width:100%;aspect-ratio:16/9;border:0;display:block}
+.streams{margin-top:22px}.stream{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#101010;border:1px solid #252525;border-radius:9px;padding:14px;margin-top:9px}.watch{border:0;background:#5865f2;color:#fff;padding:9px 13px;border-radius:7px;cursor:pointer;font-weight:700}.empty{color:#888;background:#0b0b0b;border:1px solid #1d1d1d;border-radius:10px;padding:20px;margin-top:12px}
+@media(max-width:600px){.header{height:60px;padding:0 14px}.brand img{height:40px;width:40px}.brand span{font-size:18px}.title{font-size:20px}.stream{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><img src="cricketive-logo.webp" alt="Cricketive logo"><span>CRICKETIVE</span></div>
+  <a class="back" href="index.html">← HOME</a>
+</header>
+<main class="wrap">
+  <section class="match-head" id="match"></section>
+  <section class="streams">
+    <h2>🎥 Available Streams</h2>
+    <div id="streamList"><div class="empty">Loading...</div></div>
+    <div class="player" id="player"><iframe id="video" allowfullscreen allow="encrypted-media; picture-in-picture"></iframe></div>
+  </section>
+</main>
+<script>
+const SUPABASE_URL="https://qkzwzdyahwzcwtqgcbud.supabase.co";
+const SUPABASE_ANON_KEY="sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const matchId=new URLSearchParams(location.search).get("match");
+async function load(){
+  if(!matchId){document.getElementById("match").innerHTML='<div class="empty">No match selected.</div>';return;}
+  const mr=await db.from("Matches").select("*").eq("id",matchId).maybeSingle();
+  if(mr.error||!mr.data){document.getElementById("match").innerHTML='<div class="empty">Match not found.</div>';return;}
+  const m=mr.data;
+  document.title=`${m.team1} vs ${m.team2} | Cricketive`;
+  document.getElementById("match").innerHTML=`<div class="title">${esc(m.team1)} vs ${esc(m.team2)}</div><div class="meta">${esc(m.competition||"Cricket")}<br>${esc(m.start_time?new Date(m.start_time).toLocaleString([], {dateStyle:"medium",timeStyle:"short"}):(m.match_time||""))}${m.venue?"<br>"+esc(m.venue):""}<br><b>${esc(m.status)}</b></div>`;
+  const sr=await db.from("streams").select("*").eq("match_id",matchId).eq("active",true).order("created_at",{ascending:true});
+  const el=document.getElementById("streamList");
+  if(sr.error){el.innerHTML='<div class="empty">Unable to load streams.</div>';return;}
+  if(!sr.data.length){el.innerHTML='<div class="empty">⏳ No stream is available for this match yet.</div>';return;}
+  el.innerHTML=sr.data.map(s=>`<div class="stream"><div><b>${esc(s.language)}</b><br><span style="color:#999;font-size:12px">${esc(s.stream_name)}</span></div><button class="watch" onclick="play(${JSON.stringify(s.embed_url)})">▶ WATCH</button></div>`).join("");
+}
+function play(url){if(!url)return;document.getElementById("video").src=url;const p=document.getElementById("player");p.style.display="block";p.scrollIntoView({behavior:"smooth",block:"center"});}
+function esc(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}
+load();
+</script>
+</body>
+</html>
