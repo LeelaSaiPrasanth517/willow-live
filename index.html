@@ -37,6 +37,11 @@ body {
     border-bottom: 1px solid #222;
 }
 
+.brand {
+    display: flex;
+    align-items: center;
+}
+
 .brand img {
     height: 48px;
     width: 48px;
@@ -136,14 +141,44 @@ body {
 }
 
 .match-name {
-    font-size: 18px;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.team-line {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.team-logo {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    border-radius: 50%;
+    background: #181818;
+    flex-shrink: 0;
+}
+
+.team-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vs {
+    color: #777;
+    margin: 5px 0 5px 39px;
+    font-size: 11px;
     font-weight: 700;
 }
 
 .match-info {
     color: #999;
     font-size: 13px;
-    margin-top: 8px;
+    margin-top: 11px;
     line-height: 1.55;
 }
 
@@ -271,6 +306,19 @@ footer {
 
     .match-header {
         flex-direction: column;
+    }
+
+    .status {
+        align-self: flex-start;
+    }
+
+    .team-logo {
+        width: 27px;
+        height: 27px;
+    }
+
+    .match-name {
+        font-size: 16px;
     }
 
 }
@@ -643,10 +691,6 @@ async function loadMatches() {
                             : "";
 
 
-                    /*
-                     * Match by SportScore URL.
-                     */
-
                     let storedMatch =
                         sportscoreUrl
                             ? (
@@ -656,10 +700,6 @@ async function loadMatches() {
                               )
                             : null;
 
-
-                    /*
-                     * Fall back to teams.
-                     */
 
                     if (
                         !storedMatch
@@ -718,7 +758,8 @@ async function loadMatches() {
                         item.source.status ||
                         ""
                     ).toLowerCase()
-                    === "live"
+                    ===
+                    "live"
             );
 
 
@@ -733,12 +774,12 @@ async function loadMatches() {
                         item.source.status ||
                         ""
                     ).toLowerCase()
-                    === "upcoming"
+                    ===
+                    "upcoming"
             );
 
 
         /* =================================================
-           SORT LIVE:
            STREAMS FIRST
            ================================================= */
 
@@ -780,7 +821,7 @@ async function loadMatches() {
 
 
         /* =================================================
-           SORT UPCOMING
+           UPCOMING CHRONOLOGICAL
            ================================================= */
 
         upcoming.sort(
@@ -816,14 +857,23 @@ async function loadMatches() {
         );
 
 
-        updatedEl.textContent =
+        if (
             payload.updated
-                ? `Live data updated: ${
+        ) {
+
+            updatedEl.textContent =
+                `Live data updated: ${
                     formatDate(
                         payload.updated
                     )
-                  }`
-                : "";
+                }`;
+
+        } else {
+
+            updatedEl.textContent =
+                "";
+
+        }
 
 
     } catch (error) {
@@ -900,11 +950,12 @@ function renderLive(
         );
 
 
-    let html = "";
+    let html =
+        "";
 
 
     /* =====================================================
-       AVAILABLE
+       AVAILABLE TO WATCH
        ===================================================== */
 
     if (
@@ -930,15 +981,17 @@ function renderLive(
 
                 <div class="grid">
 
-                    ${available
-                        .map(
-                            item =>
-                                createCard(
-                                    item,
-                                    true
-                                )
-                        )
-                        .join("")}
+                    ${
+                        available
+                            .map(
+                                item =>
+                                    createCard(
+                                        item,
+                                        true
+                                    )
+                            )
+                            .join("")
+                    }
 
                 </div>
 
@@ -948,7 +1001,7 @@ function renderLive(
 
 
     /* =====================================================
-       OTHER LIVE
+       OTHER LIVE MATCHES
        ===================================================== */
 
     if (
@@ -974,15 +1027,17 @@ function renderLive(
 
                 <div class="grid">
 
-                    ${unavailable
-                        .map(
-                            item =>
-                                createCard(
-                                    item,
-                                    true
-                                )
-                        )
-                        .join("")}
+                    ${
+                        unavailable
+                            .map(
+                                item =>
+                                    createCard(
+                                        item,
+                                        true
+                                    )
+                            )
+                            .join("")
+                    }
 
                 </div>
 
@@ -1049,7 +1104,7 @@ function renderUpcoming(
 
 
 /* =========================================================
-   CREATE CARD
+   CREATE MATCH CARD
    ========================================================= */
 
 function createCard(
@@ -1088,14 +1143,10 @@ function createCard(
     let actionUrl =
         "#";
 
+
     let actionText =
         "VIEW MATCH";
 
-
-    /*
-     * If Cricketive knows this match, ALWAYS go to
-     * our own stream page.
-     */
 
     if (
         item.storedMatch &&
@@ -1115,14 +1166,7 @@ function createCard(
                 ? "▶ WATCH MATCH"
                 : "VIEW MATCH";
 
-    }
-
-
-    /*
-     * Otherwise fall back to SportScore.
-     */
-
-    else if (
+    } else if (
         source.url
     ) {
 
@@ -1138,7 +1182,7 @@ function createCard(
 
 
     /* =====================================================
-       STREAM INFORMATION
+       STREAM INFO
        ===================================================== */
 
     const streamInfo =
@@ -1169,6 +1213,60 @@ function createCard(
 
 
     /* =====================================================
+       TEAM LOGOS
+       ===================================================== */
+
+    const homeLogo =
+        source.home_logo ||
+        "";
+
+
+    const awayLogo =
+        source.away_logo ||
+        "";
+
+
+    const homeLogoHtml =
+        homeLogo
+
+            ? `
+                <img
+                    class="team-logo"
+                    src="${esc(
+                        homeLogo
+                    )}"
+                    alt=""
+                    loading="lazy"
+                    onerror="
+                        this.style.display='none'
+                    "
+                >
+              `
+
+            : "";
+
+
+    const awayLogoHtml =
+        awayLogo
+
+            ? `
+                <img
+                    class="team-logo"
+                    src="${esc(
+                        awayLogo
+                    )}"
+                    alt=""
+                    loading="lazy"
+                    onerror="
+                        this.style.display='none'
+                    "
+                >
+              `
+
+            : "";
+
+
+    /* =====================================================
        CARD
        ===================================================== */
 
@@ -1186,20 +1284,40 @@ function createCard(
             <div class="match-header">
 
 
-                <div>
+                <div class="match-name">
 
 
-                    <div class="match-name">
+                    <div class="team-line">
 
-                        ${esc(
-                            team1
-                        )}
+                        ${homeLogoHtml}
 
-                        vs
+                        <span class="team-name">
 
-                        ${esc(
-                            team2
-                        )}
+                            ${esc(
+                                team1
+                            )}
+
+                        </span>
+
+                    </div>
+
+
+                    <div class="vs">
+                        VS
+                    </div>
+
+
+                    <div class="team-line">
+
+                        ${awayLogoHtml}
+
+                        <span class="team-name">
+
+                            ${esc(
+                                team2
+                            )}
+
+                        </span>
 
                     </div>
 
@@ -1218,7 +1336,6 @@ function createCard(
                         )}
 
                     </div>
-
 
                 </div>
 
@@ -1386,7 +1503,9 @@ function getTime(
     return Number.isFinite(
         time
     )
+
         ? time
+
         : Number.MAX_SAFE_INTEGER;
 
 }
