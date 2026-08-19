@@ -20,30 +20,17 @@
 .watch-button{display:inline-block;margin-top:14px;padding:10px 16px;background:#5865f2;color:#fff;text-decoration:none;border-radius:7px;font-size:13px;font-weight:700}
 .empty{color:#777;text-align:center;padding:22px;background:#0b0b0b;border:1px solid #1d1d1d;border-radius:10px}
 .community{text-align:center;padding:38px 15px 48px;background:#090909}.community h2{margin:0}.community p{color:#999;font-size:14px}
-.community-button{display:inline-block;padding:12px 20px;background:#5865f2;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:13px}
-footer{text-align:center;padding:18px;background:#030303;color:#666;font-size:11px}
-@media(max-width:600px){.header{height:60px;padding:0 14px}.brand img{height:40px;width:40px}.brand span{font-size:18px}.hero h1{font-size:23px}}
+.community-button{display:inline-block;padding:12px 20px;background:#5865f2;color:#fff;text-decoration:none;border-radius:8px;font-weight:700}
+footer{text-align:center;padding:18px;background:#030303;color:#666;font-size:11px}@media(max-width:600px){.header{height:60px;padding:0 14px}.brand img{height:40px;width:40px}.brand span{font-size:18px}.hero h1{font-size:23px}}
 </style>
 </head>
 <body>
-<header class="header">
-  <div class="brand"><img src="cricketive-logo.webp" alt="Cricketive logo"><span>CRICKETIVE</span></div>
-  <div class="live"><span class="live-dot"></span>LIVE</div>
-</header>
-
+<header class="header"><div class="brand"><img src="cricketive-logo.webp" alt="Cricketive logo"><span>CRICKETIVE</span></div><div class="live"><span class="live-dot"></span>LIVE</div></header>
 <section class="hero"><h1>🌍 Global Cricket Live</h1><p>Watch cricket from around the world</p></section>
-
-<main class="matches">
-  <h2 class="section-title">🔴 Live Now</h2>
-  <div id="liveMatches"><div class="empty">Loading matches...</div></div>
-  <h2 class="section-title">📅 Upcoming Matches</h2>
-  <div id="upcomingMatches"><div class="empty">Loading matches...</div></div>
-</main>
-
-<section class="community"><h2>💬 Join Cricketive</h2><p>Talk cricket, follow matches and connect with fans worldwide.</p>
-<a class="community-button" href="https://discord.gg/SYfPEKRrnQ" target="_blank" rel="noopener noreferrer">JOIN OUR DISCORD</a></section>
+<main class="matches"><h2 class="section-title">🔴 Live Now</h2><div id="liveMatches"><div class="empty">Loading matches...</div></div>
+<h2 class="section-title">📅 Upcoming Matches</h2><div id="upcomingMatches"><div class="empty">Loading matches...</div></div></main>
+<section class="community"><h2>💬 Join Cricketive</h2><p>Talk cricket, follow matches and connect with fans worldwide.</p><a class="community-button" href="https://discord.gg/SYfPEKRrnQ" target="_blank" rel="noopener noreferrer">JOIN OUR DISCORD</a></section>
 <footer>© 2026 Cricketive • Global Cricket Community</footer>
-
 <script>
 const SUPABASE_URL="https://qkzwzdyahwzcwtqgcbud.supabase.co";
 const SUPABASE_ANON_KEY="sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
@@ -52,59 +39,42 @@ const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 async function loadMatches(){
   const liveEl=document.getElementById("liveMatches"), upcomingEl=document.getElementById("upcomingMatches");
   const {data,error}=await db.from("Matches").select("*").order("start_time",{ascending:true});
-  if(error){liveEl.innerHTML='<div class="empty">Unable to load matches.</div>';upcomingEl.innerHTML="";console.error(error);return;}
+  if(error){liveEl.innerHTML='<div class="empty">Unable to load matches.</div>';upcomingEl.innerHTML="";return;}
 
-  let scoreMatches=[];
+  let current=[];
   try{
     const r=await fetch("/.netlify/functions/cricket-matches?mode=scores");
-    if(r.ok){const p=await r.json();scoreMatches=p.matches||[];}
-  }catch(e){console.warn("Score refresh failed",e);}
-
-  const scoresByApiId={};
-  scoreMatches.forEach(m=>{if(m.id)scoresByApiId[m.id]=m;});
+    if(r.ok){const p=await r.json();current=p.matches||[];}
+  }catch(e){console.warn(e);}
+  const byId={}; current.forEach(m=>{if(m.id)byId[m.id]=m;});
 
   const ids=(data||[]).map(m=>m.id);
   let streams=[];
-  if(ids.length){
-    const r=await db.from("streams").select("match_id,active").in("match_id",ids).eq("active",true);
-    if(!r.error) streams=r.data||[];
-  }
-  const countByMatch={};streams.forEach(s=>countByMatch[s.match_id]=(countByMatch[s.match_id]||0)+1);
+  if(ids.length){const r=await db.from("streams").select("match_id,active").in("match_id",ids).eq("active",true);if(!r.error)streams=r.data||[];}
+  const count={};streams.forEach(s=>count[s.match_id]=(count[s.match_id]||0)+1);
 
-  const now=Date.now();
-  const live=[], upcoming=[];
+  const now=Date.now(), live=[], upcoming=[];
   (data||[]).forEach(m=>{
-    const api=scoresByApiId[m.api_match_id];
-    const started=api ? api.matchStarted : (m.start_time && new Date(m.start_time).getTime()<=now);
-    const ended=api ? api.matchEnded : false;
-    if(started && !ended) live.push({...m,api});
-    else if(m.start_time && new Date(m.start_time).getTime()>=now) upcoming.push({...m,api});
+    const c=byId[m.api_match_id];
+    const started=c ? c.matchStarted : (m.start_time && new Date(m.start_time).getTime()<=now);
+    const ended=c ? c.matchEnded : false;
+    if(started&&!ended)live.push({...m,current:c});
+    else if(m.start_time && new Date(m.start_time).getTime()>=now)upcoming.push({...m,current:c});
   });
-
-  render(liveEl,live,true,countByMatch);render(upcomingEl,upcoming,false,countByMatch);
+  render(liveEl,live,true,count);render(upcomingEl,upcoming,false,count);
 }
-
-function render(el,matches,isLive,countByMatch){
-  if(!matches.length){el.innerHTML=`<div class="empty">${isLive?"No matches are live right now.":"No upcoming matches listed."}</div>`;return;}
+function render(el,arr,isLive,count){
+  if(!arr.length){el.innerHTML=`<div class="empty">${isLive?"No matches are live right now.":"No upcoming matches listed."}</div>`;return;}
   el.className="grid";
-  el.innerHTML=matches.map(m=>{
-    const n=countByMatch[m.id]||0;
-    const time=m.start_time?new Date(m.start_time).toLocaleString([], {dateStyle:"medium",timeStyle:"short"}):(m.match_time||"");
-    const score=m.api?.score||[];
-    const scoreHtml=isLive&&score.length?`<div class="score-box">${score.map(s=>`<div class="score-row"><span>${esc(s.inning||"Innings")}</span><strong>${esc((s.r||0)+"/"+(s.w||0))} ${s.o!=null?`(${esc(s.o)} ov)`:""}</strong></div>`).join("")}${m.api?.status?`<div class="score-status">${esc(m.api.status)}</div>`:""}</div>`:"";
-    return `<article class="match-card">
-      <div class="match-name">${esc(m.team1)} vs ${esc(m.team2)}</div>
-      <div class="match-info">${esc(m.competition||"Cricket")}<br>${esc(time)}${m.venue?"<br>"+esc(m.venue):""}</div>
-      <span class="status ${isLive?"live-status":""}">${isLive?"LIVE":"UPCOMING"}</span>
-      ${scoreHtml}
-      ${n?`<div class="available">🎥 ${n} stream${n===1?"":"s"} available</div>`:`<div class="unavailable">⏳ Stream unavailable</div>`}
-      <a class="watch-button" href="stream.html?match=${encodeURIComponent(m.id)}">${isLive&&n?"▶ WATCH MATCH":"VIEW MATCH"}</a>
-    </article>`;
+  el.innerHTML=arr.map(m=>{
+    const n=count[m.id]||0, score=m.current?.score||[];
+    const time=m.start_time?new Date(m.start_time).toLocaleString([], {dateStyle:"medium",timeStyle:"short"}):"";
+    const scoreHtml=isLive&&score.length?`<div class="score-box">${score.map(s=>`<div class="score-row"><span>${esc(s.inning||"Innings")}</span><strong>${esc((s.r??0)+"/"+(s.w??0))}${s.o!=null?" ("+esc(s.o)+" ov)":""}</strong></div>`).join("")}${m.current?.status?`<div class="score-status">${esc(m.current.status)}</div>`:""}</div>`:"";
+    return `<article class="match-card"><div class="match-name">${esc(m.team1)} vs ${esc(m.team2)}</div><div class="match-info">${esc(m.competition||"Cricket")}<br>${esc(time)}${m.venue?"<br>"+esc(m.venue):""}</div><span class="status ${isLive?"live-status":""}">${isLive?"LIVE":"UPCOMING"}</span>${scoreHtml}${n?`<div class="available">🎥 ${n} stream${n===1?"":"s"} available</div>`:`<div class="unavailable">⏳ Stream unavailable</div>`}<a class="watch-button" href="stream.html?match=${encodeURIComponent(m.id)}">${isLive&&n?"▶ WATCH MATCH":"VIEW MATCH"}</a></article>`;
   }).join("");
 }
 function esc(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}
-loadMatches();
-setInterval(loadMatches,60000);
+loadMatches();setInterval(loadMatches,60000);
 </script>
 </body>
 </html>
