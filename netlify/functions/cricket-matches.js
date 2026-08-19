@@ -1,136 +1,94 @@
-export default async (request) => {
+export async function onRequest(context) {
   try {
-    const apiToken = process.env.SPORTMONKS_API_TOKEN;
+    const apiToken = context.env.SPORTMONKS_API_TOKEN;
 
     if (!apiToken) {
-      return json(
-        { error: "SPORTMONKS_API_TOKEN is missing." },
-        500
-      );
+      return json({
+        error: "SPORTMONKS_API_TOKEN is missing."
+      }, 500);
     }
 
-    const url = new URL(request.url);
+    const url = new URL(context.request.url);
     const mode = url.searchParams.get("mode") || "matches";
-
-    /* =========================================================
-       FIXTURES
-       ========================================================= */
 
     if (mode === "matches") {
       const matches = await fetchFixtures(apiToken);
-
       return json({ matches });
     }
-
-    /* =========================================================
-       LIVE SCORES
-       ========================================================= */
 
     if (mode === "scores") {
       const matches = await fetchLivescores(apiToken);
-
       return json({ matches });
     }
 
-    return json(
-      { error: "Unknown mode." },
-      400
-    );
+    return json({
+      error: "Unknown mode."
+    }, 400);
 
   } catch (error) {
-
     console.error(error);
 
-    return json(
-      {
-        error:
-          error.message ||
-          "Unexpected server error."
-      },
-      500
-    );
+    return json({
+      error: error.message || "Unexpected server error."
+    }, 500);
   }
-};
+}
 
 
-/* =============================================================
-   UPCOMING FIXTURES
-   ============================================================= */
+/* =========================================================
+   FIXTURES
+   ========================================================= */
 
 async function fetchFixtures(apiToken) {
 
   const now = new Date();
 
-  const startDate =
-    formatDate(
-      new Date(
-        now.getTime() -
-        24 * 60 * 60 * 1000
-      )
-    );
+  const startDate = formatDate(
+    new Date(
+      now.getTime() - 24 * 60 * 60 * 1000
+    )
+  );
 
-  const endDate =
-    formatDate(
-      new Date(
-        now.getTime() +
-        14 * 24 * 60 * 60 * 1000
-      )
-    );
+  const endDate = formatDate(
+    new Date(
+      now.getTime() + 14 * 24 * 60 * 60 * 1000
+    )
+  );
 
   const fixtures = [];
 
   let page = 1;
 
-  const maxPages = 20;
+  for (let i = 0; i < 20; i++) {
 
-  for (
-    let i = 0;
-    i < maxPages;
-    i++
-  ) {
+    const params = new URLSearchParams({
+      api_token: apiToken,
+      page: String(page),
+      "filter[starts_between]":
+        `${startDate},${endDate}`,
+      include:
+        "localteam,visitorteam,venue"
+    });
 
-    const params =
-      new URLSearchParams({
-
-        api_token:
-          apiToken,
-
-        page:
-          String(page),
-
-        "filter[starts_between]":
-          `${startDate},${endDate}`,
-
-        include:
-          "localteam,visitorteam,venue"
-
-      });
-
-    const response =
-      await fetch(
-        `https://cricket.sportmonks.com/api/v2.0/fixtures?${params}`
-      );
+    const response = await fetch(
+      `https://cricket.sportmonks.com/api/v2.0/fixtures?${params}`
+    );
 
     if (!response.ok) {
-
       throw new Error(
         `Sportmonks fixtures returned HTTP ${response.status}`
       );
     }
 
-    const result =
-      await response.json();
+    const result = await response.json();
 
     if (!Array.isArray(result.data)) {
       break;
     }
 
-    fixtures.push(
-      ...result.data
-    );
+    fixtures.push(...result.data);
 
-    const meta =
-      result.meta;
+    const meta = result.meta;
 
     if (
       !meta ||
@@ -141,16 +99,6 @@ async function fetchFixtures(apiToken) {
 
     page++;
   }
-
-
-  /*
-   * IMPORTANT:
-   *
-   * Fixtures are NOT allowed to determine Live status.
-   *
-   * Everything returned here is Upcoming unless
-   * it is clearly finished.
-   */
 
   return fixtures
     .map(normalizeFixture)
@@ -163,47 +111,33 @@ async function fetchFixtures(apiToken) {
 }
 
 
-/* =============================================================
+/* =========================================================
    LIVE SCORES
-   ============================================================= */
+   ========================================================= */
 
 async function fetchLivescores(apiToken) {
 
-  const params =
-    new URLSearchParams({
+  const params = new URLSearchParams({
+    api_token: apiToken,
+    include:
+      "runs,batting,bowling,localteam,visitorteam,venue"
+  });
 
-      api_token:
-        apiToken,
-
-      include:
-        "runs,batting,bowling,localteam,visitorteam,venue"
-
-    });
-
-
-  const response =
-    await fetch(
-      `https://cricket.sportmonks.com/api/v2.0/livescores?${params}`
-    );
-
+  const response = await fetch(
+    `https://cricket.sportmonks.com/api/v2.0/livescores?${params}`
+  );
 
   if (!response.ok) {
-
     throw new Error(
       `Sportmonks livescores returned HTTP ${response.status}`
     );
   }
 
-
-  const result =
-    await response.json();
-
+  const result = await response.json();
 
   if (!Array.isArray(result.data)) {
-
     return [];
   }
-
 
   return result.data
     .map(normalizeLiveMatch)
@@ -211,9 +145,9 @@ async function fetchLivescores(apiToken) {
 }
 
 
-/* =============================================================
+/* =========================================================
    NORMALIZE FIXTURE
-   ============================================================= */
+   ========================================================= */
 
 function normalizeFixture(fixture) {
 
@@ -225,55 +159,27 @@ function normalizeFixture(fixture) {
     return null;
   }
 
-
   const localTeam =
-    getTeam(
-      fixture.localteam
-    );
-
+    getTeam(fixture.localteam);
 
   const visitorTeam =
-    getTeam(
-      fixture.visitorteam
-    );
-
+    getTeam(fixture.visitorteam);
 
   const team1 =
-    localTeam.name ||
-    "";
-
+    localTeam.name || "";
 
   const team2 =
-    visitorTeam.name ||
-    "";
+    visitorTeam.name || "";
 
-
-  if (
-    !team1 ||
-    !team2
-  ) {
+  if (!team1 || !team2) {
     return null;
   }
 
-
   const rawStatus =
-    String(
-      fixture.status ||
-      ""
-    ).toLowerCase();
+    String(fixture.status || "")
+      .toLowerCase();
 
-
-  /*
-   * A fixture marked finished stays Finished.
-   *
-   * Otherwise it is Upcoming.
-   *
-   * We deliberately DO NOT use fixture.live.
-   */
-
-  let status =
-    "Upcoming";
-
+  let status = "Upcoming";
 
   if (
     rawStatus.includes("finished") ||
@@ -281,13 +187,10 @@ function normalizeFixture(fixture) {
     rawStatus.includes("abandoned") ||
     rawStatus.includes("cancelled")
   ) {
-
     status = "Finished";
   }
 
-
   return {
-
     api_match_id:
       String(fixture.id),
 
@@ -317,65 +220,43 @@ function normalizeFixture(fixture) {
     status,
 
     team1_logo:
-      localTeam.image_path ||
-      "",
+      localTeam.image_path || "",
 
     team2_logo:
-      visitorTeam.image_path ||
-      "",
+      visitorTeam.image_path || "",
 
-    embed_url:
-      ""
+    embed_url: ""
   };
 }
 
 
-/* =============================================================
+/* =========================================================
    NORMALIZE LIVE MATCH
-   ============================================================= */
+   ========================================================= */
 
 function normalizeLiveMatch(fixture) {
 
-  if (
-    !fixture ||
-    !fixture.id
-  ) {
+  if (!fixture || !fixture.id) {
     return null;
   }
-
 
   const localTeam =
-    getTeam(
-      fixture.localteam
-    );
-
+    getTeam(fixture.localteam);
 
   const visitorTeam =
-    getTeam(
-      fixture.visitorteam
-    );
-
+    getTeam(fixture.visitorteam);
 
   const team1 =
-    localTeam.name ||
-    "";
-
+    localTeam.name || "";
 
   const team2 =
-    visitorTeam.name ||
-    "";
+    visitorTeam.name || "";
 
-
-  if (
-    !team1 ||
-    !team2
-  ) {
+  if (!team1 || !team2) {
     return null;
   }
 
-
   return {
-
     api_match_id:
       String(fixture.id),
 
@@ -397,55 +278,39 @@ function normalizeLiveMatch(fixture) {
       "",
 
     start_time:
-      fixture.starting_at ||
-      null,
+      fixture.starting_at || null,
 
     match_time:
-      fixture.starting_at ||
-      null,
+      fixture.starting_at || null,
 
-    status:
-      "Live",
+    status: "Live",
 
     team1_logo:
-      localTeam.image_path ||
-      "",
+      localTeam.image_path || "",
 
     team2_logo:
-      visitorTeam.image_path ||
-      "",
+      visitorTeam.image_path || "",
 
-    /*
-     * Keep the raw live information available.
-     * We'll use this when building the score display.
-     */
-
-    live:
-      true,
+    live: true,
 
     score:
-      fixture.runs ||
-      [],
+      fixture.runs || [],
 
     innings:
-      fixture.runs ||
-      [],
+      fixture.runs || [],
 
     note:
-      fixture.note ||
-      "",
+      fixture.note || "",
 
     match_status:
-      fixture.status ||
-      ""
-
+      fixture.status || ""
   };
 }
 
 
-/* =============================================================
+/* =========================================================
    TEAM HELPER
-   ============================================================= */
+   ========================================================= */
 
 function getTeam(team) {
 
@@ -461,9 +326,9 @@ function getTeam(team) {
 }
 
 
-/* =============================================================
+/* =========================================================
    PLACEHOLDER CHECK
-   ============================================================= */
+   ========================================================= */
 
 function isPlaceholder(value) {
 
@@ -472,15 +337,13 @@ function isPlaceholder(value) {
   }
 
   return /^(tbc|tbd|to be confirmed|to be decided)$/i
-    .test(
-      String(value).trim()
-    );
+    .test(String(value).trim());
 }
 
 
-/* =============================================================
+/* =========================================================
    DATE FORMAT
-   ============================================================= */
+   ========================================================= */
 
 function formatDate(date) {
 
@@ -488,37 +351,30 @@ function formatDate(date) {
     date.getUTCFullYear();
 
   const month =
-    String(
-      date.getUTCMonth() + 1
-    ).padStart(2, "0");
+    String(date.getUTCMonth() + 1)
+      .padStart(2, "0");
 
   const day =
-    String(
-      date.getUTCDate()
-    ).padStart(2, "0");
+    String(date.getUTCDate())
+      .padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
 
 
-/* =============================================================
+/* =========================================================
    JSON RESPONSE
-   ============================================================= */
+   ========================================================= */
 
-function json(
-  data,
-  status = 200
-) {
+function json(data, status = 200) {
 
   return new Response(
     JSON.stringify(data),
     {
       status,
-
       headers: {
         "content-type":
           "application/json",
-
         "cache-control":
           "public, max-age=30"
       }
