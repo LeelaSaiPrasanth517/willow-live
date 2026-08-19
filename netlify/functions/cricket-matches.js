@@ -1,21 +1,55 @@
-export default async () => {
+export default async (request) => {
   try {
     const apiKey = process.env.CRICKET_API_KEY;
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "CRICKET_API_KEY is not configured in Netlify." }), {
-        status: 500, headers: { "content-type": "application/json" }
+        status: 500,
+        headers: { "content-type": "application/json" }
+      });
+    }
+
+    const url = new URL(request.url);
+    const mode = url.searchParams.get("mode") || "matches";
+
+    if (mode === "scores") {
+      const apiUrl = `https://api.cricapi.com/v1/currentMatches?apikey=${encodeURIComponent(apiKey)}&offset=0`;
+      const response = await fetch(apiUrl);
+      if (!response.ok) throw new Error(`Cricket API returned HTTP ${response.status}`);
+
+      const json = await response.json();
+      if (json.status !== "success") {
+        throw new Error(json.info || "Cricket score API request failed.");
+      }
+
+      const matches = (json.data || []).map(m => ({
+        id: m.id || null,
+        name: m.name || "",
+        teams: m.teams || [],
+        matchStarted: !!m.matchStarted,
+        matchEnded: !!m.matchEnded,
+        status: m.status || "",
+        score: Array.isArray(m.score) ? m.score : [],
+        dateTimeGMT: m.dateTimeGMT || null
+      }));
+
+      return new Response(JSON.stringify({ matches }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "public, max-age=60"
+        }
       });
     }
 
     const now = new Date();
     const from = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-    const to = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const to = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     const all = [];
     const seen = new Set();
 
     for (let offset = 0; offset <= 250; offset += 25) {
-      const url = `https://api.cricapi.com/v1/matches?apikey=${encodeURIComponent(apiKey)}&offset=${offset}`;
-      const response = await fetch(url);
+      const apiUrl = `https://api.cricapi.com/v1/matches?apikey=${encodeURIComponent(apiKey)}&offset=${offset}`;
+      const response = await fetch(apiUrl);
       if (!response.ok) throw new Error(`Cricket API returned HTTP ${response.status}`);
 
       const json = await response.json();
@@ -55,11 +89,15 @@ export default async () => {
 
     return new Response(JSON.stringify({ matches: all }), {
       status: 200,
-      headers: { "content-type": "application/json", "cache-control": "public, max-age=60" }
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "public, max-age=60"
+      }
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message || "Unexpected server error." }), {
-      status: 500, headers: { "content-type": "application/json" }
+      status: 500,
+      headers: { "content-type": "application/json" }
     });
   }
 };
