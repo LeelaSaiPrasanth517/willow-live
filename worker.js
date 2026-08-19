@@ -6,15 +6,22 @@ export default {
       return handleCricketAPI(request, env);
     }
 
-    return new Response("Cricketive Worker is running.", {
-      status: 200,
-      headers: {
-        "content-type": "text/plain"
+    return new Response(
+      "Cricketive Worker is running.",
+      {
+        status: 200,
+        headers: {
+          "content-type": "text/plain"
+        }
       }
-    });
+    );
   }
 };
 
+
+/* =========================================================
+   MAIN API
+   ========================================================= */
 
 async function handleCricketAPI(request, env) {
 
@@ -23,59 +30,138 @@ async function handleCricketAPI(request, env) {
     const apiToken =
       env.SPORTMONKS_API_TOKEN;
 
+
     if (!apiToken) {
-      return json({
-        error:
-          "SPORTMONKS_API_TOKEN is missing."
-      }, 500);
+
+      return json(
+        {
+          error:
+            "SPORTMONKS_API_TOKEN is missing."
+        },
+        500
+      );
+
     }
 
 
     const url =
       new URL(request.url);
 
+
     const mode =
       url.searchParams.get("mode") ||
       "matches";
 
+
+    /* =====================================================
+       MATCHES
+       ===================================================== */
 
     if (mode === "matches") {
 
       const matches =
         await fetchFixtures(apiToken);
 
+
       return json({
         matches
       });
+
     }
 
+
+    /* =====================================================
+       LIVE SCORES
+       ===================================================== */
 
     if (mode === "scores") {
 
       const matches =
         await fetchLivescores(apiToken);
 
+
       return json({
         matches
       });
+
     }
 
 
-    return json({
-      error: "Unknown mode."
-    }, 400);
+    /* =====================================================
+       LEAGUES DIAGNOSTIC
+       ===================================================== */
+
+    if (mode === "leagues") {
+
+      const response =
+        await fetch(
+          `https://cricket.sportmonks.com/api/v2.0/leagues?api_token=${encodeURIComponent(apiToken)}`
+        );
+
+
+      const result =
+        await response.json();
+
+
+      return json({
+
+        status:
+          response.status,
+
+        data:
+          result.data || [],
+
+        meta:
+          result.meta || null,
+
+        message:
+          result.message || null,
+
+        info:
+          result.info || null
+
+      });
+
+    }
+
+
+    /* =====================================================
+       UNKNOWN MODE
+       ===================================================== */
+
+    return json(
+      {
+        error:
+          "Unknown mode."
+      },
+      400
+    );
 
 
   } catch (error) {
 
-    return json({
-      error:
-        error.message ||
-        "Unexpected server error."
-    }, 500);
+    console.error(
+      "Cricketive Worker error:",
+      error
+    );
+
+
+    return json(
+      {
+        error:
+          error.message ||
+          "Unexpected server error."
+      },
+      500
+    );
+
   }
 }
 
+
+/* =========================================================
+   FETCH FIXTURES
+   ========================================================= */
 
 async function fetchFixtures(apiToken) {
 
@@ -101,50 +187,116 @@ async function fetchFixtures(apiToken) {
     );
 
 
-  const params =
-    new URLSearchParams({
-
-      api_token:
-        apiToken,
-
-      "filter[starts_between]":
-        `${startDate},${endDate}`,
-
-      include:
-        "localteam,visitorteam,venue"
-
-    });
+  const fixtures = [];
 
 
-  const response =
-    await fetch(
-      `https://cricket.sportmonks.com/api/v2.0/fixtures?${params}`
+  let page = 1;
+
+
+  const maxPages = 20;
+
+
+  for (
+    let i = 0;
+    i < maxPages;
+    i++
+  ) {
+
+
+    const params =
+      new URLSearchParams({
+
+        api_token:
+          apiToken,
+
+        page:
+          String(page),
+
+        "filter[starts_between]":
+          `${startDate},${endDate}`,
+
+        include:
+          "localteam,visitorteam,venue"
+
+      });
+
+
+    const response =
+      await fetch(
+        `https://cricket.sportmonks.com/api/v2.0/fixtures?${params.toString()}`
+      );
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        `Sportmonks fixtures returned HTTP ${response.status}`
+      );
+
+    }
+
+
+    const result =
+      await response.json();
+
+
+    if (!Array.isArray(result.data)) {
+
+      break;
+
+    }
+
+
+    fixtures.push(
+      ...result.data
     );
 
 
-  if (!response.ok) {
+    const meta =
+      result.meta;
 
-    throw new Error(
-      `Sportmonks returned HTTP ${response.status}`
+
+    if (
+      !meta ||
+      !meta.current_page ||
+      !meta.last_page ||
+      meta.current_page >= meta.last_page
+    ) {
+
+      break;
+
+    }
+
+
+    page++;
+
+  }
+
+
+  return fixtures
+
+    .map(
+      normalizeFixture
+    )
+
+    .filter(Boolean)
+
+    .filter(
+      match =>
+        !isPlaceholder(
+          match.team1
+        ) &&
+        !isPlaceholder(
+          match.team2
+        )
     );
-  }
 
-
-  const result =
-    await response.json();
-
-
-  if (!Array.isArray(result.data)) {
-
-    return [];
-  }
-
-
-  return result.data
-    .map(normalizeFixture)
-    .filter(Boolean);
 }
 
+
+/* =========================================================
+   FETCH LIVE SCORES
+   ========================================================= */
 
 async function fetchLivescores(apiToken) {
 
@@ -162,7 +314,7 @@ async function fetchLivescores(apiToken) {
 
   const response =
     await fetch(
-      `https://cricket.sportmonks.com/api/v2.0/livescores?${params}`
+      `https://cricket.sportmonks.com/api/v2.0/livescores?${params.toString()}`
     );
 
 
@@ -171,6 +323,7 @@ async function fetchLivescores(apiToken) {
     throw new Error(
       `Sportmonks livescores returned HTTP ${response.status}`
     );
+
   }
 
 
@@ -181,32 +334,50 @@ async function fetchLivescores(apiToken) {
   if (!Array.isArray(result.data)) {
 
     return [];
+
   }
 
 
   return result.data
-    .map(normalizeLiveMatch)
+
+    .map(
+      normalizeLiveMatch
+    )
+
     .filter(Boolean);
+
 }
 
 
-function normalizeFixture(fixture) {
+/* =========================================================
+   NORMALIZE FIXTURE
+   ========================================================= */
+
+function normalizeFixture(
+  fixture
+) {
 
   if (
     !fixture ||
     !fixture.id ||
     !fixture.starting_at
   ) {
+
     return null;
+
   }
 
 
   const local =
-    getTeam(fixture.localteam);
+    getTeam(
+      fixture.localteam
+    );
 
 
   const visitor =
-    getTeam(fixture.visitorteam);
+    getTeam(
+      fixture.visitorteam
+    );
 
 
   const team1 =
@@ -217,9 +388,13 @@ function normalizeFixture(fixture) {
     visitor.name || "";
 
 
-  if (!team1 || !team2) {
+  if (
+    !team1 ||
+    !team2
+  ) {
 
     return null;
+
   }
 
 
@@ -230,64 +405,101 @@ function normalizeFixture(fixture) {
 
 
   const status =
-    rawStatus.includes("finished") ||
-    rawStatus.includes("completed") ||
-    rawStatus.includes("abandoned") ||
-    rawStatus.includes("cancelled")
+
+    rawStatus.includes(
+      "finished"
+    ) ||
+
+    rawStatus.includes(
+      "completed"
+    ) ||
+
+    rawStatus.includes(
+      "abandoned"
+    ) ||
+
+    rawStatus.includes(
+      "cancelled"
+    )
+
       ? "Finished"
+
       : "Upcoming";
 
 
   return {
 
     api_match_id:
-      String(fixture.id),
+      String(
+        fixture.id
+      ),
+
 
     title:
       `${team1} vs ${team2}`,
 
+
     team1,
 
+
     team2,
+
 
     competition:
       fixture.league?.name ||
       fixture.league_name ||
       "Cricket",
 
+
     venue:
       fixture.venue?.name ||
       fixture.venue_name ||
       "",
 
+
     start_time:
       fixture.starting_at,
+
 
     match_time:
       fixture.starting_at,
 
+
     status
 
   };
+
 }
 
 
-function normalizeLiveMatch(fixture) {
+/* =========================================================
+   NORMALIZE LIVE MATCH
+   ========================================================= */
+
+function normalizeLiveMatch(
+  fixture
+) {
 
   if (
     !fixture ||
     !fixture.id
   ) {
+
     return null;
+
   }
 
 
   const local =
-    getTeam(fixture.localteam);
+    getTeam(
+      fixture.localteam
+    );
 
 
   const visitor =
-    getTeam(fixture.visitorteam);
+    getTeam(
+      fixture.visitorteam
+    );
 
 
   const team1 =
@@ -298,78 +510,152 @@ function normalizeLiveMatch(fixture) {
     visitor.name || "";
 
 
-  if (!team1 || !team2) {
+  if (
+    !team1 ||
+    !team2
+  ) {
 
     return null;
+
   }
 
 
   return {
 
     api_match_id:
-      String(fixture.id),
+      String(
+        fixture.id
+      ),
+
 
     title:
       `${team1} vs ${team2}`,
 
+
     team1,
 
+
     team2,
+
 
     competition:
       fixture.league?.name ||
       fixture.league_name ||
       "Cricket",
 
+
     venue:
       fixture.venue?.name ||
       fixture.venue_name ||
       "",
 
+
     start_time:
       fixture.starting_at ||
       null,
+
 
     match_time:
       fixture.starting_at ||
       null,
 
+
     status:
       "Live",
+
 
     score:
       fixture.runs ||
       [],
+
 
     note:
       fixture.note ||
       ""
 
   };
+
 }
 
 
-function getTeam(team) {
+/* =========================================================
+   TEAM HELPER
+   ========================================================= */
+
+function getTeam(
+  team
+) {
 
   if (!team) {
+
     return {};
+
   }
 
-  if (Array.isArray(team)) {
-    return team[0] || {};
+
+  if (
+    Array.isArray(team)
+  ) {
+
+    return (
+      team[0] ||
+      {}
+    );
+
   }
+
 
   return team;
+
 }
 
 
-function formatDate(date) {
+/* =========================================================
+   PLACEHOLDER CHECK
+   ========================================================= */
+
+function isPlaceholder(
+  value
+) {
+
+  if (!value) {
+
+    return true;
+
+  }
+
+
+  return /^(tbc|tbd|to be confirmed|to be decided)$/i
+    .test(
+      String(
+        value
+      ).trim()
+    );
+
+}
+
+
+/* =========================================================
+   DATE FORMAT
+   ========================================================= */
+
+function formatDate(
+  date
+) {
 
   return date
     .toISOString()
-    .slice(0, 10);
+    .slice(
+      0,
+      10
+    );
+
 }
 
+
+/* =========================================================
+   JSON RESPONSE
+   ========================================================= */
 
 function json(
   data,
@@ -377,17 +663,27 @@ function json(
 ) {
 
   return new Response(
-    JSON.stringify(data),
+
+    JSON.stringify(
+      data
+    ),
+
     {
+
       status,
 
       headers: {
+
         "content-type":
           "application/json",
 
         "cache-control":
           "public, max-age=30"
+
       }
+
     }
+
   );
+
 }
