@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Willow Cricket Live</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .player {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .discord-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+
+            background: #5865F2;
+            color: white;
+            text-decoration: none;
+
+            padding: 12px 18px;
+            border-radius: 8px;
+
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .discord-button:hover {
+            background: #4752C4;
+        }
+
+        @media (max-width: 600px) {
+            .discord-button {
+                top: 10px;
+                right: 10px;
+                padding: 9px 12px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="player">
+
+    <iframe
+        title="Willow Cricket Player"
+        src="https://embed.st/embed/admin/admin-willow-cricket/1"
+        scrolling="no"
+        allowfullscreen
+        allow="encrypted-media; picture-in-picture;"
+        frameborder="0">
+    </iframe>
+
+    <a
+        class="discord-button"
+        href="https://discord.gg/SYfPEKRrnQ"
+        target="_blank"
+        rel="noopener noreferrer">
+        💬 JOIN OUR DISCORD SERVER
+    </a>
+
+</div>
+
+</body>
+</html>
