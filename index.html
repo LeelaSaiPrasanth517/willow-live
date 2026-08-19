@@ -12,6 +12,8 @@
 
 <title>Cricketive | Global Cricket Live</title>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
 
 * {
@@ -93,6 +95,20 @@ body {
     margin: 20px 0 14px;
 }
 
+.group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 22px 0 12px;
+    font-size: 17px;
+}
+
+.group-count {
+    color: #777;
+    font-size: 12px;
+    font-weight: normal;
+}
+
 .grid {
     display: grid;
     grid-template-columns:
@@ -108,6 +124,12 @@ body {
     border: 1px solid #252525;
     border-radius: 12px;
     padding: 18px;
+}
+
+.match-card.has-stream {
+    border-color: #355f42;
+    box-shadow:
+        0 0 0 1px rgba(53, 95, 66, .25);
 }
 
 .match-header {
@@ -136,6 +158,7 @@ body {
     border-radius: 20px;
     background: #222;
     font-size: 11px;
+    white-space: nowrap;
 }
 
 .live-status {
@@ -146,6 +169,23 @@ body {
 .upcoming-status {
     background: #1e2b39;
     color: #8fc7ff;
+}
+
+.stream-badge {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 5px 8px;
+    border-radius: 20px;
+    background: #16321e;
+    color: #72d38b;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.no-stream {
+    color: #999;
+    font-size: 12px;
+    margin-top: 10px;
 }
 
 .score-box {
@@ -193,31 +233,10 @@ body {
 }
 
 .score-status {
-    color: #aaa;
+    color: #999;
     font-size: 12px;
     margin-top: 8px;
     line-height: 1.4;
-}
-
-.no-score {
-    color: #777;
-    font-size: 13px;
-    margin-top: 12px;
-    padding: 10px;
-    border: 1px dashed #2b2b2b;
-    border-radius: 8px;
-}
-
-.available {
-    color: #72d38b;
-    font-size: 12px;
-    margin-top: 10px;
-}
-
-.unavailable {
-    color: #999;
-    font-size: 12px;
-    margin-top: 10px;
 }
 
 .watch-button {
@@ -232,12 +251,16 @@ body {
     font-weight: 700;
 }
 
-.match-source {
+.watch-button:hover {
+    background: #4752c4;
+}
+
+.source-link {
     display: inline-block;
-    margin-top: 10px;
+    margin-top: 9px;
     color: #777;
-    font-size: 11px;
     text-decoration: none;
+    font-size: 11px;
 }
 
 .empty {
@@ -249,20 +272,11 @@ body {
     border-radius: 10px;
 }
 
-.error {
-    color: #ff7777;
-    text-align: center;
-    padding: 22px;
-    background: #160909;
-    border: 1px solid #351515;
-    border-radius: 10px;
-}
-
 .updated {
     color: #666;
     font-size: 11px;
     text-align: center;
-    margin-top: 5px;
+    margin-top: 8px;
 }
 
 .community {
@@ -298,7 +312,7 @@ footer {
     font-size: 11px;
 }
 
-@media(max-width:600px) {
+@media(max-width: 600px) {
 
     .header {
         height: 60px;
@@ -320,6 +334,10 @@ footer {
 
     .match-header {
         flex-direction: column;
+    }
+
+    .status {
+        align-self: flex-start;
     }
 
 }
@@ -377,6 +395,10 @@ footer {
 <main class="matches">
 
 
+    <!-- =====================================================
+         LIVE
+         ===================================================== -->
+
     <h2 class="section-title">
         🔴 Live Now
     </h2>
@@ -394,6 +416,10 @@ footer {
     <div id="updatedTime" class="updated"></div>
 
 
+
+    <!-- =====================================================
+         UPCOMING
+         ===================================================== -->
 
     <h2 class="section-title">
         📅 Upcoming Matches
@@ -447,7 +473,24 @@ footer {
 
 
 /* =========================================================
-   LOAD MATCHES
+   SUPABASE
+   ========================================================= */
+
+const SUPABASE_URL =
+    "https://qkzwzdyahwzcwtqgcbud.supabase.co";
+
+const SUPABASE_ANON_KEY =
+    "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
+
+const db =
+    supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+    );
+
+
+/* =========================================================
+   LOAD
    ========================================================= */
 
 async function loadMatches() {
@@ -468,22 +511,11 @@ async function loadMatches() {
         );
 
 
-    liveEl.innerHTML =
-        `
-            <div class="empty">
-                Loading live matches...
-            </div>
-        `;
-
-    upcomingEl.innerHTML =
-        `
-            <div class="empty">
-                Loading upcoming matches...
-            </div>
-        `;
-
-
     try {
+
+        /*
+         * Get SportScore feed.
+         */
 
         const response =
             await fetch(
@@ -507,7 +539,7 @@ async function loadMatches() {
             await response.json();
 
 
-        const matches =
+        const sportScoreMatches =
             Array.isArray(
                 result.matches
             )
@@ -515,44 +547,342 @@ async function loadMatches() {
                 : [];
 
 
+        /*
+         * Get all Cricketive matches.
+         *
+         * These are needed because the Streams table
+         * points to Matches.id.
+         */
+
+        const {
+            data: storedMatches,
+            error: matchError
+        } = await db
+            .from("Matches")
+            .select("*");
+
+
+        if (matchError) {
+
+            throw matchError;
+
+        }
+
+
+        const matches =
+            storedMatches || [];
+
+
+        /*
+         * Load ALL active streams in one query.
+         */
+
+        const matchIds =
+            matches
+                .map(
+                    match => match.id
+                );
+
+
+        let streamRows = [];
+
+
+        if (
+            matchIds.length
+        ) {
+
+            const {
+                data,
+                error
+            } = await db
+                .from("streams")
+                .select(
+                    "id, match_id, language, stream_name, embed_url, active"
+                )
+                .in(
+                    "match_id",
+                    matchIds
+                )
+                .eq(
+                    "active",
+                    true
+                );
+
+
+            if (error) {
+
+                throw error;
+
+            }
+
+
+            streamRows =
+                data || [];
+
+        }
+
+
+        /*
+         * Count active streams for each match.
+         */
+
+        const streamCounts = {};
+
+
+        streamRows.forEach(
+            stream => {
+
+                streamCounts[
+                    stream.match_id
+                ] = (
+                    streamCounts[
+                        stream.match_id
+                    ] || 0
+                ) + 1;
+
+            }
+        );
+
+
+        /*
+         * Index database matches by:
+         *
+         * - sportscore_url
+         * - team names
+         */
+
+        const byUrl = {};
+        const byTeams = {};
+
+
+        matches.forEach(
+            match => {
+
+                if (
+                    match.sportscore_url
+                ) {
+
+                    byUrl[
+                        normalizeUrl(
+                            match.sportscore_url
+                        )
+                    ] =
+                        match;
+
+                }
+
+
+                const key =
+                    makeTeamKey(
+                        match.team1,
+                        match.team2
+                    );
+
+
+                if (key) {
+
+                    byTeams[key] =
+                        match;
+
+                }
+
+            }
+        );
+
+
+        /*
+         * Convert SportScore matches and connect them
+         * to Cricketive database matches.
+         */
+
+        const normalized =
+            sportScoreMatches
+                .map(
+                    match => {
+
+                        const sportScoreUrl =
+                            match.url
+                                ? normalizeUrl(
+                                    match.url
+                                )
+                                : null;
+
+
+                        let stored =
+                            sportScoreUrl
+                                ? (
+                                    byUrl[
+                                        sportScoreUrl
+                                    ] || null
+                                  )
+                                : null;
+
+
+                        /*
+                         * Fallback to team names.
+                         */
+
+                        if (
+                            !stored
+                        ) {
+
+                            stored =
+                                byTeams[
+                                    makeTeamKey(
+                                        match.home,
+                                        match.away
+                                    )
+                                ] || null;
+
+                        }
+
+
+                        const streamCount =
+                            stored
+                                ? (
+                                    streamCounts[
+                                        stored.id
+                                    ] || 0
+                                  )
+                                : 0;
+
+
+                        return {
+
+                            sportScore:
+                                match,
+
+                            stored,
+
+                            streamCount,
+
+                            hasStream:
+                                streamCount > 0
+
+                        };
+
+                    }
+                );
+
+
+        /*
+         * Separate live and upcoming.
+         */
+
         const live =
-            matches.filter(
-                match =>
+            normalized.filter(
+                item =>
                     String(
-                        match.status || ""
-                    ).toLowerCase() === "live"
+                        item.sportScore.status ||
+                        ""
+                    ).toLowerCase()
+                    ===
+                    "live"
             );
 
 
         const upcoming =
-            matches.filter(
-                match =>
+            normalized.filter(
+                item =>
                     String(
-                        match.status || ""
-                    ).toLowerCase() === "upcoming"
+                        item.sportScore.status ||
+                        ""
+                    ).toLowerCase()
+                    ===
+                    "upcoming"
             );
 
 
-        renderMatches(
+        /*
+         * STREAMS FIRST.
+         */
+
+        live.sort(
+            (
+                a,
+                b
+            ) => {
+
+                if (
+                    a.hasStream &&
+                    !b.hasStream
+                ) {
+
+                    return -1;
+
+                }
+
+
+                if (
+                    !a.hasStream &&
+                    b.hasStream
+                ) {
+
+                    return 1;
+
+                }
+
+
+                return (
+                    getTime(
+                        a.sportScore.time
+                    )
+                    -
+                    getTime(
+                        b.sportScore.time
+                    )
+                );
+
+            }
+        );
+
+
+        /*
+         * Upcoming matches stay chronological.
+         */
+
+        upcoming.sort(
+            (
+                a,
+                b
+            ) => {
+
+                return (
+                    getTime(
+                        a.sportScore.time
+                    )
+                    -
+                    getTime(
+                        b.sportScore.time
+                    )
+                );
+
+            }
+        );
+
+
+        renderLive(
             liveEl,
-            live,
-            true
+            live
         );
 
 
-        renderMatches(
+        renderUpcoming(
             upcomingEl,
-            upcoming,
-            false
+            upcoming
         );
 
+
+        /*
+         * Display feed update time.
+         */
 
         if (
             result.updated
         ) {
 
             updatedEl.textContent =
-                `Data updated: ${
+                `Live data updated: ${
                     formatDate(
                         result.updated
                     )
@@ -566,26 +896,32 @@ async function loadMatches() {
         }
 
 
-    } catch (error) {
+    } catch (
+        error
+    ) {
 
         console.error(
-            "Cricketive match loading error:",
+            "Cricketive loading error:",
             error
         );
 
 
         liveEl.innerHTML =
             `
-                <div class="error">
+                <div class="empty">
+
                     Unable to load live matches.
+
                 </div>
             `;
 
 
         upcomingEl.innerHTML =
             `
-                <div class="error">
+                <div class="empty">
+
                     Unable to load upcoming matches.
+
                 </div>
             `;
 
@@ -599,13 +935,12 @@ async function loadMatches() {
 
 
 /* =========================================================
-   RENDER MATCHES
+   LIVE RENDER
    ========================================================= */
 
-function renderMatches(
+function renderLive(
     element,
-    matches,
-    isLive
+    matches
 ) {
 
     if (
@@ -619,11 +954,152 @@ function renderMatches(
             `
                 <div class="empty">
 
+                    No matches are live right now.
+
+                </div>
+            `;
+
+        return;
+
+    }
+
+
+    const available =
+        matches.filter(
+            item =>
+                item.hasStream
+        );
+
+
+    const unavailable =
+        matches.filter(
+            item =>
+                !item.hasStream
+        );
+
+
+    let html = "";
+
+
+    /* =====================================================
+       AVAILABLE TO WATCH
+       ===================================================== */
+
+    if (
+        available.length
+    ) {
+
+        html +=
+
+            `
+
+                <div class="group-title">
+
+                    🎥 Available to Watch
+
+                    <span class="group-count">
+
+                        (${available.length})
+
+                    </span>
+
+                </div>
+
+
+                <div class="grid">
+
                     ${
-                        isLive
-                            ? "No matches are live right now."
-                            : "No upcoming matches listed."
+                        available
+                            .map(
+                                item =>
+                                    createCard(
+                                        item,
+                                        true
+                                    )
+                            )
+                            .join("")
                     }
+
+                </div>
+
+            `;
+
+    }
+
+
+    /* =====================================================
+       OTHER LIVE MATCHES
+       ===================================================== */
+
+    if (
+        unavailable.length
+    ) {
+
+        html +=
+
+            `
+
+                <div class="group-title">
+
+                    🔴 Other Live Matches
+
+                    <span class="group-count">
+
+                        (${unavailable.length})
+
+                    </span>
+
+                </div>
+
+
+                <div class="grid">
+
+                    ${
+                        unavailable
+                            .map(
+                                item =>
+                                    createCard(
+                                        item,
+                                        true
+                                    )
+                            )
+                            .join("")
+                    }
+
+                </div>
+
+            `;
+
+    }
+
+
+    element.innerHTML =
+        html;
+
+}
+
+
+/* =========================================================
+   UPCOMING RENDER
+   ========================================================= */
+
+function renderUpcoming(
+    element,
+    matches
+) {
+
+    if (
+        !matches.length
+    ) {
+
+        element.className =
+            "";
+
+        element.innerHTML =
+            `
+                <div class="empty">
+
+                    No upcoming matches listed.
 
                 </div>
             `;
@@ -640,10 +1116,10 @@ function renderMatches(
     element.innerHTML =
         matches
             .map(
-                match =>
-                    createMatchCard(
-                        match,
-                        isLive
+                item =>
+                    createCard(
+                        item,
+                        false
                     )
             )
             .join("");
@@ -652,23 +1128,34 @@ function renderMatches(
 
 
 /* =========================================================
-   MATCH CARD
+   CREATE CARD
    ========================================================= */
 
-function createMatchCard(
-    match,
+function createCard(
+    item,
     isLive
 ) {
 
-    const home =
-        String(
-            match.home || ""
-        );
+    const match =
+        item.sportScore;
 
-    const away =
-        String(
-            match.away || ""
-        );
+
+    const stored =
+        item.stored;
+
+
+    const streamCount =
+        item.streamCount;
+
+
+    const team1 =
+        match.home ||
+        "";
+
+
+    const team2 =
+        match.away ||
+        "";
 
 
     const homeScore =
@@ -684,181 +1171,207 @@ function createMatchCard(
 
 
     const hasScore =
-        (
-            homeScore !== null ||
-            awayScore !== null
-        );
+        homeScore !== null ||
+        awayScore !== null;
 
 
-    const scoreBox =
-
-        hasScore
-
-            ? `
-
-                <div class="score-box">
+    let scoreHtml = "";
 
 
-                    <div class="score-row">
+    if (
+        isLive
+    ) {
 
-                        <div class="score-team">
+        if (
+            hasScore
+        ) {
 
+            scoreHtml =
 
-                            ${
-                                match.home_logo
+                `
 
-                                    ? `
-
-                                        <img
-                                            src="${esc(
-                                                match.home_logo
-                                            )}"
-                                            alt=""
-                                            loading="lazy"
-                                            onerror="this.style.display='none'"
-                                        >
-
-                                      `
-
-                                    : ""
-
-                            }
+                    <div class="score-box">
 
 
-                            <span>
-
-                                ${esc(
-                                    home
-                                )}
-
-                            </span>
+                        <div class="score-row">
 
 
-                        </div>
+                            <div class="score-team">
+
+                                ${
+                                    match.home_logo
+                                        ? `
+                                            <img
+                                                src="${esc(
+                                                    match.home_logo
+                                                )}"
+                                                alt=""
+                                                loading="lazy"
+                                                onerror="this.style.display='none'"
+                                            >
+                                          `
+                                        : ""
+                                }
 
 
-                        <div class="score-value">
-
-                            ${esc(
-                                homeScore !== null
-                                    ? homeScore
-                                    : "-"
-                            )}
-
-                        </div>
-
-                    </div>
-
-
-
-                    <div class="score-row">
-
-                        <div class="score-team">
-
-
-                            ${
-                                match.away_logo
-
-                                    ? `
-
-                                        <img
-                                            src="${esc(
-                                                match.away_logo
-                                            )}"
-                                            alt=""
-                                            loading="lazy"
-                                            onerror="this.style.display='none'"
-                                        >
-
-                                      `
-
-                                    : ""
-
-                            }
-
-
-                            <span>
-
-                                ${esc(
-                                    away
-                                )}
-
-                            </span>
-
-
-                        </div>
-
-
-                        <div class="score-value">
-
-                            ${esc(
-                                awayScore !== null
-                                    ? awayScore
-                                    : "-"
-                            )}
-
-                        </div>
-
-                    </div>
-
-
-
-                    ${
-                        match.status_text
-
-                            ? `
-
-                                <div class="score-status">
+                                <span>
 
                                     ${esc(
-                                        match.status_text
+                                        team1
                                     )}
 
-                                </div>
+                                </span>
 
-                              `
-
-                            : ""
-
-                    }
+                            </div>
 
 
-                </div>
+                            <div class="score-value">
 
-              `
+                                ${esc(
+                                    homeScore || "-"
+                                )}
+
+                            </div>
 
 
-            : (
+                        </div>
 
-                isLive
 
-                    ? `
 
-                        <div class="no-score">
+                        <div class="score-row">
 
-                            Score not available yet.
 
-                            ${
-                                match.status_text
-                                    ? `
-                                        <br>
+                            <div class="score-team">
+
+                                ${
+                                    match.away_logo
+                                        ? `
+                                            <img
+                                                src="${esc(
+                                                    match.away_logo
+                                                )}"
+                                                alt=""
+                                                loading="lazy"
+                                                onerror="this.style.display='none'"
+                                            >
+                                          `
+                                        : ""
+                                }
+
+
+                                <span>
+
+                                    ${esc(
+                                        team2
+                                    )}
+
+                                </span>
+
+                            </div>
+
+
+                            <div class="score-value">
+
+                                ${esc(
+                                    awayScore || "-"
+                                )}
+
+                            </div>
+
+
+                        </div>
+
+
+                        ${
+                            match.status_text
+                                ? `
+                                    <div class="score-status">
+
                                         ${esc(
                                             match.status_text
                                         )}
-                                      `
-                                    : ""
+
+                                    </div>
+                                  `
+                                : ""
+                        }
+
+
+                    </div>
+
+                `;
+
+        } else {
+
+            scoreHtml =
+
+                `
+
+                    <div class="score-box">
+
+                        <div class="score-status">
+
+                            ${
+                                match.status_text
+                                    ? esc(
+                                        match.status_text
+                                      )
+                                    : "Score not available yet."
                             }
 
                         </div>
 
-                      `
+                    </div>
 
-                    : ""
+                `;
 
-            );
+        }
+
+    }
 
 
-    const matchTime =
+    /*
+     * If the match exists in Supabase AND has streams,
+     * send the user directly to stream.html.
+     */
+
+    let actionUrl = null;
+
+    let actionText = "";
+
+
+    if (
+        stored
+    ) {
+
+        actionUrl =
+            `stream.html?match=${
+                encodeURIComponent(
+                    stored.id
+                )
+            }`;
+
+
+        actionText =
+            streamCount > 0
+                ? "▶ WATCH MATCH"
+                : "VIEW MATCH";
+
+    } else {
+
+        actionUrl =
+            match.url
+                ? `https://sportscore.com${match.url}`
+                : "#";
+
+
+        actionText =
+            "VIEW MATCH";
+
+    }
+
+
+    const time =
         match.time
             ? formatDate(
                 match.time
@@ -866,139 +1379,280 @@ function createMatchCard(
             : "";
 
 
-    const statusText =
-        isLive
-            ? "LIVE"
-            : "UPCOMING";
+    return
+
+        `
+
+            <article class="match-card ${
+                item.hasStream
+                    ? "has-stream"
+                    : ""
+            }">
 
 
-    /*
-     * At this stage the stream system is still
-     * attached to Supabase matches.
-     *
-     * We use the SportScore match URL for now.
-     */
-
-    const sportScoreUrl =
-        match.url
-            ? `https://sportscore.com${
-                match.url
-            }`
-            : "#";
+                <div class="match-header">
 
 
-    return `
-
-        <article class="match-card">
+                    <div>
 
 
-            <div class="match-header">
+                        <div class="match-name">
+
+                            ${esc(
+                                team1
+                            )}
+
+                            vs
+
+                            ${esc(
+                                team2
+                            )}
+
+                        </div>
 
 
-                <div>
+                        <div class="match-info">
 
+                            ${esc(
+                                match.competition ||
+                                "Cricket"
+                            )}
 
-                    <div class="match-name">
+                            <br>
 
-                        ${esc(
-                            home
-                        )}
+                            ${esc(
+                                time
+                            )}
 
-                        vs
+                        </div>
 
-                        ${esc(
-                            away
-                        )}
 
                     </div>
 
 
-                    <div class="match-info">
+                    <span
+                        class="status ${
+                            isLive
+                                ? "live-status"
+                                : "upcoming-status"
+                        }"
+                    >
 
-                        ${esc(
-                            match.competition ||
-                            "Cricket"
-                        )}
+                        ${
+                            isLive
+                                ? "LIVE"
+                                : "UPCOMING"
+                        }
 
-                        <br>
-
-                        ${esc(
-                            matchTime
-                        )}
-
-                    </div>
+                    </span>
 
 
                 </div>
 
 
-                <span class="status ${
-                    isLive
-                        ? "live-status"
-                        : "upcoming-status"
-                }">
 
-                    ${statusText}
-
-                </span>
+                ${scoreHtml}
 
 
-            </div>
-
-
-
-            ${scoreBox}
-
-
-
-            <a
-                class="watch-button"
-                href="${esc(
-                    sportScoreUrl
-                )}"
-                target="_blank"
-                rel="noopener noreferrer"
-            >
 
                 ${
-                    isLive
-                        ? "VIEW LIVE MATCH"
-                        : "VIEW MATCH"
+                    streamCount > 0
+
+                        ? `
+
+                            <div class="stream-badge">
+
+                                🎥
+                                ${streamCount}
+                                STREAM${
+                                    streamCount === 1
+                                        ? ""
+                                        : "S"
+                                }
+                                AVAILABLE
+
+                            </div>
+
+                          `
+
+                        : `
+
+                            <div class="no-stream">
+
+                                ⏳ Stream unavailable
+
+                            </div>
+
+                          `
+
                 }
 
-            </a>
 
 
-            ${
-                match.url
+                <a
+                    class="watch-button"
+                    href="${esc(
+                        actionUrl
+                    )}"
+                    ${
+                        stored
+                            ? ""
+                            : `
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              `
+                    }
+                >
 
-                    ? `
+                    ${actionText}
 
-                        <br>
-
-                        <a
-                            class="match-source"
-                            href="${esc(
-                                sportScoreUrl
-                            )}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-
-                            View score details on SportScore
-
-                        </a>
-
-                      `
-
-                    : ""
-
-            }
+                </a>
 
 
-        </article>
 
-    `;
+                ${
+                    !stored &&
+                    match.url
+
+                        ? `
+
+                            <br>
+
+                            <a
+                                class="source-link"
+                                href="${esc(
+                                    actionUrl
+                                )}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+
+                                View score details on SportScore
+
+                            </a>
+
+                          `
+
+                        : ""
+
+                }
+
+
+            </article>
+
+        `;
+
+}
+
+
+/* =========================================================
+   MATCH KEY
+   ========================================================= */
+
+function makeTeamKey(
+    team1,
+    team2
+) {
+
+    if (
+        !team1 ||
+        !team2
+    ) {
+
+        return "";
+
+    }
+
+
+    return (
+
+        normalizeName(
+            team1
+        )
+
+        +
+
+        "|"
+
+        +
+
+        normalizeName(
+            team2
+        )
+
+    );
+
+}
+
+
+/* =========================================================
+   NAME NORMALIZATION
+   ========================================================= */
+
+function normalizeName(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+        .trim()
+        .toLowerCase();
+
+}
+
+
+/* =========================================================
+   URL NORMALIZATION
+   ========================================================= */
+
+function normalizeUrl(
+    value
+) {
+
+    if (
+        !value
+    ) {
+
+        return "";
+
+    }
+
+
+    const url =
+        String(
+            value
+        ).trim();
+
+
+    if (
+        url.startsWith(
+            "http"
+        )
+    ) {
+
+        return url
+            .replace(
+                /\/+$/,
+                ""
+            );
+
+    }
+
+
+    return (
+        "https://sportscore.com"
+        +
+        (
+            url.startsWith("/")
+                ? url
+                : `/${url}`
+        )
+    )
+        .replace(
+            /\/+$/,
+            ""
+        );
 
 }
 
@@ -1008,12 +1662,12 @@ function createMatchCard(
    ========================================================= */
 
 function cleanScore(
-    score
+    value
 ) {
 
     if (
-        score === null ||
-        score === undefined
+        value === null ||
+        value === undefined
     ) {
 
         return null;
@@ -1021,15 +1675,15 @@ function cleanScore(
     }
 
 
-    const value =
+    const score =
         String(
-            score
+            value
         ).trim();
 
 
     if (
-        !value ||
-        value === "-"
+        !score ||
+        score === "-"
     ) {
 
         return null;
@@ -1037,13 +1691,13 @@ function cleanScore(
     }
 
 
-    return value;
+    return score;
 
 }
 
 
 /* =========================================================
-   DATE FORMAT
+   DATE
    ========================================================= */
 
 function formatDate(
@@ -1082,7 +1736,30 @@ function formatDate(
 
 
 /* =========================================================
-   HTML ESCAPE
+   TIME
+   ========================================================= */
+
+function getTime(
+    value
+) {
+
+    const time =
+        new Date(
+            value
+        ).getTime();
+
+
+    return Number.isFinite(
+        time
+    )
+        ? time
+        : Number.MAX_SAFE_INTEGER;
+
+}
+
+
+/* =========================================================
+   ESCAPE HTML
    ========================================================= */
 
 function esc(
@@ -1122,10 +1799,16 @@ function esc(
 
 
 /* =========================================================
-   INITIAL LOAD + AUTO REFRESH
+   START
    ========================================================= */
 
 loadMatches();
+
+
+/*
+ * Refresh every 60 seconds so live games and stream
+ * availability stay current.
+ */
 
 setInterval(
     loadMatches,
@@ -1135,4 +1818,5 @@ setInterval(
 </script>
 
 </body>
+
 </html>
