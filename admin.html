@@ -1140,6 +1140,18 @@ async function syncMatches() {
             const row = {
 
 
+                /*
+                 * Supabase requires Matches.id to be non-null.
+                 * Keep the existing UUID when this match already
+                 * exists; otherwise create a new UUID locally so
+                 * new matches can be inserted safely.
+                 */
+                id:
+                    (existingMatch && existingMatch.id)
+                        ? existingMatch.id
+                        : crypto.randomUUID(),
+
+
                 api_match_id:
                     apiMatchId,
 
