@@ -104,7 +104,6 @@ body {
 .group-count {
     color: #777;
     font-size: 12px;
-    font-weight: normal;
 }
 
 .grid {
@@ -199,14 +198,6 @@ body {
 
 .watch-button:hover {
     background: #4752c4;
-}
-
-.source-link {
-    display: inline-block;
-    margin-top: 9px;
-    color: #777;
-    text-decoration: none;
-    font-size: 11px;
 }
 
 .empty {
@@ -319,6 +310,7 @@ footer {
 </header>
 
 
+
 <section class="hero">
 
     <h1>
@@ -332,11 +324,9 @@ footer {
 </section>
 
 
+
 <main class="matches">
 
-    <!-- =====================================================
-         LIVE MATCHES
-         ===================================================== -->
 
     <h2 class="section-title">
         🔴 Live Now
@@ -358,9 +348,6 @@ footer {
     ></div>
 
 
-    <!-- =====================================================
-         UPCOMING MATCHES
-         ===================================================== -->
 
     <h2 class="section-title">
         📅 Upcoming Matches
@@ -376,6 +363,7 @@ footer {
     </div>
 
 </main>
+
 
 
 <section class="community">
@@ -400,9 +388,11 @@ footer {
 </section>
 
 
+
 <footer>
     © 2026 Cricketive • Global Cricket Community
 </footer>
+
 
 
 <script>
@@ -449,7 +439,7 @@ async function loadMatches() {
     try {
 
         /* =================================================
-           1. SPORTScore MATCH FEED
+           SPORTScore
            ================================================= */
 
         const response =
@@ -483,7 +473,7 @@ async function loadMatches() {
 
 
         /* =================================================
-           2. CRICKETIVE MATCHES
+           CRICKETIVE MATCHES
            ================================================= */
 
         const {
@@ -508,14 +498,13 @@ async function loadMatches() {
 
 
         /* =================================================
-           3. ACTIVE STREAMS
+           ACTIVE STREAMS
            ================================================= */
 
         const matchIds =
             stored
                 .map(
-                    match =>
-                        match.id
+                    match => match.id
                 )
                 .filter(Boolean);
 
@@ -559,7 +548,7 @@ async function loadMatches() {
 
 
         /* =================================================
-           4. COUNT STREAMS
+           STREAM COUNTS
            ================================================= */
 
         const streamCounts = {};
@@ -582,7 +571,7 @@ async function loadMatches() {
 
 
         /* =================================================
-           5. INDEX CRICKETIVE MATCHES
+           INDEX CRICKETIVE MATCHES
            ================================================= */
 
         const byUrl = {};
@@ -625,142 +614,136 @@ async function loadMatches() {
 
 
         /* =================================================
-           6. CONNECT SPORTScore → CRICKETIVE
+           CONNECT SPORTScore → CRICKETIVE
            ================================================= */
 
         const normalized =
-            sportScoreMatches
-                .map(
-                    source => {
+            sportScoreMatches.map(
+                source => {
 
-                        const team1 =
-                            String(
-                                source.home ||
-                                ""
-                            ).trim();
-
-
-                        const team2 =
-                            String(
-                                source.away ||
-                                ""
-                            ).trim();
+                    const team1 =
+                        String(
+                            source.home ||
+                            ""
+                        ).trim();
 
 
-                        const sportscoreUrl =
-                            source.url
-                                ? normalizeUrl(
-                                    source.url
+                    const team2 =
+                        String(
+                            source.away ||
+                            ""
+                        ).trim();
+
+
+                    const sportscoreUrl =
+                        source.url
+                            ? normalizeUrl(
+                                source.url
+                            )
+                            : "";
+
+
+                    /*
+                     * Match by SportScore URL.
+                     */
+
+                    let storedMatch =
+                        sportscoreUrl
+                            ? (
+                                byUrl[
+                                    sportscoreUrl
+                                ] || null
+                              )
+                            : null;
+
+
+                    /*
+                     * Fall back to teams.
+                     */
+
+                    if (
+                        !storedMatch
+                    ) {
+
+                        storedMatch =
+                            byTeams[
+                                makeTeamKey(
+                                    team1,
+                                    team2
                                 )
-                                : "";
-
-
-                        /*
-                         * Match by SportScore URL first.
-                         */
-
-                        let storedMatch =
-                            sportscoreUrl
-                                ? (
-                                    byUrl[
-                                        sportscoreUrl
-                                    ] || null
-                                  )
-                                : null;
-
-
-                        /*
-                         * Fall back to team names.
-                         */
-
-                        if (
-                            !storedMatch
-                        ) {
-
-                            storedMatch =
-                                byTeams[
-                                    makeTeamKey(
-                                        team1,
-                                        team2
-                                    )
-                                ] || null;
-
-                        }
-
-
-                        const streamCount =
-                            storedMatch
-                                ? (
-                                    streamCounts[
-                                        storedMatch.id
-                                    ] || 0
-                                  )
-                                : 0;
-
-
-                        return {
-
-                            source,
-
-                            team1,
-
-                            team2,
-
-                            storedMatch,
-
-                            streamCount,
-
-                            hasStream:
-                                streamCount > 0
-
-                        };
+                            ] || null;
 
                     }
-                );
+
+
+                    const streamCount =
+                        storedMatch
+                            ? (
+                                streamCounts[
+                                    storedMatch.id
+                                ] || 0
+                              )
+                            : 0;
+
+
+                    return {
+
+                        source,
+
+                        team1,
+
+                        team2,
+
+                        storedMatch,
+
+                        streamCount,
+
+                        hasStream:
+                            streamCount > 0
+
+                    };
+
+                }
+            );
 
 
         /* =================================================
-           7. LIVE MATCHES
+           LIVE
            ================================================= */
 
         const live =
             normalized.filter(
-                match =>
+                item =>
                     String(
-                        match.source.status ||
+                        item.source.status ||
                         ""
                     ).toLowerCase()
-                    ===
-                    "live"
+                    === "live"
             );
 
 
         /* =================================================
-           8. UPCOMING MATCHES
+           UPCOMING
            ================================================= */
 
         const upcoming =
             normalized.filter(
-                match =>
+                item =>
                     String(
-                        match.source.status ||
+                        item.source.status ||
                         ""
                     ).toLowerCase()
-                    ===
-                    "upcoming"
+                    === "upcoming"
             );
 
 
         /* =================================================
-           9. STREAM MATCHES FIRST
+           SORT LIVE:
+           STREAMS FIRST
            ================================================= */
 
         live.sort(
             (a, b) => {
-
-                /*
-                 * Matches with streams first.
-                 */
 
                 if (
                     a.hasStream &&
@@ -782,10 +765,6 @@ async function loadMatches() {
                 }
 
 
-                /*
-                 * Then chronological.
-                 */
-
                 return (
                     getTime(
                         a.source.time
@@ -801,7 +780,7 @@ async function loadMatches() {
 
 
         /* =================================================
-           10. UPCOMING CHRONOLOGICAL
+           SORT UPCOMING
            ================================================= */
 
         upcoming.sort(
@@ -822,7 +801,7 @@ async function loadMatches() {
 
 
         /* =================================================
-           11. RENDER
+           RENDER
            ================================================= */
 
         renderLive(
@@ -837,23 +816,14 @@ async function loadMatches() {
         );
 
 
-        if (
+        updatedEl.textContent =
             payload.updated
-        ) {
-
-            updatedEl.textContent =
-                `Live data updated: ${
+                ? `Live data updated: ${
                     formatDate(
                         payload.updated
                     )
-                }`;
-
-        } else {
-
-            updatedEl.textContent =
-                "";
-
-        }
+                  }`
+                : "";
 
 
     } catch (error) {
@@ -918,15 +888,15 @@ function renderLive(
 
     const available =
         matches.filter(
-            match =>
-                match.hasStream
+            item =>
+                item.hasStream
         );
 
 
     const unavailable =
         matches.filter(
-            match =>
-                !match.hasStream
+            item =>
+                !item.hasStream
         );
 
 
@@ -934,7 +904,7 @@ function renderLive(
 
 
     /* =====================================================
-       AVAILABLE TO WATCH
+       AVAILABLE
        ===================================================== */
 
     if (
@@ -960,17 +930,15 @@ function renderLive(
 
                 <div class="grid">
 
-                    ${
-                        available
-                            .map(
-                                match =>
-                                    createCard(
-                                        match,
-                                        true
-                                    )
-                            )
-                            .join("")
-                    }
+                    ${available
+                        .map(
+                            item =>
+                                createCard(
+                                    item,
+                                    true
+                                )
+                        )
+                        .join("")}
 
                 </div>
 
@@ -980,7 +948,7 @@ function renderLive(
 
 
     /* =====================================================
-       OTHER LIVE MATCHES
+       OTHER LIVE
        ===================================================== */
 
     if (
@@ -1006,17 +974,15 @@ function renderLive(
 
                 <div class="grid">
 
-                    ${
-                        unavailable
-                            .map(
-                                match =>
-                                    createCard(
-                                        match,
-                                        true
-                                    )
-                            )
-                            .join("")
-                    }
+                    ${unavailable
+                        .map(
+                            item =>
+                                createCard(
+                                    item,
+                                    true
+                                )
+                        )
+                        .join("")}
 
                 </div>
 
@@ -1026,7 +992,12 @@ function renderLive(
 
 
     element.innerHTML =
-        html;
+        html ||
+        `
+            <div class="empty">
+                No live matches available.
+            </div>
+        `;
 
 }
 
@@ -1066,9 +1037,9 @@ function renderUpcoming(
     element.innerHTML =
         matches
             .map(
-                match =>
+                item =>
                     createCard(
-                        match,
+                        item,
                         false
                     )
             )
@@ -1078,7 +1049,7 @@ function renderUpcoming(
 
 
 /* =========================================================
-   CREATE MATCH CARD
+   CREATE CARD
    ========================================================= */
 
 function createCard(
@@ -1092,11 +1063,13 @@ function createCard(
 
     const team1 =
         item.team1 ||
+        source.home ||
         "Unknown team";
 
 
     const team2 =
         item.team2 ||
+        source.away ||
         "Unknown team";
 
 
@@ -1108,12 +1081,9 @@ function createCard(
             : "";
 
 
-    /*
-     * If the match exists in Cricketive,
-     * use our stream.html page.
-     *
-     * Otherwise use SportScore's match page.
-     */
+    /* =====================================================
+       DESTINATION
+       ===================================================== */
 
     let actionUrl =
         "#";
@@ -1121,9 +1091,11 @@ function createCard(
     let actionText =
         "VIEW MATCH";
 
-    let openExternally =
-        false;
 
+    /*
+     * If Cricketive knows this match, ALWAYS go to
+     * our own stream page.
+     */
 
     if (
         item.storedMatch &&
@@ -1143,8 +1115,14 @@ function createCard(
                 ? "▶ WATCH MATCH"
                 : "VIEW MATCH";
 
+    }
 
-    } else if (
+
+    /*
+     * Otherwise fall back to SportScore.
+     */
+
+    else if (
         source.url
     ) {
 
@@ -1153,145 +1131,138 @@ function createCard(
                 source.url
             );
 
-
         actionText =
             "VIEW MATCH";
-
-        openExternally =
-            true;
 
     }
 
 
-    return
+    /* =====================================================
+       STREAM INFORMATION
+       ===================================================== */
 
-        `
+    const streamInfo =
+        item.streamCount > 0
 
-            <article
-                class="match-card ${
-                    item.hasStream
-                        ? "has-stream"
-                        : ""
-                }"
-            >
+            ? `
+                <div class="stream-badge">
 
+                    🎥
+                    ${item.streamCount}
+                    STREAM${
+                        item.streamCount === 1
+                            ? ""
+                            : "S"
+                    }
+                    AVAILABLE
 
-                <div class="match-header">
+                </div>
+              `
 
+            : `
+                <div class="no-stream">
 
-                    <div>
+                    ⏳ Stream unavailable
 
-                        <div class="match-name">
-
-                            ${esc(
-                                team1
-                            )}
-
-                            vs
-
-                            ${esc(
-                                team2
-                            )}
-
-                        </div>
+                </div>
+              `;
 
 
-                        <div class="match-info">
+    /* =====================================================
+       CARD
+       ===================================================== */
 
-                            ${esc(
-                                source.competition ||
-                                "Cricket"
-                            )}
+    return `
 
-                            <br>
+        <article
+            class="match-card ${
+                item.hasStream
+                    ? "has-stream"
+                    : ""
+            }"
+        >
 
-                            ${esc(
-                                time
-                            )}
 
-                        </div>
+            <div class="match-header">
+
+
+                <div>
+
+
+                    <div class="match-name">
+
+                        ${esc(
+                            team1
+                        )}
+
+                        vs
+
+                        ${esc(
+                            team2
+                        )}
 
                     </div>
 
 
-                    <span
-                        class="status ${
-                            isLive
-                                ? "live-status"
-                                : "upcoming-status"
-                        }"
-                    >
+                    <div class="match-info">
 
-                        ${
-                            isLive
-                                ? "LIVE"
-                                : "UPCOMING"
-                        }
+                        ${esc(
+                            source.competition ||
+                            "Cricket"
+                        )}
 
-                    </span>
+                        <br>
+
+                        ${esc(
+                            time
+                        )}
+
+                    </div>
 
 
                 </div>
 
 
-
-                ${
-                    item.streamCount > 0
-
-                        ? `
-
-                            <div class="stream-badge">
-
-                                🎥
-                                ${item.streamCount}
-                                STREAM${
-                                    item.streamCount === 1
-                                        ? ""
-                                        : "S"
-                                }
-                                AVAILABLE
-
-                            </div>
-
-                          `
-
-                        : `
-
-                            <div class="no-stream">
-
-                                ⏳ Stream unavailable
-
-                            </div>
-
-                          `
-
-                }
-
-
-
-                <a
-                    class="watch-button"
-                    href="${esc(
-                        actionUrl
-                    )}"
-                    ${
-                        openExternally
-                            ? `
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              `
-                            : ""
-                    }
+                <span
+                    class="status ${
+                        isLive
+                            ? "live-status"
+                            : "upcoming-status"
+                    }"
                 >
 
-                    ${actionText}
+                    ${
+                        isLive
+                            ? "LIVE"
+                            : "UPCOMING"
+                    }
 
-                </a>
+                </span>
 
 
-            </article>
+            </div>
 
-        `;
+
+
+            ${streamInfo}
+
+
+
+            <a
+                class="watch-button"
+                href="${esc(
+                    actionUrl
+                )}"
+            >
+
+                ${actionText}
+
+            </a>
+
+
+        </article>
+
+    `;
 
 }
 
@@ -1415,9 +1386,7 @@ function getTime(
     return Number.isFinite(
         time
     )
-
         ? time
-
         : Number.MAX_SAFE_INTEGER;
 
 }
@@ -1500,10 +1469,6 @@ function esc(
 
 loadMatches();
 
-
-/*
- * Refresh every 60 seconds.
- */
 
 setInterval(
     loadMatches,
