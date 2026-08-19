@@ -72,7 +72,7 @@ body {
 
 
 /* =========================================================
-   MATCH
+   MATCH HEADER
    ========================================================= */
 
 .match-head {
@@ -267,7 +267,7 @@ body {
    MOBILE
    ========================================================= */
 
-@media(max-width:600px) {
+@media (max-width: 600px) {
 
     .header {
         height: 60px;
@@ -336,7 +336,7 @@ body {
 
 
     <!-- =====================================================
-         MATCH HEADER
+         MATCH
          ===================================================== -->
 
     <section
@@ -439,7 +439,6 @@ body {
 
 <script>
 
-
 /* =========================================================
    SUPABASE
    ========================================================= */
@@ -471,7 +470,7 @@ const matchId =
 
 
 /* =========================================================
-   LOAD
+   LOAD PAGE
    ========================================================= */
 
 async function load() {
@@ -496,6 +495,13 @@ async function load() {
                 </div>
             `;
 
+        streamEl.innerHTML =
+            `
+                <div class="empty">
+                    No stream selected.
+                </div>
+            `;
+
         return;
 
     }
@@ -504,7 +510,7 @@ async function load() {
     try {
 
         /* =================================================
-           MATCH
+           LOAD MATCH
            ================================================= */
 
         const {
@@ -521,7 +527,9 @@ async function load() {
 
 
         if (matchError) {
+
             throw matchError;
+
         }
 
 
@@ -534,13 +542,20 @@ async function load() {
                     </div>
                 `;
 
+            streamEl.innerHTML =
+                `
+                    <div class="empty">
+                        No streams available.
+                    </div>
+                `;
+
             return;
 
         }
 
 
         document.title =
-            `${match.team1} vs ${match.team2} | Cricketive`;
+            `${match.team1 || "Team 1"} vs ${match.team2 || "Team 2"} | Cricketive`;
 
 
         const time =
@@ -556,9 +571,10 @@ async function load() {
 
         const isLive =
             String(
-                match.status ||
-                ""
-            ).toLowerCase()
+                match.status || ""
+            )
+                .trim()
+                .toLowerCase()
             ===
             "live";
 
@@ -615,11 +631,13 @@ async function load() {
 
                 ${
                     isLive
+
                         ? `
                             <span class="live-badge">
                                 🔴 LIVE
                             </span>
                           `
+
                         : `
                             <span class="status-badge">
                                 ${esc(
@@ -634,7 +652,7 @@ async function load() {
 
 
         /* =================================================
-           STREAMS
+           LOAD ACTIVE STREAMS
            ================================================= */
 
         const {
@@ -660,22 +678,22 @@ async function load() {
 
 
         if (streamError) {
+
             throw streamError;
+
         }
 
 
         if (
             !streams ||
-            !streams.length
+            streams.length === 0
         ) {
 
             streamEl.innerHTML =
                 `
                     <div class="empty">
-
                         ⏳ No stream is available
                         for this match yet.
-
                     </div>
                 `;
 
@@ -683,6 +701,10 @@ async function load() {
 
         }
 
+
+        /* =================================================
+           RENDER
+           ================================================= */
 
         streamEl.innerHTML =
             streams
@@ -728,7 +750,7 @@ async function load() {
 
 
 /* =========================================================
-   STREAM ROW
+   CREATE STREAM ROW
    ========================================================= */
 
 function createStreamRow(
@@ -753,9 +775,7 @@ function createStreamRow(
         "▶ WATCH";
 
 
-    if (
-        type === "direct"
-    ) {
+    if (type === "direct") {
 
         buttonText =
             "▶ OPEN STREAM";
@@ -770,37 +790,30 @@ function createStreamRow(
             id="stream-row-${index}"
         >
 
-
             <div class="stream-info">
 
                 <div class="stream-language">
-
                     ${esc(
                         stream.language ||
                         "Unknown"
                     )}
-
                 </div>
 
 
                 <div class="stream-name">
-
                     ${esc(
                         stream.stream_name ||
                         "Stream"
                     )}
-
                 </div>
 
 
                 <div class="stream-type">
-
                     ${esc(
                         getStreamTypeLabel(
                             type
                         )
                     )}
-
                 </div>
 
             </div>
@@ -809,20 +822,95 @@ function createStreamRow(
             <button
                 class="watch"
                 type="button"
-                onclick='openStream(
-                    ${JSON.stringify(stream)},
-                    ${index}
-                )'
+                onclick="openStreamByIndex(${index})"
             >
-
                 ${buttonText}
-
             </button>
-
 
         </div>
 
     `;
+}
+
+
+/* =========================================================
+   OPEN STREAM BY INDEX
+   ========================================================= */
+
+let loadedStreams = [];
+
+
+async function openStreamByIndex(
+    index
+) {
+
+    try {
+
+        const {
+            data: streams,
+            error
+        } = await db
+            .from("streams")
+            .select("*")
+            .eq(
+                "match_id",
+                matchId
+            )
+            .eq(
+                "active",
+                true
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: true
+                }
+            );
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        loadedStreams =
+            streams || [];
+
+
+        const stream =
+            loadedStreams[index];
+
+
+        if (!stream) {
+
+            showPlayerMessage(
+                "Stream not found."
+            );
+
+            return;
+
+        }
+
+
+        openStream(
+            stream,
+            index
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "Unable to open stream:",
+            error
+        );
+
+
+        showPlayerMessage(
+            "Unable to load this stream."
+        );
+
+    }
 
 }
 
@@ -861,7 +949,7 @@ function openStream(
 
 
     /* =====================================================
-       DIRECT WEBPAGE
+       EXTERNAL PAGE
        ===================================================== */
 
     if (
@@ -869,7 +957,7 @@ function openStream(
     ) {
 
         /*
-         * Open external player/webpage directly.
+         * Use same tab.
          */
 
         window.location.href =
@@ -945,7 +1033,7 @@ function openStream(
 
 
     /* =====================================================
-       HLS
+       M3U8
        ===================================================== */
 
     if (
@@ -953,10 +1041,7 @@ function openStream(
     ) {
 
         /*
-         * Native HLS support exists on Safari/iOS.
-         *
-         * For other browsers, use the iframe/direct
-         * fallback rather than pretending it will work.
+         * Native browser HLS support.
          */
 
         const video =
@@ -984,6 +1069,12 @@ function openStream(
 
         } else {
 
+            /*
+             * Browser doesn't support native HLS.
+             * Open the URL directly rather than showing
+             * a broken iframe.
+             */
+
             window.location.href =
                 url;
 
@@ -995,7 +1086,7 @@ function openStream(
 
 
     /* =====================================================
-       EMBED
+       NORMAL EMBED URL
        ===================================================== */
 
     showIframe(
@@ -1022,14 +1113,22 @@ function detectStreamType(
 
     const value =
         String(
-            url ||
-            ""
+            url || ""
         )
-        .trim()
-        .toLowerCase();
+            .trim()
+            .toLowerCase();
 
 
-    /* YouTube */
+    if (!value) {
+
+        return "direct";
+
+    }
+
+
+    /*
+     * YouTube
+     */
 
     if (
         value.includes(
@@ -1045,7 +1144,9 @@ function detectStreamType(
     }
 
 
-    /* HLS */
+    /*
+     * HLS
+     */
 
     if (
         value.includes(
@@ -1058,13 +1159,14 @@ function detectStreamType(
     }
 
 
-    /* MP4 */
+    /*
+     * MP4
+     */
 
     if (
         value.includes(
             ".mp4"
         )
-    )
     ) {
 
         return "mp4";
@@ -1073,10 +1175,7 @@ function detectStreamType(
 
 
     /*
-     * Known webpage-style stream pages.
-     *
-     * We open these directly because they are not
-     * reliable iframe targets.
+     * Pages that should be opened directly.
      */
 
     if (
@@ -1097,7 +1196,7 @@ function detectStreamType(
 
 
     /*
-     * Everything else is treated as an embed.
+     * Everything else is treated as an iframe embed.
      */
 
     return "embed";
@@ -1106,7 +1205,7 @@ function detectStreamType(
 
 
 /* =========================================================
-   STREAM TYPE LABEL
+   TYPE LABEL
    ========================================================= */
 
 function getStreamTypeLabel(
@@ -1139,7 +1238,7 @@ function getStreamTypeLabel(
 
 
 /* =========================================================
-   YOUTUBE EMBED
+   YOUTUBE EMBED URL
    ========================================================= */
 
 function youtubeEmbedUrl(
@@ -1177,20 +1276,18 @@ function youtubeEmbedUrl(
 
 
         /*
-         * youtu.be/VIDEO_ID
+         * youtube.com/live/VIDEO_ID
          */
 
         if (
-            url.hostname ===
-            "youtu.be"
+            url.pathname.startsWith(
+                "/live/"
+            )
         ) {
 
             videoId =
                 url.pathname
-                    .replace(
-                        /^\//,
-                        ""
-                    )
+                    .split("/live/")[1]
                     .split("/")[0];
 
         }
@@ -1214,6 +1311,26 @@ function youtubeEmbedUrl(
         }
 
 
+        /*
+         * youtu.be/VIDEO_ID
+         */
+
+        if (
+            url.hostname ===
+            "youtu.be"
+        ) {
+
+            videoId =
+                url.pathname
+                    .replace(
+                        /^\//,
+                        ""
+                    )
+                    .split("/")[0];
+
+        }
+
+
         if (
             !videoId
         ) {
@@ -1230,7 +1347,6 @@ function youtubeEmbedUrl(
             ) +
             "?autoplay=1"
         );
-
 
     } catch {
 
@@ -1271,19 +1387,29 @@ function showIframe(
         );
 
 
+    /*
+     * Stop video player.
+     */
+
     video.pause();
+
     video.removeAttribute(
         "src"
     );
+
     video.style.display =
         "none";
 
 
-    frame.src =
-        url;
+    /*
+     * Show iframe.
+     */
 
     frame.style.display =
         "block";
+
+    frame.src =
+        url;
 
 
     playerTitle.textContent =
@@ -1294,16 +1420,17 @@ function showIframe(
         "block";
 
 
+    showPlayerMessage(
+        "Loading stream..."
+    );
+
+
     player.scrollIntoView({
         behavior:
             "smooth",
+
         block:
             "center"
-    });
-
-
-    showPlayerMessage(
-        "Loading stream..."
     );
 
 }
@@ -1339,6 +1466,10 @@ function showVideo(
         );
 
 
+    /*
+     * Hide iframe.
+     */
+
     frame.src =
         "about:blank";
 
@@ -1346,11 +1477,15 @@ function showVideo(
         "none";
 
 
-    video.src =
-        url;
+    /*
+     * Show video.
+     */
 
     video.style.display =
         "block";
+
+    video.src =
+        url;
 
 
     playerTitle.textContent =
@@ -1361,21 +1496,29 @@ function showVideo(
         "block";
 
 
-    video.play().catch(
-        () => {}
+    showPlayerMessage(
+        "Loading stream..."
     );
+
+
+    /*
+     * Autoplay may be blocked by browser.
+     * That is okay.
+     */
+
+    video
+        .play()
+        .catch(
+            () => {}
+        );
 
 
     player.scrollIntoView({
         behavior:
             "smooth",
+
         block:
             "center"
-    });
-
-
-    showPlayerMessage(
-        "Loading stream..."
     );
 
 }
@@ -1421,7 +1564,7 @@ function closePlayer() {
 
 
 /* =========================================================
-   ACTIVE BUTTON
+   SET ACTIVE BUTTON
    ========================================================= */
 
 function setActiveButton(
@@ -1534,7 +1677,7 @@ function formatDate(
 
 
 /* =========================================================
-   ESCAPE HTML
+   HTML ESCAPE
    ========================================================= */
 
 function esc(
