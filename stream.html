@@ -36,19 +36,22 @@ body {
     border-bottom: 1px solid #222;
 }
 
+.brand {
+    display: flex;
+    align-items: center;
+}
+
 .brand img {
     height: 48px;
     width: 48px;
     object-fit: cover;
     border-radius: 8px;
-    vertical-align: middle;
 }
 
 .brand span {
     font-weight: 800;
     font-size: 21px;
     margin-left: 9px;
-    vertical-align: middle;
 }
 
 .back {
@@ -69,7 +72,7 @@ body {
 
 
 /* =========================================================
-   SELECTED MATCH
+   MATCH HEADER
    ========================================================= */
 
 .match-head {
@@ -102,58 +105,15 @@ body {
     font-weight: 700;
 }
 
-
-/* =========================================================
-   SCORE
-   ========================================================= */
-
-.score-box {
-    margin-top: 16px;
-    padding: 14px;
-    background: #080808;
-    border: 1px solid #222;
-    border-radius: 10px;
-}
-
-.score-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 7px 0;
-}
-
-.team {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-}
-
-.team img {
-    width: 28px;
-    height: 28px;
-    object-fit: contain;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-.team span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.score {
-    font-size: 18px;
-    font-weight: 800;
-    white-space: nowrap;
-}
-
-.score-status {
-    color: #999;
-    font-size: 12px;
-    margin-top: 8px;
+.upcoming-badge {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 6px 10px;
+    border-radius: 20px;
+    background: #1e2b39;
+    color: #8fc7ff;
+    font-size: 11px;
+    font-weight: 700;
 }
 
 
@@ -163,30 +123,57 @@ body {
 
 .player {
     display: none;
-    margin-top: 18px;
+    margin-top: 20px;
     background: #000;
-    border-radius: 10px;
+    border: 1px solid #252525;
+    border-radius: 12px;
     overflow: hidden;
+}
+
+.player-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: #0b0b0b;
+    border-bottom: 1px solid #222;
+}
+
+.player-title {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.close-player {
+    border: 0;
+    background: #222;
+    color: #fff;
+    padding: 6px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
 }
 
 .player iframe {
     width: 100%;
-    aspect-ratio: 16/9;
+    aspect-ratio: 16 / 9;
     border: 0;
     display: block;
+    background: #000;
 }
 
 
 /* =========================================================
-   STREAMS
+   STREAM SECTION
    ========================================================= */
 
 .streams {
-    margin-top: 22px;
+    margin-top: 24px;
 }
 
 .streams h2 {
-    margin-bottom: 10px;
+    margin: 0 0 12px;
+    font-size: 21px;
 }
 
 .stream {
@@ -207,6 +194,7 @@ body {
 
 .stream-language {
     font-weight: 700;
+    font-size: 14px;
 }
 
 .stream-name {
@@ -219,7 +207,7 @@ body {
     border: 0;
     background: #5865f2;
     color: #fff;
-    padding: 9px 13px;
+    padding: 10px 15px;
     border-radius: 7px;
     cursor: pointer;
     font-weight: 700;
@@ -230,146 +218,26 @@ body {
     background: #4752c4;
 }
 
+.watch.active {
+    background: #3c8c53;
+}
+
 
 /* =========================================================
-   LIVE MATCH DIRECTORY
+   STATUS
    ========================================================= */
 
-.live-directory {
-    margin-top: 32px;
-}
-
-.live-directory h2 {
-    margin-bottom: 8px;
-}
-
-.directory-note {
-    color: #777;
+.player-message {
+    padding: 14px;
+    color: #aaa;
     font-size: 13px;
-    margin-bottom: 14px;
-}
-
-
-/* =========================================================
-   MATCH GROUPS
-   ========================================================= */
-
-.match-group {
-    margin-top: 24px;
-}
-
-.group-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 10px;
-    font-size: 17px;
-}
-
-.group-title .count {
-    color: #777;
-    font-size: 12px;
-    font-weight: normal;
-}
-
-
-/* =========================================================
-   MATCH CARD
-   ========================================================= */
-
-.live-match-card {
-    background: #101010;
-    border: 1px solid #252525;
-    border-radius: 10px;
-    padding: 15px;
-    margin-top: 9px;
-}
-
-.live-match-card.has-stream {
-    border-color: #355f42;
-    box-shadow: 0 0 0 1px rgba(53,95,66,.25);
-}
-
-.live-match-card.selected {
-    border-color: #5865f2;
-}
-
-.live-match-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-}
-
-.live-match-title {
-    font-size: 16px;
-    font-weight: 700;
-}
-
-.live-match-meta {
-    color: #999;
-    font-size: 12px;
-    line-height: 1.5;
-    margin-top: 5px;
-}
-
-.stream-badge {
-    flex-shrink: 0;
-    padding: 5px 8px;
-    border-radius: 20px;
-    background: #16321e;
-    color: #72d38b;
-    font-size: 10px;
-    font-weight: 700;
-}
-
-.no-stream-badge {
-    flex-shrink: 0;
-    padding: 5px 8px;
-    border-radius: 20px;
-    background: #222;
-    color: #888;
-    font-size: 10px;
-    font-weight: 700;
-}
-
-.live-score-small {
-    margin-top: 10px;
-    padding-top: 10px;
     border-top: 1px solid #222;
-    font-size: 13px;
-}
-
-.live-score-small-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 3px 0;
-}
-
-.live-score-small-row strong {
-    font-size: 14px;
-}
-
-.open-match {
-    display: inline-block;
-    margin-top: 11px;
-    padding: 8px 12px;
-    background: #222;
-    color: #fff;
-    text-decoration: none;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.open-match:hover {
-    background: #333;
+    background: #080808;
 }
 
 
 /* =========================================================
-   EMPTY
+   EMPTY / ERROR
    ========================================================= */
 
 .empty {
@@ -386,7 +254,7 @@ body {
    MOBILE
    ========================================================= */
 
-@media(max-width:600px) {
+@media(max-width: 600px) {
 
     .header {
         height: 60px;
@@ -407,16 +275,16 @@ body {
     }
 
     .stream {
-        align-items: flex-start;
         flex-direction: column;
+        align-items: stretch;
     }
 
     .watch {
         width: 100%;
     }
 
-    .live-match-top {
-        flex-direction: column;
+    .player-header {
+        gap: 10px;
     }
 
 }
@@ -447,7 +315,7 @@ body {
 
     <a
         class="back"
-        href="index.html"
+        href="/index.html"
     >
         ← HOME
     </a>
@@ -455,12 +323,11 @@ body {
 </header>
 
 
-
 <main class="wrap">
 
 
     <!-- =====================================================
-         SELECTED MATCH
+         MATCH
          ===================================================== -->
 
     <section
@@ -475,24 +342,58 @@ body {
     </section>
 
 
-
     <!-- =====================================================
-         PLAYER
+         VIDEO PLAYER
          ===================================================== -->
 
-    <div
+    <section
         class="player"
         id="player"
     >
 
+        <div class="player-header">
+
+            <div
+                class="player-title"
+                id="playerTitle"
+            >
+                Cricketive Player
+            </div>
+
+
+            <button
+                class="close-player"
+                type="button"
+                onclick="closePlayer()"
+            >
+                CLOSE
+            </button>
+
+        </div>
+
+
         <iframe
             id="video"
+            title="Cricketive Stream"
             allowfullscreen
-            allow="encrypted-media; picture-in-picture"
+            allow="
+                autoplay;
+                encrypted-media;
+                picture-in-picture;
+                fullscreen
+            "
+            referrerpolicy="no-referrer-when-downgrade"
         ></iframe>
 
-    </div>
 
+        <div
+            class="player-message"
+            id="playerMessage"
+        >
+            Loading stream...
+        </div>
+
+    </section>
 
 
     <!-- =====================================================
@@ -510,36 +411,6 @@ body {
 
             <div class="empty">
                 Loading streams...
-            </div>
-
-        </div>
-
-    </section>
-
-
-
-    <!-- =====================================================
-         LIVE MATCH DIRECTORY
-         ===================================================== -->
-
-    <section class="live-directory">
-
-        <h2>
-            🔴 Live Matches
-        </h2>
-
-
-        <div class="directory-note">
-
-            Matches with available streams are shown first.
-
-        </div>
-
-
-        <div id="liveDirectory">
-
-            <div class="empty">
-                Loading live matches...
             </div>
 
         </div>
@@ -571,12 +442,12 @@ const db =
 
 
 /* =========================================================
-   SELECTED MATCH ID
+   MATCH ID
    ========================================================= */
 
 const params =
     new URLSearchParams(
-        location.search
+        window.location.search
     );
 
 const matchId =
@@ -584,37 +455,32 @@ const matchId =
 
 
 /* =========================================================
-   GLOBAL DATA
-   ========================================================= */
-
-let selectedMatch = null;
-
-let liveMatches = [];
-
-let streamsByMatch = {};
-
-let sportScoreMatches = [];
-
-
-/* =========================================================
-   LOAD EVERYTHING
+   LOAD
    ========================================================= */
 
 async function load() {
 
-    if (!matchId) {
-
+    const matchEl =
         document.getElementById(
             "match"
-        ).innerHTML =
+        );
 
+    const streamEl =
+        document.getElementById(
+            "streamList"
+        );
+
+
+    if (
+        !matchId
+    ) {
+
+        matchEl.innerHTML =
             `
                 <div class="empty">
                     No match selected.
                 </div>
             `;
-
-        await loadLiveDirectory();
 
         return;
 
@@ -623,23 +489,252 @@ async function load() {
 
     try {
 
+        /* =================================================
+           LOAD MATCH
+           ================================================= */
+
+        const {
+            data: match,
+            error: matchError
+        } = await db
+            .from("Matches")
+            .select("*")
+            .eq(
+                "id",
+                matchId
+            )
+            .maybeSingle();
+
+
+        if (
+            matchError
+        ) {
+
+            throw matchError;
+
+        }
+
+
+        if (
+            !match
+        ) {
+
+            matchEl.innerHTML =
+                `
+                    <div class="empty">
+                        Match not found.
+                    </div>
+                `;
+
+            streamEl.innerHTML =
+                `
+                    <div class="empty">
+                        No streams available.
+                    </div>
+                `;
+
+            return;
+
+        }
+
+
+        document.title =
+            `${match.team1} vs ${match.team2} | Cricketive`;
+
+
+        /* =================================================
+           MATCH HEADER
+           ================================================= */
+
+        const startTime =
+            match.start_time
+                ? formatDate(
+                    match.start_time
+                )
+                : (
+                    match.match_time ||
+                    ""
+                );
+
+
+        const isLive =
+            String(
+                match.status ||
+                ""
+            ).toLowerCase()
+            ===
+            "live";
+
+
+        matchEl.innerHTML =
+            `
+
+                <div class="title">
+
+                    ${esc(
+                        match.team1 ||
+                        ""
+                    )}
+
+                    vs
+
+                    ${esc(
+                        match.team2 ||
+                        ""
+                    )}
+
+                </div>
+
+
+                <div class="meta">
+
+                    ${esc(
+                        match.competition ||
+                        "Cricket"
+                    )}
+
+                    ${
+                        startTime
+                            ? `
+                                <br>
+                                ${esc(
+                                    startTime
+                                )}
+                              `
+                            : ""
+                    }
+
+                    ${
+                        match.venue
+                            ? `
+                                <br>
+                                ${esc(
+                                    match.venue
+                                )}
+                              `
+                            : ""
+                    }
+
+                </div>
+
+
+                ${
+                    isLive
+
+                        ? `
+                            <span class="live-badge">
+                                🔴 LIVE
+                            </span>
+                          `
+
+                        : `
+                            <span class="upcoming-badge">
+                                ${
+                                    esc(
+                                        match.status ||
+                                        "MATCH"
+                                    )
+                                }
+                            </span>
+                          `
+                }
+
+            `;
+
+
+        /* =================================================
+           LOAD STREAMS
+           ================================================= */
+
+        const {
+            data: streams,
+            error: streamError
+        } = await db
+            .from("streams")
+            .select(
+                "*"
+            )
+            .eq(
+                "match_id",
+                matchId
+            )
+            .eq(
+                "active",
+                true
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: true
+                }
+            );
+
+
+        if (
+            streamError
+        ) {
+
+            throw streamError;
+
+        }
+
+
+        if (
+            !streams ||
+            !streams.length
+        ) {
+
+            streamEl.innerHTML =
+                `
+                    <div class="empty">
+
+                        ⏳ No stream is available
+                        for this match yet.
+
+                    </div>
+                `;
+
+            return;
+
+        }
+
+
+        /* =================================================
+           RENDER STREAMS
+           ================================================= */
+
+        streamEl.innerHTML =
+            streams
+                .map(
+                    (
+                        stream,
+                        index
+                    ) =>
+                        createStream(
+                            stream,
+                            index
+                        )
+                )
+                .join("");
+
+
         /*
-         * Load selected match, streams, and
-         * current SportScore data in parallel.
+         * If there is exactly one stream,
+         * automatically select it.
+         *
+         * This makes the WATCH MATCH flow smoother.
          */
 
-        await Promise.all([
-            loadSelectedMatch(),
-            loadSportScoreMatches(),
-            loadAllLiveMatches()
-        ]);
+        if (
+            streams.length === 1
+        ) {
 
+            playStream(
+                streams[0],
+                0
+            );
 
-        renderSelectedMatch();
-
-        renderSelectedStreams();
-
-        renderLiveDirectory();
+        }
 
 
     } catch (error) {
@@ -649,1256 +744,93 @@ async function load() {
             error
         );
 
-        document.getElementById(
-            "match"
-        ).innerHTML =
 
+        matchEl.innerHTML =
             `
                 <div class="empty">
                     Unable to load match.
                 </div>
             `;
 
-    }
 
-}
-
-
-/* =========================================================
-   LOAD SELECTED MATCH
-   ========================================================= */
-
-async function loadSelectedMatch() {
-
-    const result =
-        await db
-            .from("Matches")
-            .select("*")
-            .eq("id", matchId)
-            .maybeSingle();
-
-
-    if (
-        result.error ||
-        !result.data
-    ) {
-
-        throw new Error(
-            "Match not found."
-        );
-
-    }
-
-
-    selectedMatch =
-        result.data;
-
-
-    document.title =
-        `${selectedMatch.team1} vs ${selectedMatch.team2} | Cricketive`;
-
-}
-
-
-/* =========================================================
-   LOAD SELECTED STREAMS
-   ========================================================= */
-
-async function loadSelectedStreams() {
-
-    const result =
-        await db
-            .from("streams")
-            .select("*")
-            .eq("match_id", matchId)
-            .eq("active", true)
-            .order(
-                "created_at",
-                {
-                    ascending: true
-                }
-            );
-
-
-    if (result.error) {
-
-        throw result.error;
-
-    }
-
-
-    return result.data || [];
-
-}
-
-
-/* =========================================================
-   LOAD CURRENT SPORTScore MATCHES
-   ========================================================= */
-
-async function loadSportScoreMatches() {
-
-    const response =
-        await fetch(
-            "/api/cricket-matches?mode=matches",
-            {
-                cache: "no-store"
-            }
-        );
-
-
-    if (!response.ok) {
-
-        throw new Error(
-            `SportScore returned HTTP ${response.status}`
-        );
-
-    }
-
-
-    const result =
-        await response.json();
-
-
-    sportScoreMatches =
-        Array.isArray(
-            result.matches
-        )
-            ? result.matches
-            : [];
-
-}
-
-
-/* =========================================================
-   LOAD LIVE MATCHES FROM SUPABASE
-   ========================================================= */
-
-async function loadAllLiveMatches() {
-
-    const result =
-        await db
-            .from("Matches")
-            .select("*")
-            .eq("status", "Live")
-            .order(
-                "start_time",
-                {
-                    ascending: true
-                }
-            );
-
-
-    if (result.error) {
-
-        throw result.error;
-
-    }
-
-
-    liveMatches =
-        result.data || [];
-
-
-    /*
-     * Load all active streams in one query
-     * rather than one query per match.
-     */
-
-    const matchIds =
-        liveMatches
-            .map(
-                match =>
-                    match.id
-            );
-
-
-    streamsByMatch = {};
-
-
-    if (
-        !matchIds.length
-    ) {
-
-        return;
-
-    }
-
-
-    const streamsResult =
-        await db
-            .from("streams")
-            .select(
-                "id, match_id, language, stream_name, embed_url, active"
-            )
-            .in(
-                "match_id",
-                matchIds
-            )
-            .eq(
-                "active",
-                true
-            );
-
-
-    if (
-        streamsResult.error
-    ) {
-
-        throw streamsResult.error;
-
-    }
-
-
-    (
-        streamsResult.data ||
-        []
-    ).forEach(
-        stream => {
-
-            if (
-                !streamsByMatch[
-                    stream.match_id
-                ]
-            ) {
-
-                streamsByMatch[
-                    stream.match_id
-                ] = [];
-
-            }
-
-
-            streamsByMatch[
-                stream.match_id
-            ].push(
-                stream
-            );
-
-        }
-    );
-
-}
-
-
-/* =========================================================
-   LOAD LIVE DIRECTORY WHEN NO MATCH SELECTED
-   ========================================================= */
-
-async function loadLiveDirectory() {
-
-    await Promise.all([
-        loadSportScoreMatches(),
-        loadAllLiveMatches()
-    ]);
-
-
-    renderLiveDirectory();
-
-}
-
-
-/* =========================================================
-   RENDER SELECTED MATCH
-   ========================================================= */
-
-function renderSelectedMatch() {
-
-    const m =
-        selectedMatch;
-
-
-    const sportScore =
-        findSportScoreMatch(
-            m
-        );
-
-
-    const scoreHtml =
-        sportScore
-            ? createScoreBox(
-                sportScore
-            )
-            : "";
-
-
-    const time =
-        m.start_time
-            ? formatDate(
-                m.start_time
-            )
-            : (
-                m.match_time ||
-                ""
-            );
-
-
-    const isLive =
-        m.status === "Live";
-
-
-    document.getElementById(
-        "match"
-    ).innerHTML =
-
-        `
-
-            <div class="title">
-
-                ${esc(
-                    m.team1
-                )}
-
-                vs
-
-                ${esc(
-                    m.team2
-                )}
-
-            </div>
-
-
-            <div class="meta">
-
-                ${esc(
-                    m.competition ||
-                    "Cricket"
-                )}
-
-                <br>
-
-                ${esc(
-                    time
-                )}
-
-                ${
-                    m.venue
-                        ? `
-                            <br>
-                            ${esc(
-                                m.venue
-                            )}
-                          `
-                        : ""
-                }
-
-            </div>
-
-
-            ${
-                isLive
-                    ? `
-                        <span class="live-badge">
-                            🔴 LIVE
-                        </span>
-                      `
-                    : ""
-            }
-
-
-            ${scoreHtml}
-
-        `;
-
-}
-
-
-/* =========================================================
-   RENDER SELECTED STREAMS
-   ========================================================= */
-
-async function renderSelectedStreams() {
-
-    const el =
-        document.getElementById(
-            "streamList"
-        );
-
-
-    const streams =
-        await loadSelectedStreams();
-
-
-    if (
-        !streams.length
-    ) {
-
-        el.innerHTML =
-
+        streamEl.innerHTML =
             `
                 <div class="empty">
-
-                    ⏳ No stream is available
-                    for this match yet.
-
+                    Unable to load streams.
                 </div>
             `;
 
-        return;
-
     }
-
-
-    el.innerHTML =
-
-        streams
-            .map(
-                stream =>
-
-                    `
-
-                        <div class="stream">
-
-
-                            <div class="stream-info">
-
-                                <div class="stream-language">
-
-                                    ${esc(
-                                        stream.language
-                                    )}
-
-                                </div>
-
-
-                                <div class="stream-name">
-
-                                    ${esc(
-                                        stream.stream_name
-                                    )}
-
-                                </div>
-
-                            </div>
-
-
-                            <button
-                                class="watch"
-                                onclick="play(
-                                    ${JSON.stringify(
-                                        stream.embed_url
-                                    )}
-                                )"
-                            >
-
-                                ▶ WATCH
-
-                            </button>
-
-
-                        </div>
-
-                    `
-            )
-            .join("");
 
 }
 
 
 /* =========================================================
-   RENDER LIVE DIRECTORY
+   CREATE STREAM ROW
    ========================================================= */
 
-function renderLiveDirectory() {
-
-    const el =
-        document.getElementById(
-            "liveDirectory"
-        );
-
-
-    if (
-        !liveMatches.length
-    ) {
-
-        el.innerHTML =
-
-            `
-                <div class="empty">
-
-                    No live matches right now.
-
-                </div>
-            `;
-
-        return;
-
-    }
-
-
-    /*
-     * Enrich every database match with its current
-     * SportScore data.
-     */
-
-    const enriched =
-        liveMatches.map(
-            match => {
-
-                const score =
-                    findSportScoreMatch(
-                        match
-                    );
-
-
-                const streams =
-                    streamsByMatch[
-                        match.id
-                    ] || [];
-
-
-                return {
-
-                    match,
-
-                    score,
-
-                    streams
-
-                };
-
-            }
-        );
-
-
-    /*
-     * STREAMS FIRST
-     *
-     * Matches with at least one active stream
-     * always appear before matches without streams.
-     *
-     * Within each group, keep the original start-time
-     * ordering.
-     */
-
-    enriched.sort(
-        (
-            a,
-            b
-        ) => {
-
-            const aHas =
-                a.streams.length > 0;
-
-            const bHas =
-                b.streams.length > 0;
-
-
-            if (
-                aHas &&
-                !bHas
-            ) {
-
-                return -1;
-
-            }
-
-
-            if (
-                !aHas &&
-                bHas
-            ) {
-
-                return 1;
-
-            }
-
-
-            return (
-                getTime(
-                    a.match.start_time
-                )
-                -
-
-                getTime(
-                    b.match.start_time
-                )
-            );
-
-        }
-    );
-
-
-    const withStreams =
-        enriched.filter(
-            item =>
-                item.streams.length > 0
-        );
-
-
-    const withoutStreams =
-        enriched.filter(
-            item =>
-                item.streams.length === 0
-        );
-
-
-    let html = "";
-
-
-    /* =====================================================
-       AVAILABLE STREAMS
-       ===================================================== */
-
-    if (
-        withStreams.length
-    ) {
-
-        html +=
-
-            `
-
-                <div class="match-group">
-
-                    <h3 class="group-title">
-
-                        🎥 Matches with Streams
-
-                        <span class="count">
-
-                            (${withStreams.length})
-
-                        </span>
-
-                    </h3>
-
-            `;
-
-
-        html +=
-            withStreams
-                .map(
-                    item =>
-                        createLiveDirectoryCard(
-                            item
-                        )
-                )
-                .join("");
-
-
-        html +=
-            `</div>`;
-
-    }
-
-
-    /* =====================================================
-       OTHER LIVE MATCHES
-       ===================================================== */
-
-    if (
-        withoutStreams.length
-    ) {
-
-        html +=
-
-            `
-
-                <div class="match-group">
-
-                    <h3 class="group-title">
-
-                        🔴 Other Live Matches
-
-                        <span class="count">
-
-                            (${withoutStreams.length})
-
-                        </span>
-
-                    </h3>
-
-            `;
-
-
-        html +=
-            withoutStreams
-                .map(
-                    item =>
-                        createLiveDirectoryCard(
-                            item
-                        )
-                )
-                .join("");
-
-
-        html +=
-            `</div>`;
-
-    }
-
-
-    el.innerHTML =
-        html ||
-        `
-            <div class="empty">
-                No live matches right now.
-            </div>
-        `;
-
-}
-
-
-/* =========================================================
-   LIVE DIRECTORY CARD
-   ========================================================= */
-
-function createLiveDirectoryCard(
-    item
+function createStream(
+    stream,
+    index
 ) {
 
-    const m =
-        item.match;
-
-    const score =
-        item.score;
-
-    const streams =
-        item.streams;
+    const language =
+        stream.language ||
+        "Unknown";
 
 
-    const isSelected =
-        m.id === matchId;
+    const name =
+        stream.stream_name ||
+        "Stream";
 
 
-    return
+    return `
 
-        `
+        <div
+            class="stream"
+            id="stream-row-${index}"
+        >
 
-            <article
-                class="live-match-card
-                    ${
-                        streams.length
-                            ? "has-stream"
-                            : ""
-                    }
-                    ${
-                        isSelected
-                            ? "selected"
-                            : ""
-                    }
-                "
+
+            <div class="stream-info">
+
+                <div class="stream-language">
+
+                    ${esc(
+                        language
+                    )}
+
+                </div>
+
+
+                <div class="stream-name">
+
+                    ${esc(
+                        name
+                    )}
+
+                </div>
+
+            </div>
+
+
+            <button
+                class="watch"
+                type="button"
+                onclick='playStream(
+                    ${JSON.stringify(stream)},
+                    ${index}
+                )'
             >
 
+                ▶ WATCH
 
-                <div class="live-match-top">
+            </button>
 
 
-                    <div>
+        </div>
 
-                        <div class="live-match-title">
-
-                            ${esc(
-                                m.team1
-                            )}
-
-                            vs
-
-                            ${esc(
-                                m.team2
-                            )}
-
-                        </div>
-
-
-                        <div class="live-match-meta">
-
-                            ${esc(
-                                m.competition ||
-                                "Cricket"
-                            )}
-
-                        </div>
-
-                    </div>
-
-
-                    ${
-                        streams.length
-
-                            ? `
-
-                                <span class="stream-badge">
-
-                                    🎥
-                                    ${streams.length}
-                                    STREAM${
-                                        streams.length === 1
-                                            ? ""
-                                            : "S"
-                                    }
-
-                                </span>
-
-                              `
-
-                            : `
-
-                                <span class="no-stream-badge">
-
-                                    NO STREAM
-
-                                </span>
-
-                              `
-
-                    }
-
-
-                </div>
-
-
-                ${
-                    score
-                        ? createSmallScore(
-                            score
-                          )
-                        : ""
-                }
-
-
-                ${
-                    !isSelected
-
-                        ? `
-
-                            <a
-                                class="open-match"
-                                href="stream.html?match=${
-                                    encodeURIComponent(
-                                        m.id
-                                    )
-                                }"
-                            >
-
-                                ${
-                                    streams.length
-                                        ? "▶ WATCH MATCH"
-                                        : "VIEW MATCH"
-                                }
-
-                            </a>
-
-                          `
-
-                        : `
-
-                            <span
-                                class="open-match"
-                                style="
-                                    background:#5865f2;
-                                    cursor:default;
-                                "
-                            >
-
-                                CURRENT MATCH
-
-                            </span>
-
-                          `
-
-                }
-
-
-            </article>
-
-        `;
-
-}
-
-
-/* =========================================================
-   SCORE BOX
-   ========================================================= */
-
-function createScoreBox(
-    score
-) {
-
-    const home =
-        cleanScore(
-            score.home_score
-        );
-
-    const away =
-        cleanScore(
-            score.away_score
-        );
-
-
-    const hasScore =
-        home !== null ||
-        away !== null;
-
-
-    if (
-        !hasScore &&
-        !score.status_text
-    ) {
-
-        return "";
-
-    }
-
-
-    return
-
-        `
-
-            <div class="score-box">
-
-
-                <div class="score-row">
-
-
-                    <div class="team">
-
-
-                        ${
-                            score.home_logo
-                                ? `
-                                    <img
-                                        src="${esc(
-                                            score.home_logo
-                                        )}"
-                                        alt=""
-                                        onerror="this.style.display='none'"
-                                    >
-                                  `
-                                : ""
-                        }
-
-
-                        <span>
-
-                            ${esc(
-                                score.home ||
-                                selectedMatch.team1
-                            )}
-
-                        </span>
-
-                    </div>
-
-
-                    <div class="score">
-
-                        ${esc(
-                            home !== null
-                                ? home
-                                : "-"
-                        )}
-
-                    </div>
-
-                </div>
-
-
-
-                <div class="score-row">
-
-
-                    <div class="team">
-
-
-                        ${
-                            score.away_logo
-                                ? `
-                                    <img
-                                        src="${esc(
-                                            score.away_logo
-                                        )}"
-                                        alt=""
-                                        onerror="this.style.display='none'"
-                                    >
-                                  `
-                                : ""
-                        }
-
-
-                        <span>
-
-                            ${esc(
-                                score.away ||
-                                selectedMatch.team2
-                            )}
-
-                        </span>
-
-                    </div>
-
-
-                    <div class="score">
-
-                        ${esc(
-                            away !== null
-                                ? away
-                                : "-"
-                        )}
-
-                    </div>
-
-                </div>
-
-
-
-                ${
-                    score.status_text
-
-                        ? `
-
-                            <div class="score-status">
-
-                                ${esc(
-                                    score.status_text
-                                )}
-
-                            </div>
-
-                          `
-
-                        : ""
-                }
-
-
-            </div>
-
-        `;
-
-}
-
-
-/* =========================================================
-   SMALL SCORE
-   ========================================================= */
-
-function createSmallScore(
-    score
-) {
-
-    const home =
-        cleanScore(
-            score.home_score
-        );
-
-    const away =
-        cleanScore(
-            score.away_score
-        );
-
-
-    if (
-        home === null &&
-        away === null
-    ) {
-
-        return "";
-
-    }
-
-
-    return
-
-        `
-
-            <div class="live-score-small">
-
-
-                <div class="live-score-small-row">
-
-                    <span>
-
-                        ${esc(
-                            score.home || ""
-                        )}
-
-                    </span>
-
-                    <strong>
-
-                        ${esc(
-                            home || "-"
-                        )}
-
-                    </strong>
-
-                </div>
-
-
-                <div class="live-score-small-row">
-
-                    <span>
-
-                        ${esc(
-                            score.away || ""
-                        )}
-
-                    </span>
-
-                    <strong>
-
-                        ${esc(
-                            away || "-"
-                        )}
-
-                    </strong>
-
-                </div>
-
-
-            </div>
-
-        `;
-
-}
-
-
-/* =========================================================
-   FIND SportScore MATCH
-   ========================================================= */
-
-function findSportScoreMatch(
-    match
-) {
-
-    if (
-        !match
-    ) {
-
-        return null;
-
-    }
-
-
-    /*
-     * First match by sportscore_url.
-     */
-
-    if (
-        match.sportscore_url
-    ) {
-
-        const url =
-            String(
-                match.sportscore_url
-            );
-
-
-        const found =
-            sportScoreMatches.find(
-                item => {
-
-                    const itemUrl =
-                        item.url
-                            ? (
-                                item.url.startsWith("http")
-                                    ? item.url
-                                    : `https://sportscore.com${item.url}`
-                              )
-                            : "";
-
-
-                    return itemUrl === url;
-
-                }
-            );
-
-
-        if (
-            found
-        ) {
-
-            return found;
-
-        }
-
-    }
-
-
-    /*
-     * Fallback to team names.
-     */
-
-    const team1 =
-        normalizeName(
-            match.team1
-        );
-
-    const team2 =
-        normalizeName(
-            match.team2
-        );
-
-
-    return (
-        sportScoreMatches.find(
-            item =>
-                normalizeName(
-                    item.home
-                ) === team1
-                &&
-                normalizeName(
-                    item.away
-                ) === team2
-        )
-        || null
-    );
-
-}
-
-
-/* =========================================================
-   NAME NORMALIZATION
-   ========================================================= */
-
-function normalizeName(
-    value
-) {
-
-    return String(
-        value || ""
-    )
-        .trim()
-        .toLowerCase();
-
-}
-
-
-/* =========================================================
-   SCORE CLEANUP
-   ========================================================= */
-
-function cleanScore(
-    value
-) {
-
-    if (
-        value === null ||
-        value === undefined
-    ) {
-
-        return null;
-
-    }
-
-
-    const result =
-        String(
-            value
-        ).trim();
-
-
-    if (
-        !result ||
-        result === "-"
-    ) {
-
-        return null;
-
-    }
-
-
-    return result;
+    `;
 
 }
 
@@ -1907,37 +839,127 @@ function cleanScore(
    PLAY STREAM
    ========================================================= */
 
-function play(
-    url
+function playStream(
+    stream,
+    index
 ) {
 
+    const embedUrl =
+        String(
+            stream.embed_url ||
+            ""
+        ).trim();
+
+
     if (
-        !url
+        !embedUrl
     ) {
+
+        document.getElementById(
+            "playerMessage"
+        ).textContent =
+            "This stream does not have a valid embed URL.";
+
+        document.getElementById(
+            "player"
+        ).style.display =
+            "block";
 
         return;
 
     }
 
 
-    const video =
-        document.getElementById(
-            "video"
-        );
-
     const player =
         document.getElementById(
             "player"
         );
 
+    const video =
+        document.getElementById(
+            "video"
+        );
+
+    const title =
+        document.getElementById(
+            "playerTitle"
+        );
+
+    const message =
+        document.getElementById(
+            "playerMessage"
+        );
+
+
+    /*
+     * Set the player source.
+     */
 
     video.src =
-        url;
+        embedUrl;
+
+
+    title.textContent =
+        stream.stream_name ||
+        stream.language ||
+        "Cricketive Player";
+
+
+    message.textContent =
+        "Loading stream...";
 
 
     player.style.display =
         "block";
 
+
+    /*
+     * Highlight selected stream.
+     */
+
+    document
+        .querySelectorAll(
+            ".watch"
+        )
+        .forEach(
+            button => {
+
+                button.classList.remove(
+                    "active"
+                );
+
+            }
+        );
+
+
+    const row =
+        document.getElementById(
+            `stream-row-${index}`
+        );
+
+
+    if (row) {
+
+        const button =
+            row.querySelector(
+                ".watch"
+            );
+
+
+        if (button) {
+
+            button.classList.add(
+                "active"
+            );
+
+        }
+
+    }
+
+
+    /*
+     * Scroll to player.
+     */
 
     player.scrollIntoView({
         behavior:
@@ -1947,11 +969,53 @@ function play(
             "center"
     });
 
+
+    /*
+     * Give iframe a moment to load.
+     */
+
+    setTimeout(
+        () => {
+
+            message.textContent =
+                "If the player does not load, the stream embed may not allow iframe playback.";
+
+        },
+        2500
+    );
+
 }
 
 
 /* =========================================================
-   DATE FORMAT
+   CLOSE PLAYER
+   ========================================================= */
+
+function closePlayer() {
+
+    const player =
+        document.getElementById(
+            "player"
+        );
+
+    const video =
+        document.getElementById(
+            "video"
+        );
+
+
+    video.src =
+        "about:blank";
+
+
+    player.style.display =
+        "none";
+
+}
+
+
+/* =========================================================
+   DATE
    ========================================================= */
 
 function formatDate(
@@ -1985,29 +1049,6 @@ function formatDate(
                 "short"
         }
     );
-
-}
-
-
-/* =========================================================
-   TIME
-   ========================================================= */
-
-function getTime(
-    value
-) {
-
-    const time =
-        new Date(
-            value
-        ).getTime();
-
-
-    return Number.isFinite(
-        time
-    )
-        ? time
-        : Number.MAX_SAFE_INTEGER;
 
 }
 
@@ -2057,41 +1098,6 @@ function esc(
    ========================================================= */
 
 load();
-
-
-/*
- * Refresh live scores / match list every 60 seconds.
- */
-
-setInterval(
-    async () => {
-
-        try {
-
-            await loadSportScoreMatches();
-
-            await loadAllLiveMatches();
-
-            renderSelectedMatch();
-
-            renderSelectedStreams();
-
-            renderLiveDirectory();
-
-        } catch (
-            error
-        ) {
-
-            console.error(
-                "Live refresh failed:",
-                error
-            );
-
-        }
-
-    },
-    60000
-);
 
 </script>
 
