@@ -45,7 +45,6 @@ async function handleCricketAPI() {
       competition: match.competition || "Cricket",
       competition_logo: match.competition_logo || "",
       url: match.url || "",
-      // Attach the score data (if available)
       score: match.score || null
     }));
 
@@ -62,7 +61,7 @@ async function handleCricketAPI() {
 }
 
 /* =========================================================
-   NEW: LIVE SCORES ENDPOINT
+   LIVE SCORES ENDPOINT (FIXED)
    ========================================================= */
 async function handleLiveScores(url) {
   try {
@@ -85,12 +84,55 @@ async function handleLiveScores(url) {
       // Use match URL as the unique key
       const key = match.url ? normalizeUrl(match.url) : null;
       if (key) {
+        // Safely extract scores with deep null checks
+        let homeScore = null;
+        let awayScore = null;
+        let overs = null;
+
+        // Extract home score safely
+        if (match.score && typeof match.score === 'object') {
+          homeScore = match.score.home ?? null;
+        } else if (match.home_score !== undefined && match.home_score !== null) {
+          homeScore = match.home_score;
+        } else {
+          homeScore = match.home_score ?? null;
+        }
+
+        // Extract away score safely
+        if (match.score && typeof match.score === 'object') {
+          awayScore = match.score.away ?? null;
+        } else if (match.away_score !== undefined && match.away_score !== null) {
+          awayScore = match.away_score;
+        } else {
+          awayScore = match.away_score ?? null;
+        }
+
+        // Extract overs safely
+        if (match.score && typeof match.score === 'object') {
+          overs = match.score.overs ?? null;
+        } else if (match.overs !== undefined && match.overs !== null) {
+          overs = match.overs;
+        } else {
+          overs = match.overs ?? null;
+        }
+
+        // If scores are objects (like {runs: 45, wickets: 2}), extract runs
+        if (homeScore && typeof homeScore === 'object') {
+          homeScore = homeScore.runs ?? homeScore.total ?? null;
+        }
+        if (awayScore && typeof awayScore === 'object') {
+          awayScore = awayScore.runs ?? awayScore.total ?? null;
+        }
+        if (overs && typeof overs === 'object') {
+          overs = overs.current ?? overs.total ?? null;
+        }
+
         scoreMap[key] = {
-          home_score: match.home_score || match.score?.home || null,
-          away_score: match.away_score || match.score?.away || null,
+          home_score: homeScore,
+          away_score: awayScore,
           status: match.status,
           status_text: match.status_text,
-          overs: match.overs || null,
+          overs: overs,
           batting_team: match.batting_team || null
         };
       }
