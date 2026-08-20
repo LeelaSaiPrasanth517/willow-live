@@ -1207,7 +1207,7 @@ async function loadMatches() {
 }
 
 /* =========================================================
-   FETCH LIVE SCORES (WITH SCORE STRING FIX)
+   FETCH LIVE SCORES (FIXED FOR DASH "-" STRINGS)
    ========================================================= */
 async function fetchLiveScores() {
     const scoreElements = document.querySelectorAll('[id^="score-"]');
@@ -1241,27 +1241,31 @@ async function fetchLiveScores() {
             
             if (scoreData) {
                 
-                // 1. Extract the scores directly (could be Number or String like "145/1")
+                // 1. Extract the scores
                 let homeScore = scoreData.home_score;
                 let awayScore = scoreData.away_score;
                 let overs = scoreData.overs;
 
-                // 2. Only treat null/undefined as empty. Allow "0" and "145/1" as valid.
+                // 2. Convert null/undefined to empty string
                 if (homeScore === null || homeScore === undefined) homeScore = "";
                 if (awayScore === null || awayScore === undefined) awayScore = "";
                 if (overs === null || overs === undefined) overs = "";
 
-                // 3. Get team names
+                // 3. 🛠️ THE FIX: Treat dash "-" as "Yet to bat"
+                if (homeScore === "-") homeScore = "";
+                if (awayScore === "-") awayScore = "";
+
+                // 4. Get team names
                 const card = el.closest('.match-card');
                 const teamNames = card.querySelectorAll('.team-name');
                 const team1Name = teamNames[0]?.textContent || "Home";
                 const team2Name = teamNames[1]?.textContent || "Away";
 
-                // 4. If the score is an empty string (and strictly NOT "0"), show "Yet to bat"
-                const homeDisplay = (homeScore === "" && homeScore !== "0") ? "Yet to bat" : homeScore;
-                const awayDisplay = (awayScore === "" && awayScore !== "0") ? "Yet to bat" : awayScore;
+                // 5. If the score is empty, show "Yet to bat"
+                const homeDisplay = (homeScore === "" || homeScore === 0) ? "Yet to bat" : homeScore;
+                const awayDisplay = (awayScore === "" || awayScore === 0) ? "Yet to bat" : awayScore;
 
-                // 5. Render it cleanly
+                // 6. Render it cleanly
                 el.innerHTML = `
                     <div class="score-team">
                         <span>${esc(team1Name)}</span>
