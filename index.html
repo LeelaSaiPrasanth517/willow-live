@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -486,68 +486,47 @@ async function loadMatches() {
 
     try {
 
-        /* =================================================
-           SPORTScore
-           ================================================= */
-
-        const response =
-            await fetch(
-                "/api/cricket-matches?mode=matches",
-                {
-                    cache: "no-store"
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Worker returned HTTP ${response.status}`
-            );
-
-        }
-
-
-        const payload =
-            await response.json();
-
-
-        const sportScoreMatches =
-            Array.isArray(
-                payload.matches
-            )
-                ? payload.matches
-                : [];
-
-
-        /* =================================================
-           CRICKETIVE MATCHES
-           ================================================= */
+        /*
+         * IMPORTANT:
+         * The homepage now uses the same source of truth as
+         * the Admin page: Supabase Matches + start_time.
+         *
+         * We do NOT use SportScore status to decide whether
+         * a match is Live or Upcoming.
+         */
 
         const {
             data: storedMatches,
             error: matchError
         } = await db
             .from("Matches")
-            .select(
-                "id, team1, team2, sportscore_url"
+            .select("*")
+            .order(
+                "start_time",
+                {
+                    ascending: true
+                }
             );
 
 
         if (matchError) {
-
             throw matchError;
-
         }
 
 
         const stored =
-            storedMatches || [];
+            Array.isArray(
+                storedMatches
+            )
+                ? storedMatches
+                : [];
 
 
-        /* =================================================
-           ACTIVE STREAMS
-           ================================================= */
+        /*
+         * Load active streams directly from the streams table.
+         * This is important because the saved stream belongs to
+         * the Supabase match record, not the SportScore response.
+         */
 
         const matchIds =
             stored
@@ -583,9 +562,7 @@ async function loadMatches() {
 
 
             if (error) {
-
                 throw error;
-
             }
 
 
@@ -594,10 +571,6 @@ async function loadMatches() {
 
         }
 
-
-        /* =================================================
-           STREAM COUNTS
-           ================================================= */
 
         const streamCounts = {};
 
@@ -618,138 +591,162 @@ async function loadMatches() {
         );
 
 
-        /* =================================================
-           INDEX CRICKETIVE MATCHES
-           ================================================= */
+        /*
+         * Remove duplicate fixture rows from the public page.
+         *
+         * If duplicates exist, prefer the record that has an
+         * active stream so the user's saved stream is retained.
+         */
 
-        const byUrl = {};
-        const byTeams = {};
-
-
-        stored.forEach(
-            match => {
-
-                if (
-                    match.sportscore_url
-                ) {
-
-                    byUrl[
-                        normalizeUrl(
-                            match.sportscore_url
-                        )
-                    ] =
-                        match;
-
-                }
+        const uniqueMatches = [];
+        const byFixture = new Map();
 
 
-                const key =
-                    makeTeamKey(
-                        match.team1,
-                        match.team2
-                    );
+        for (
+            const match of stored
+        ) {
+
+            if (
+                !match.team1 ||
+                !match.team2
+            ) {
+                continue;
+            }
 
 
-                if (key) {
+            const key =
+                makeFixtureKey(
+                    match.team1,
+                    match.team2,
+                    match.start_time ||
+                        match.match_time
+                );
 
-                    byTeams[key] =
-                        match;
 
-                }
+            if (!key) {
+                continue;
+            }
+
+
+            const previous =
+                byFixture.get(
+                    key
+                );
+
+
+            if (
+                !previous
+            ) {
+
+                byFixture.set(
+                    key,
+                    match
+                );
+
+                uniqueMatches.push(
+                    match
+                );
+
+                continue;
 
             }
-        );
 
 
-        /* =================================================
-           CONNECT SPORTScore → CRICKETIVE
-           ================================================= */
+            const previousStreams =
+                streamCounts[
+                    previous.id
+                ] || 0;
+
+            const currentStreams =
+                streamCounts[
+                    match.id
+                ] || 0;
+
+
+            /*
+             * Prefer the duplicate with the stream.
+             */
+
+            if (
+                currentStreams >
+                previousStreams
+            ) {
+
+                const index =
+                    uniqueMatches.indexOf(
+                        previous
+                    );
+
+                if (
+                    index !== -1
+                ) {
+
+                    uniqueMatches[
+                        index
+                    ] = match;
+
+                }
+
+                byFixture.set(
+                    key,
+                    match
+                );
+
+            }
+
+        }
+
+
+        /*
+         * Calculate current status from the clock.
+         *
+         * Rules:
+         *   Future              -> Upcoming
+         *   Started <= 6 hours  -> Live
+         *   Older than 6 hours  -> Finished
+         */
 
         const normalized =
-            sportScoreMatches.map(
-                source => {
+            uniqueMatches.map(
+                match => {
 
-                    const team1 =
-                        String(
-                            source.home ||
-                            ""
-                        ).trim();
-
-
-                    const team2 =
-                        String(
-                            source.away ||
-                            ""
-                        ).trim();
+                    const startTime =
+                        match.start_time ||
+                        match.match_time ||
+                        null;
 
 
-                    const sportscoreUrl =
-                        source.url
-                            ? normalizeUrl(
-                                source.url
-                            )
-                            : "";
-
-
-                    let storedMatch =
-                        sportscoreUrl
-                            ? (
-                                byUrl[
-                                    sportscoreUrl
-                                ] || null
-                              )
-                            : null;
-
-
-                    if (
-                        !storedMatch
-                    ) {
-
-                        storedMatch =
-                            byTeams[
-                                makeTeamKey(
-                                    team1,
-                                    team2
-                                )
-                            ] || null;
-
-                    }
+                    const currentStatus =
+                        getCurrentMatchStatus(
+                            match.status,
+                            startTime,
+                            match.status_text
+                        );
 
 
                     const streamCount =
-                        storedMatch
-                            ? (
-                                streamCounts[
-                                    storedMatch.id
-                                ] || 0
-                              )
-                            : 0;
+                        streamCounts[
+                            match.id
+                        ] || 0;
 
 
                     return {
 
-                        source,
+                        match,
 
-                        team1,
+                        team1:
+                            match.team1,
 
-                        team2,
+                        team2:
+                            match.team2,
 
-                        storedMatch,
+                        source: match,
 
-                        /*
-                         * IMPORTANT:
-                         * The Admin page uses the normalized status
-                         * stored in Supabase (Live / Upcoming /
-                         * Finished). Use that as Cricketive's source
-                         * of truth instead of relying only on the
-                         * raw SportScore status value.
-                         */
+                        storedMatch:
+                            match,
 
                         matchStatus:
-                            storedMatch?.status ||
-                            normalizeStatus(
-                                source.status
-                            ),
+                            currentStatus,
 
                         streamCount,
 
@@ -762,41 +759,25 @@ async function loadMatches() {
             );
 
 
-        /* =================================================
-           LIVE
-           ================================================= */
-
         const live =
             normalized.filter(
                 item =>
-                    String(
-                        item.matchStatus ||
-                        ""
-                    ).toLowerCase()
-                    ===
-                    "live"
+                    item.matchStatus ===
+                    "Live"
             );
 
-
-        /* =================================================
-           UPCOMING
-           ================================================= */
 
         const upcoming =
             normalized.filter(
                 item =>
-                    String(
-                        item.matchStatus ||
-                        ""
-                    ).toLowerCase()
-                    ===
-                    "upcoming"
+                    item.matchStatus ===
+                    "Upcoming"
             );
 
 
-        /* =================================================
-           STREAMS FIRST
-           ================================================= */
+        /*
+         * Put matches with an available stream first.
+         */
 
         live.sort(
             (a, b) => {
@@ -805,9 +786,7 @@ async function loadMatches() {
                     a.hasStream &&
                     !b.hasStream
                 ) {
-
                     return -1;
-
                 }
 
 
@@ -815,50 +794,44 @@ async function loadMatches() {
                     !a.hasStream &&
                     b.hasStream
                 ) {
-
                     return 1;
-
                 }
 
 
                 return (
                     getTime(
-                        a.source.time
+                        a.source.start_time ||
+                        a.source.match_time
                     )
                     -
                     getTime(
-                        b.source.time
+                        b.source.start_time ||
+                        b.source.match_time
                     )
                 );
 
             }
         );
 
-
-        /* =================================================
-           UPCOMING CHRONOLOGICAL
-           ================================================= */
 
         upcoming.sort(
             (a, b) => {
 
                 return (
                     getTime(
-                        a.source.time
+                        a.source.start_time ||
+                        a.source.match_time
                     )
                     -
                     getTime(
-                        b.source.time
+                        b.source.start_time ||
+                        b.source.match_time
                     )
                 );
 
             }
         );
 
-
-        /* =================================================
-           RENDER
-           ================================================= */
 
         renderLive(
             liveEl,
@@ -872,23 +845,12 @@ async function loadMatches() {
         );
 
 
-        if (
-            payload.updated
-        ) {
-
-            updatedEl.textContent =
-                `Live data updated: ${
-                    formatDate(
-                        payload.updated
-                    )
-                }`;
-
-        } else {
-
-            updatedEl.textContent =
-                "";
-
-        }
+        updatedEl.textContent =
+            `Live data updated: ${
+                formatDate(
+                    new Date()
+                )
+            }`;
 
 
     } catch (error) {
@@ -921,7 +883,6 @@ async function loadMatches() {
     }
 
 }
-
 
 /* =========================================================
    RENDER LIVE
@@ -1144,8 +1105,14 @@ function createCard(
 
 
     const time =
-        source.time
+        (
+            source.start_time ||
+            source.match_time ||
+            source.time
+        )
             ? formatDate(
+                source.start_time ||
+                source.match_time ||
                 source.time
             )
             : "";
@@ -1233,11 +1200,13 @@ function createCard(
 
     const homeLogo =
         source.home_logo ||
+        source.team1_logo ||
         "";
 
 
     const awayLogo =
         source.away_logo ||
+        source.team2_logo ||
         "";
 
 
@@ -1341,13 +1310,18 @@ function createCard(
 
                         ${esc(
                             source.competition ||
+                            source.title ||
                             "Cricket"
                         )}
 
                         <br>
 
                         ${esc(
-                            time
+                            time ||
+                            formatDate(
+                                source.start_time ||
+                                source.match_time
+                            )
                         )}
 
                     </div>
@@ -1402,6 +1376,95 @@ function createCard(
 /* =========================================================
    HELPERS
    ========================================================= */
+
+function makeFixtureKey(
+    team1,
+    team2,
+    startTime
+) {
+
+    if (
+        !team1 ||
+        !team2 ||
+        !startTime
+    ) {
+        return "";
+    }
+
+
+    const teams =
+        [
+            normalizeName(team1),
+            normalizeName(team2)
+        ]
+            .sort()
+            .join("|");
+
+
+    return (
+        `${teams}|${String(startTime)}`
+    );
+
+}
+
+
+function getCurrentMatchStatus(
+    storedStatus,
+    startTime,
+    statusText = ""
+) {
+
+    const start =
+        startTime
+            ? new Date(startTime)
+            : null;
+
+
+    if (
+        start &&
+        !Number.isNaN(
+            start.getTime()
+        )
+    ) {
+
+        const elapsedHours =
+            (
+                Date.now() -
+                start.getTime()
+            ) /
+            (1000 * 60 * 60);
+
+
+        if (
+            elapsedHours < 0
+        ) {
+            return "Upcoming";
+        }
+
+
+        if (
+            elapsedHours <= 6
+        ) {
+            return "Live";
+        }
+
+
+        return "Finished";
+
+    }
+
+
+    /*
+     * Fallback only when no usable timestamp exists.
+     */
+
+    return normalizeStatus(
+        storedStatus ||
+        statusText
+    );
+
+}
+
 
 function normalizeStatus(
     status
