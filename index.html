@@ -1207,7 +1207,7 @@ async function loadMatches() {
 }
 
 /* =========================================================
-   FETCH LIVE SCORES (FIXED VERSION)
+   FETCH LIVE SCORES (ULTIMATE FRONTEND FIX)
    ========================================================= */
 async function fetchLiveScores() {
     const scoreElements = document.querySelectorAll('[id^="score-"]');
@@ -1240,42 +1240,28 @@ async function fetchLiveScores() {
             const scoreData = scores[url];
             
             if (scoreData) {
-                // 🛠️ FIX: Extract the actual numeric scores properly
-                let homeScore = "0";
-                let awayScore = "0";
-                let overs = "";
+                
+                // 1. Extract the raw numbers from the Worker JSON
+                let homeScore = scoreData.home_score;
+                let awayScore = scoreData.away_score;
+                let overs = scoreData.overs;
 
-                // Handle both string and object formats for home_score
-                if (typeof scoreData.home_score === 'object' && scoreData.home_score !== null) {
-                    homeScore = scoreData.home_score.runs ?? scoreData.home_score.total ?? "0";
-                } else {
-                    homeScore = scoreData.home_score ?? "0";
-                }
+                // 2. Convert null/undefined to empty string
+                if (homeScore === null || homeScore === undefined) homeScore = "";
+                if (awayScore === null || awayScore === undefined) awayScore = "";
+                if (overs === null || overs === undefined) overs = "";
 
-                // Handle both string and object formats for away_score
-                if (typeof scoreData.away_score === 'object' && scoreData.away_score !== null) {
-                    awayScore = scoreData.away_score.runs ?? scoreData.away_score.total ?? "0";
-                } else {
-                    awayScore = scoreData.away_score ?? "0";
-                }
-
-                // Handle overs
-                if (typeof scoreData.overs === 'object' && scoreData.overs !== null) {
-                    overs = scoreData.overs.current ?? scoreData.overs.total ?? "";
-                } else {
-                    overs = scoreData.overs ?? "";
-                }
-
-                // Get team names
+                // 3. Get team names
                 const card = el.closest('.match-card');
                 const teamNames = card.querySelectorAll('.team-name');
                 const team1Name = teamNames[0]?.textContent || "Home";
                 const team2Name = teamNames[1]?.textContent || "Away";
 
-                // If scores are "0" or empty, show "Yet to bat"
-                const homeDisplay = (homeScore === "0" || homeScore === "") ? "Yet to bat" : homeScore;
-                const awayDisplay = (awayScore === "0" || awayScore === "") ? "Yet to bat" : awayScore;
+                // 4. If the score is empty, show "Yet to bat"
+                const homeDisplay = (homeScore === "" || homeScore === 0) ? "Yet to bat" : homeScore;
+                const awayDisplay = (awayScore === "" || awayScore === 0) ? "Yet to bat" : awayScore;
 
+                // 5. Render it cleanly
                 el.innerHTML = `
                     <div class="score-team">
                         <span>${esc(team1Name)}</span>
