@@ -1,1910 +1,468 @@
+<!DOCTYPE html>
 <html lang="en">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
->
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cricketive | Global Cricket Live</title>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <style>
-
-* {
-    box-sizing: border-box;
-}
-
-body {
-    margin: 0;
-    background: #050505;
-    color: #fff;
-    font-family: Arial, Helvetica, sans-serif;
-}
-
-.header {
-    height: 70px;
-    padding: 0 28px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: #090909;
-    border-bottom: 1px solid #222;
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-}
-
-.brand img {
-    height: 48px;
-    width: 48px;
-    object-fit: cover;
-    border-radius: 8px;
-}
-
-.brand span {
-    font-weight: 800;
-    font-size: 21px;
-    margin-left: 9px;
-}
-
-.live {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.live-dot {
-    width: 9px;
-    height: 9px;
-    background: #ff3030;
-    border-radius: 50%;
-    box-shadow: 0 0 10px rgba(255, 48, 48, .8);
-}
-
-.hero {
-    text-align: center;
-    padding: 38px 15px 28px;
-}
-
-.hero h1 {
-    margin: 0;
-    font-size: 30px;
-}
-
-.hero p {
-    color: #999;
-    font-size: 14px;
-}
-
-.matches {
-    width: 100%;
-    max-width: 1050px;
-    margin: auto;
-    padding: 0 15px 35px;
-}
-
-.section-title {
-    font-size: 20px;
-    margin: 20px 0 14px;
-}
-
-.group-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 22px 0 12px;
-    font-size: 17px;
-}
-
-.group-count {
-    color: #777;
-    font-size: 12px;
-}
-
-.grid {
-    display: grid;
-    grid-template-columns: repeat(
-        auto-fit,
-        minmax(280px, 1fr)
-    );
-    gap: 12px;
-}
-
-.match-card {
-    background: #101010;
-    border: 1px solid #252525;
-    border-radius: 12px;
-    padding: 18px;
-}
-
-.match-card.has-stream {
-    border-color: #355f42;
-    box-shadow:
-        0 0 0 1px rgba(53, 95, 66, .25);
-}
-
-.match-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: flex-start;
-}
-
-.match-name {
-    font-size: 17px;
-    font-weight: 700;
-    line-height: 1.25;
-}
-
-.team-line {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-}
-
-.team-logo {
-    width: 30px;
-    height: 30px;
-    object-fit: contain;
-    border-radius: 50%;
-    background: #181818;
-    flex-shrink: 0;
-}
-
-.team-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.vs {
-    color: #777;
-    margin: 5px 0 5px 39px;
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.match-info {
-    color: #999;
-    font-size: 13px;
-    margin-top: 11px;
-    line-height: 1.55;
-}
-
-.status {
-    display: inline-block;
-    margin-top: 11px;
-    padding: 5px 9px;
-    border-radius: 20px;
-    background: #222;
-    font-size: 11px;
-    white-space: nowrap;
-}
-
-.live-status {
-    background: #3a1010;
-    color: #ff6666;
-}
-
-.upcoming-status {
-    background: #1e2b39;
-    color: #8fc7ff;
-}
-
-.stream-badge {
-    display: inline-block;
-    margin-top: 11px;
-    padding: 5px 9px;
-    border-radius: 20px;
-    background: #16321e;
-    color: #72d38b;
-    font-size: 10px;
-    font-weight: 700;
-}
-
-.no-stream {
-    color: #999;
-    font-size: 12px;
-    margin-top: 11px;
-}
-
-.watch-button {
-    display: inline-block;
-    margin-top: 14px;
-    padding: 10px 16px;
-    background: #5865f2;
-    color: #fff;
-    text-decoration: none;
-    border-radius: 7px;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.watch-button:hover {
-    background: #4752c4;
-}
-
-.empty {
-    color: #777;
-    text-align: center;
-    padding: 22px;
-    background: #0b0b0b;
-    border: 1px solid #1d1d1d;
-    border-radius: 10px;
-}
-
-.updated {
-    color: #666;
-    font-size: 11px;
-    text-align: center;
-    margin-top: 8px;
-}
-
-.community {
-    text-align: center;
-    padding: 38px 15px 48px;
-    background: #090909;
-}
-
-.community h2 {
-    margin: 0;
-}
-
-.community p {
-    color: #999;
-    font-size: 14px;
-}
-
-.community-button {
-    display: inline-block;
-    padding: 12px 20px;
-    background: #5865f2;
-    color: #fff;
-    text-decoration: none;
-    border-radius: 8px;
-    font-weight: 700;
-}
-
-footer {
-    text-align: center;
-    padding: 18px;
-    background: #030303;
-    color: #666;
-    font-size: 11px;
-}
-
+* { box-sizing: border-box; }
+body { margin: 0; background: #050505; color: #fff; font-family: Arial, Helvetica, sans-serif; }
+.header { height: 70px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; background: #090909; border-bottom: 1px solid #222; }
+.brand { display: flex; align-items: center; }
+.brand img { height: 48px; width: 48px; object-fit: cover; border-radius: 8px; }
+.brand span { font-weight: 800; font-size: 21px; margin-left: 9px; }
+.live { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; }
+.live-dot { width: 9px; height: 9px; background: #ff3030; border-radius: 50%; box-shadow: 0 0 10px rgba(255, 48, 48, .8); }
+.hero { text-align: center; padding: 38px 15px 28px; }
+.hero h1 { margin: 0; font-size: 30px; }
+.hero p { color: #999; font-size: 14px; }
+.matches { width: 100%; max-width: 1050px; margin: auto; padding: 0 15px 35px; }
+.section-title { font-size: 20px; margin: 20px 0 14px; }
+.group-title { display: flex; align-items: center; gap: 8px; margin: 22px 0 12px; font-size: 17px; }
+.group-count { color: #777; font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.match-card { background: #101010; border: 1px solid #252525; border-radius: 12px; padding: 18px; }
+.match-card.has-stream { border-color: #355f42; box-shadow: 0 0 0 1px rgba(53, 95, 66, .25); }
+.match-header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.match-name { font-size: 17px; font-weight: 700; line-height: 1.25; width: 100%; }
+.team-line { display: flex; align-items: center; gap: 9px; min-width: 0; margin-bottom: 5px; }
+.team-logo { width: 30px; height: 30px; object-fit: contain; border-radius: 50%; background: #181818; flex-shrink: 0; }
+.team-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs { color: #777; margin: 5px 0 5px 39px; font-size: 11px; font-weight: 700; }
+.match-info { color: #999; font-size: 13px; margin-top: 11px; line-height: 1.55; }
+.status { display: inline-block; margin-top: 11px; padding: 5px 9px; border-radius: 20px; background: #222; font-size: 11px; white-space: nowrap; }
+.live-status { background: #3a1010; color: #ff6666; }
+.upcoming-status { background: #1e2b39; color: #8fc7ff; }
+.stream-badge { display: inline-block; margin-top: 11px; padding: 5px 9px; border-radius: 20px; background: #16321e; color: #72d38b; font-size: 10px; font-weight: 700; }
+.no-stream { color: #999; font-size: 12px; margin-top: 11px; }
+.watch-button { display: inline-block; margin-top: 14px; padding: 10px 16px; background: #5865f2; color: #fff; text-decoration: none; border-radius: 7px; font-size: 13px; font-weight: 700; }
+.watch-button:hover { background: #4752c4; }
+.empty { color: #777; text-align: center; padding: 22px; background: #0b0b0b; border: 1px solid #1d1d1d; border-radius: 10px; }
+.updated { color: #666; font-size: 11px; text-align: center; margin-top: 8px; }
+.community { text-align: center; padding: 38px 15px 48px; background: #090909; }
+.community h2 { margin: 0; }
+.community p { color: #999; font-size: 14px; }
+.community-button { display: inline-block; padding: 12px 20px; background: #5865f2; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 700; }
+footer { text-align: center; padding: 18px; background: #030303; color: #666; font-size: 11px; }
 @media(max-width:600px) {
-
-    .header {
-        height: 60px;
-        padding: 0 14px;
-    }
-
-    .brand img {
-        height: 40px;
-        width: 40px;
-    }
-
-    .brand span {
-        font-size: 18px;
-    }
-
-    .hero h1 {
-        font-size: 23px;
-    }
-
-    .match-header {
-        flex-direction: column;
-    }
-
-    .status {
-        align-self: flex-start;
-    }
-
-    .team-logo {
-        width: 27px;
-        height: 27px;
-    }
-
-    .match-name {
-        font-size: 16px;
-    }
-
+    .header { height: 60px; padding: 0 14px; }
+    .brand img { height: 40px; width: 40px; }
+    .brand span { font-size: 18px; }
+    .hero h1 { font-size: 23px; }
+    .match-header { flex-direction: column; }
+    .status { align-self: flex-start; }
+    .team-logo { width: 27px; height: 27px; }
+    .match-name { font-size: 16px; }
 }
-
 </style>
-
 </head>
-
-
 <body>
-
-
 <header class="header">
-
     <div class="brand">
-
-        <img
-            src="cricketive-logo.webp"
-            alt="Cricketive logo"
-        >
-
-        <span>
-            CRICKETIVE
-        </span>
-
+        <img src="cricketive-logo.webp" alt="Cricketive logo">
+        <span>CRICKETIVE</span>
     </div>
-
-
     <div class="live">
-
-        <span class="live-dot"></span>
-
-        LIVE
-
+        <span class="live-dot"></span>LIVE
     </div>
-
 </header>
 
-
-
 <section class="hero">
-
-    <h1>
-        🌍 Global Cricket Live
-    </h1>
-
-    <p>
-        Watch cricket from around the world
-    </p>
-
+    <h1>🌍 Global Cricket Live</h1>
+    <p>Watch cricket from around the world</p>
 </section>
-
-
 
 <main class="matches">
-
-
-    <h2 class="section-title">
-        🔴 Live Now
-    </h2>
-
-
+    <h2 class="section-title">🔴 Live Now</h2>
     <div id="liveMatches">
-
-        <div class="empty">
-            Loading live matches...
-        </div>
-
+        <div class="empty">Loading live matches...</div>
     </div>
+    <div id="updatedTime" class="updated"></div>
 
-
-    <div
-        id="updatedTime"
-        class="updated"
-    ></div>
-
-
-
-    <h2 class="section-title">
-        📅 Upcoming Matches
-    </h2>
-
-
+    <h2 class="section-title">📅 Upcoming Matches</h2>
     <div id="upcomingMatches">
-
-        <div class="empty">
-            Loading upcoming matches...
-        </div>
-
+        <div class="empty">Loading upcoming matches...</div>
     </div>
-
 </main>
 
-
-
 <section class="community">
-
-    <h2>
-        💬 Join Cricketive
-    </h2>
-
-    <p>
-        Talk cricket, follow matches and connect with fans worldwide.
-    </p>
-
-    <a
-        class="community-button"
-        href="https://discord.gg/SYfPEKRrnQ"
-        target="_blank"
-        rel="noopener noreferrer"
-    >
+    <h2>💬 Join Cricketive</h2>
+    <p>Talk cricket, follow matches and connect with fans worldwide.</p>
+    <a class="community-button" href="https://discord.gg/SYfPEKRrnQ" target="_blank" rel="noopener noreferrer">
         JOIN OUR DISCORD
     </a>
-
 </section>
-
-
 
 <footer>
     © 2026 Cricketive • Global Cricket Community
 </footer>
 
-
-
 <script>
-
 /* =========================================================
    SUPABASE
    ========================================================= */
-
-const SUPABASE_URL =
-    "https://qkzwzdyahwzcwtqgcbud.supabase.co";
-
-const SUPABASE_ANON_KEY =
-    "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
-
-const db =
-    supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_ANON_KEY
-    );
-
+const SUPABASE_URL = "https://qkzwzdyahwzcwtqgcbud.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* =========================================================
    LOAD MATCHES
    ========================================================= */
-
 async function loadMatches() {
-
-    const liveEl =
-        document.getElementById(
-            "liveMatches"
-        );
-
-    const upcomingEl =
-        document.getElementById(
-            "upcomingMatches"
-        );
-
-    const updatedEl =
-        document.getElementById(
-            "updatedTime"
-        );
-
+    const liveEl = document.getElementById("liveMatches");
+    const upcomingEl = document.getElementById("upcomingMatches");
+    const updatedEl = document.getElementById("updatedTime");
 
     try {
+        /* Filter out matches older than 24 hours */
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-        /*
-         * Load Cricketive's persistent match records.
-         * These contain the database IDs needed for stream links.
-         */
-
-        const {
-            data: storedMatches,
-            error: matchError
-        } = await db
+        const { data: storedMatches, error: matchError } = await db
             .from("Matches")
             .select("*")
-            .order(
-                "start_time",
-                {
-                    ascending: true
-                }
-            );
+            .gte("start_time", yesterday)
+            .order("start_time", { ascending: true });
 
+        if (matchError) throw matchError;
 
-        if (matchError) {
-            throw matchError;
-        }
-
-
-        const stored =
-            Array.isArray(
-                storedMatches
-            )
-                ? storedMatches
-                : [];
-
-
-        /*
-         * Active streams.
-         */
-
-        const matchIds =
-            stored
-                .map(
-                    match => match.id
-                )
-                .filter(Boolean);
-
-
+        const stored = Array.isArray(storedMatches) ? storedMatches : [];
+        const matchIds = stored.map(match => match.id).filter(Boolean);
         let streamRows = [];
 
-
-        if (
-            matchIds.length
-        ) {
-
-            const {
-                data,
-                error
-            } = await db
+        if (matchIds.length) {
+            const { data, error } = await db
                 .from("streams")
-                .select(
-                    "match_id"
-                )
-                .in(
-                    "match_id",
-                    matchIds
-                )
-                .eq(
-                    "active",
-                    true
-                );
+                .select("match_id")
+                .in("match_id", matchIds)
+                .eq("active", true);
 
-
-            if (error) {
-                throw error;
-            }
-
-
-            streamRows =
-                data || [];
-
+            if (error) throw error;
+            streamRows = data || [];
         }
 
-
         const streamCounts = {};
-
-
-        streamRows.forEach(
-            stream => {
-
-                streamCounts[
-                    stream.match_id
-                ] =
-                    (
-                        streamCounts[
-                            stream.match_id
-                        ] || 0
-                    ) + 1;
-
-            }
-        );
-
-
-        /*
-         * Fetch the CURRENT SportScore feed.
-         *
-         * SportScore is authoritative for Live/Upcoming/
-         * Finished whenever this request succeeds.
-         */
+        streamRows.forEach(stream => {
+            streamCounts[stream.match_id] = (streamCounts[stream.match_id] || 0) + 1;
+        });
 
         let sportScoreMatches = [];
         let sportScoreAvailable = false;
 
-
         try {
-
-            const response =
-                await fetch(
-                    "/api/cricket-matches?mode=matches",
-                    {
-                        cache: "no-store"
-                    }
-                );
-
-
-            if (
-                response.ok
-            ) {
-
-                const payload =
-                    await response.json();
-
-
-                if (
-                    Array.isArray(
-                        payload.matches
-                    )
-                ) {
-
-                    sportScoreMatches =
-                        payload.matches;
-
-                    sportScoreAvailable =
-                        true;
-
+            const response = await fetch("/api/cricket-matches?mode=matches", { cache: "no-store" });
+            if (response.ok) {
+                const payload = await response.json();
+                if (Array.isArray(payload.matches)) {
+                    sportScoreMatches = payload.matches;
+                    sportScoreAvailable = true;
                 }
-
             }
-
         } catch (error) {
-
-            console.warn(
-                "SportScore unavailable. Falling back to stored status.",
-                error
-            );
-
+            console.warn("SportScore unavailable. Falling back to stored status.", error);
         }
-
-
-        /*
-         * Index stored Cricketive matches.
-         */
 
         const byUrl = new Map();
         const byFixture = new Map();
 
-
-        stored.forEach(
-            match => {
-
-                if (
-                    match.sportscore_url
-                ) {
-
-                    byUrl.set(
-                        normalizeUrl(
-                            match.sportscore_url
-                        ),
-                        match
-                    );
-
-                }
-
-
-                const key =
-                    makeFixtureKey(
-                        match.team1,
-                        match.team2,
-                        match.start_time ||
-                            match.match_time
-                    );
-
-
-                if (
-                    key
-                ) {
-
-                    const previous =
-                        byFixture.get(
-                            key
-                        );
-
-
-                    /*
-                     * Prefer the row with the active stream.
-                     */
-
-                    if (
-                        !previous ||
-                        (
-                            (
-                                streamCounts[
-                                    match.id
-                                ] || 0
-                            ) >
-                            (
-                                streamCounts[
-                                    previous.id
-                                ] || 0
-                            )
-                        )
-                    ) {
-
-                        byFixture.set(
-                            key,
-                            match
-                        );
-
-                    }
-
-                }
-
+        stored.forEach(match => {
+            if (match.sportscore_url) {
+                byUrl.set(normalizeUrl(match.sportscore_url), match);
             }
-        );
-
-
-        /*
-         * Index fresh SportScore fixtures.
-         */
-
-        const bySportScoreUrl =
-            new Map();
-
-        const sportScoreByFixture =
-            new Map();
-
-
-        sportScoreMatches.forEach(
-            source => {
-
-                const team1 =
-                    String(
-                        source.home ||
-                        source.team1 ||
-                        ""
-                    ).trim();
-
-                const team2 =
-                    String(
-                        source.away ||
-                        source.team2 ||
-                        ""
-                    ).trim();
-
-                const sourceTime =
-                    source.time ||
-                    source.start_time ||
-                    source.match_time ||
-                    null;
-
-
-                const url =
-                    source.url
-                        ? normalizeUrl(
-                            source.url
-                        )
-                        : "";
-
-
-                if (
-                    url
-                ) {
-
-                    bySportScoreUrl.set(
-                        url,
-                        source
-                    );
-
+            const key = makeFixtureKey(match.team1, match.team2, match.start_time || match.match_time);
+            if (key) {
+                const previous = byFixture.get(key);
+                if (!previous || ((streamCounts[match.id] || 0) > (streamCounts[previous.id] || 0))) {
+                    byFixture.set(key, match);
                 }
-
-
-                const key =
-                    makeFixtureKey(
-                        team1,
-                        team2,
-                        sourceTime
-                    );
-
-
-                if (
-                    key
-                ) {
-
-                    sportScoreByFixture.set(
-                        key,
-                        source
-                    );
-
-                }
-
             }
-        );
+        });
 
+        const bySportScoreUrl = new Map();
+        const sportScoreByFixture = new Map();
 
-        /*
-         * If SportScore is available, use its current fixtures.
-         * Otherwise fall back to the stored Cricketive records.
-         */
+        sportScoreMatches.forEach(source => {
+            const team1 = String(source.home || source.team1 || "").trim();
+            const team2 = String(source.away || source.team2 || "").trim();
+            const sourceTime = source.time || source.start_time || source.match_time || null;
+            const url = source.url ? normalizeUrl(source.url) : "";
+
+            if (url) bySportScoreUrl.set(url, source);
+
+            const key = makeFixtureKey(team1, team2, sourceTime);
+            if (key) sportScoreByFixture.set(key, source);
+        });
 
         let normalized = [];
 
+        if (sportScoreAvailable) {
+            normalized = sportScoreMatches.map(source => {
+                const team1 = String(source.home || source.team1 || "").trim();
+                const team2 = String(source.away || source.team2 || "").trim();
+                const sourceTime = source.time || source.start_time || source.match_time || null;
+                const sportscoreUrl = source.url ? normalizeUrl(source.url) : "";
 
-        if (
-            sportScoreAvailable
-        ) {
+                const storedMatch = (sportscoreUrl ? byUrl.get(sportscoreUrl) : null) ||
+                    byFixture.get(makeFixtureKey(team1, team2, sourceTime)) || null;
 
-            normalized =
-                sportScoreMatches.map(
-                    source => {
+                const streamCount = storedMatch ? (streamCounts[storedMatch.id] || 0) : 0;
 
-                        const team1 =
-                            String(
-                                source.home ||
-                                source.team1 ||
-                                ""
-                            ).trim();
-
-                        const team2 =
-                            String(
-                                source.away ||
-                                source.team2 ||
-                                ""
-                            ).trim();
-
-                        const sourceTime =
-                            source.time ||
-                            source.start_time ||
-                            source.match_time ||
-                            null;
-
-
-                        const sportscoreUrl =
-                            source.url
-                                ? normalizeUrl(
-                                    source.url
-                                )
-                                : "";
-
-
-                        const storedMatch =
-                            (
-                                sportscoreUrl
-                                    ? byUrl.get(
-                                        sportscoreUrl
-                                    )
-                                    : null
-                            ) ||
-                            byFixture.get(
-                                makeFixtureKey(
-                                    team1,
-                                    team2,
-                                    sourceTime
-                                )
-                            ) ||
-                            null;
-
-
-                        const streamCount =
-                            storedMatch
-                                ? (
-                                    streamCounts[
-                                        storedMatch.id
-                                    ] || 0
-                                )
-                                : 0;
-
-
-                        return {
-
-                            source,
-
-                            team1,
-
-                            team2,
-
-                            storedMatch,
-
-                            matchStatus:
-                                normalizeStatus(
-                                    source.status
-                                ),
-
-                            streamCount,
-
-                            hasStream:
-                                streamCount > 0
-
-                        };
-
-                    }
-                );
-
+                return {
+                    source,
+                    team1,
+                    team2,
+                    storedMatch,
+                    matchStatus: normalizeStatus(source.status),
+                    streamCount,
+                    hasStream: streamCount > 0
+                };
+            });
         } else {
-
-            /*
-             * SportScore is temporarily unavailable.
-             * Keep the public page alive using the last known
-             * Cricketive status.
-             */
-
-            normalized =
-                stored.map(
-                    storedMatch => {
-
-                        const streamCount =
-                            streamCounts[
-                                storedMatch.id
-                            ] || 0;
-
-
-                        return {
-
-                            source:
-                                storedMatch,
-
-                            team1:
-                                storedMatch.team1,
-
-                            team2:
-                                storedMatch.team2,
-
-                            storedMatch,
-
-                            matchStatus:
-                                normalizeStatus(
-                                    storedMatch.status
-                                ),
-
-                            streamCount,
-
-                            hasStream:
-                                streamCount > 0
-
-                        };
-
-                    }
-                );
-
+            normalized = stored.map(storedMatch => {
+                const streamCount = streamCounts[storedMatch.id] || 0;
+                return {
+                    source: storedMatch,
+                    team1: storedMatch.team1,
+                    team2: storedMatch.team2,
+                    storedMatch,
+                    matchStatus: normalizeStatus(storedMatch.status),
+                    streamCount,
+                    hasStream: streamCount > 0
+                };
+            });
         }
 
+        const unique = new Map();
 
-        /*
-         * Deduplicate the public feed.
-         * Prefer the record that has the stream.
-         */
+        normalized.forEach(item => {
+            const source = item.source;
+            const key = makeFixtureKey(item.team1, item.team2, source.time || source.start_time || source.match_time);
+            if (!key) return;
 
-        const unique =
-            new Map();
-
-
-        normalized.forEach(
-            item => {
-
-                const source =
-                    item.source;
-
-
-                const key =
-                    makeFixtureKey(
-                        item.team1,
-                        item.team2,
-                        source.time ||
-                        source.start_time ||
-                        source.match_time
-                    );
-
-
-                if (!key) {
-                    return;
-                }
-
-
-                const previous =
-                    unique.get(
-                        key
-                    );
-
-
-                if (!previous) {
-
-                    unique.set(
-                        key,
-                        item
-                    );
-
-                    return;
-
-                }
-
-
-                if (
-                    item.hasStream &&
-                    !previous.hasStream
-                ) {
-
-                    unique.set(
-                        key,
-                        item
-                    );
-
-                }
-
+            const previous = unique.get(key);
+            if (!previous) {
+                unique.set(key, item);
+                return;
             }
-        );
-
-
-        const finalMatches =
-            Array.from(
-                unique.values()
-            );
-
-
-        const live =
-            finalMatches.filter(
-                item =>
-                    String(
-                        item.matchStatus ||
-                        ""
-                    ).toLowerCase()
-                    ===
-                    "live"
-            );
-
-
-        const upcoming =
-            finalMatches.filter(
-                item =>
-                    String(
-                        item.matchStatus ||
-                        ""
-                    ).toLowerCase()
-                    ===
-                    "upcoming"
-            );
-
-
-        live.sort(
-            (a, b) => {
-
-                if (
-                    a.hasStream &&
-                    !b.hasStream
-                ) {
-                    return -1;
-                }
-
-
-                if (
-                    !a.hasStream &&
-                    b.hasStream
-                ) {
-                    return 1;
-                }
-
-
-                return (
-                    getTime(
-                        a.source.time ||
-                        a.source.start_time ||
-                        a.source.match_time
-                    )
-                    -
-                    getTime(
-                        b.source.time ||
-                        b.source.start_time ||
-                        b.source.match_time
-                    )
-                );
-
+            if (item.hasStream && !previous.hasStream) {
+                unique.set(key, item);
             }
-        );
+        });
 
+        const finalMatches = Array.from(unique.values());
+        const live = finalMatches.filter(item => String(item.matchStatus || "").toLowerCase() === "live");
+        const upcoming = finalMatches.filter(item => String(item.matchStatus || "").toLowerCase() === "upcoming");
 
-        upcoming.sort(
-            (a, b) => {
+        live.sort((a, b) => {
+            if (a.hasStream && !b.hasStream) return -1;
+            if (!a.hasStream && b.hasStream) return 1;
+            return getTime(a.source.time || a.source.start_time || a.source.match_time) -
+                   getTime(b.source.time || b.source.start_time || b.source.match_time);
+        });
 
-                return (
-                    getTime(
-                        a.source.time ||
-                        a.source.start_time ||
-                        a.source.match_time
-                    )
-                    -
-                    getTime(
-                        b.source.time ||
-                        b.source.start_time ||
-                        b.source.match_time
-                    )
-                );
+        upcoming.sort((a, b) => {
+            return getTime(a.source.time || a.source.start_time || a.source.match_time) -
+                   getTime(b.source.time || b.source.start_time || b.source.match_time);
+        });
 
-            }
-        );
+        renderLive(liveEl, live);
+        renderUpcoming(upcomingEl, upcoming);
 
-
-        renderLive(
-            liveEl,
-            live
-        );
-
-
-        renderUpcoming(
-            upcomingEl,
-            upcoming
-        );
-
-
-        updatedEl.textContent =
-            `Live data updated: ${
-                formatDate(
-                    new Date()
-                )
-            }`;
-
+        updatedEl.textContent = `Live data updated: ${formatDate(new Date())}`;
 
     } catch (error) {
-
-        console.error(
-            "Cricketive loading error:",
-            error
-        );
-
-
-        liveEl.innerHTML =
-            `
-                <div class="empty">
-                    Unable to load live matches.
-                </div>
-            `;
-
-
-        upcomingEl.innerHTML =
-            `
-                <div class="empty">
-                    Unable to load upcoming matches.
-                </div>
-            `;
-
-
-        updatedEl.textContent =
-            "";
-
+        console.error("Cricketive loading error:", error);
+        liveEl.innerHTML = `<div class="empty">Unable to load live matches.</div>`;
+        upcomingEl.innerHTML = `<div class="empty">Unable to load upcoming matches.</div>`;
+        updatedEl.textContent = "";
     }
-
 }
 
 /* =========================================================
    RENDER LIVE
    ========================================================= */
-
-function renderLive(
-    element,
-    matches
-) {
-
-    if (
-        !matches.length
-    ) {
-
-        element.className =
-            "";
-
-        element.innerHTML =
-            `
-                <div class="empty">
-                    No matches are live right now.
-                </div>
-            `;
-
+function renderLive(element, matches) {
+    if (!matches.length) {
+        element.className = "";
+        element.innerHTML = `<div class="empty">No matches are live right now.</div>`;
         return;
-
     }
 
+    const available = matches.filter(item => item.hasStream);
+    const unavailable = matches.filter(item => !item.hasStream);
+    let html = "";
 
-    const available =
-        matches.filter(
-            item =>
-                item.hasStream
-        );
-
-
-    const unavailable =
-        matches.filter(
-            item =>
-                !item.hasStream
-        );
-
-
-    let html =
-        "";
-
-
-    /* =====================================================
-       AVAILABLE TO WATCH
-       ===================================================== */
-
-    if (
-        available.length
-    ) {
-
-        html +=
-
-            `
-
-                <div class="group-title">
-
-                    🎥 Available to Watch
-
-                    <span class="group-count">
-
-                        (${available.length})
-
-                    </span>
-
-                </div>
-
-
-                <div class="grid">
-
-                    ${
-                        available
-                            .map(
-                                item =>
-                                    createCard(
-                                        item,
-                                        true
-                                    )
-                            )
-                            .join("")
-                    }
-
-                </div>
-
-            `;
-
-    }
-
-
-    /* =====================================================
-       OTHER LIVE MATCHES
-       ===================================================== */
-
-    if (
-        unavailable.length
-    ) {
-
-        html +=
-
-            `
-
-                <div class="group-title">
-
-                    🔴 Other Live Matches
-
-                    <span class="group-count">
-
-                        (${unavailable.length})
-
-                    </span>
-
-                </div>
-
-
-                <div class="grid">
-
-                    ${
-                        unavailable
-                            .map(
-                                item =>
-                                    createCard(
-                                        item,
-                                        true
-                                    )
-                            )
-                            .join("")
-                    }
-
-                </div>
-
-            `;
-
-    }
-
-
-    element.innerHTML =
-        html ||
-        `
-            <div class="empty">
-                No live matches available.
+    if (available.length) {
+        html += `
+            <div class="group-title">
+                🎥 Available to Watch
+                <span class="group-count">(${available.length})</span>
+            </div>
+            <div class="grid">
+                ${available.map(item => createCard(item, true)).join("")}
             </div>
         `;
+    }
 
+    if (unavailable.length) {
+        html += `
+            <div class="group-title">
+                🔴 Other Live Matches
+                <span class="group-count">(${unavailable.length})</span>
+            </div>
+            <div class="grid">
+                ${unavailable.map(item => createCard(item, true)).join("")}
+            </div>
+        `;
+    }
+
+    element.innerHTML = html || `<div class="empty">No live matches available.</div>`;
 }
-
 
 /* =========================================================
    RENDER UPCOMING
    ========================================================= */
-
-function renderUpcoming(
-    element,
-    matches
-) {
-
-    if (
-        !matches.length
-    ) {
-
-        element.className =
-            "";
-
-        element.innerHTML =
-            `
-                <div class="empty">
-                    No upcoming matches listed.
-                </div>
-            `;
-
+function renderUpcoming(element, matches) {
+    if (!matches.length) {
+        element.className = "";
+        element.innerHTML = `<div class="empty">No upcoming matches listed.</div>`;
         return;
-
     }
-
-
-    element.className =
-        "grid";
-
-
-    element.innerHTML =
-        matches
-            .map(
-                item =>
-                    createCard(
-                        item,
-                        false
-                    )
-            )
-            .join("");
-
+    element.className = "grid";
+    element.innerHTML = matches.map(item => createCard(item, false)).join("");
 }
-
 
 /* =========================================================
    CREATE MATCH CARD
    ========================================================= */
+function createCard(item, isLive) {
+    const source = item.source;
+    const team1 = item.team1 || source.home || "Unknown team";
+    const team2 = item.team2 || source.away || "Unknown team";
+    const time = (source.time || source.start_time || source.match_time) 
+        ? formatDate(source.time || source.start_time || source.match_time) : "";
 
-function createCard(
-    item,
-    isLive
-) {
+    let actionUrl = "#";
+    let actionText = "VIEW MATCH";
 
-    const source =
-        item.source;
-
-
-    const team1 =
-        item.team1 ||
-        source.home ||
-        "Unknown team";
-
-
-    const team2 =
-        item.team2 ||
-        source.away ||
-        "Unknown team";
-
-
-    const time =
-        (
-            source.time ||
-            source.start_time ||
-            source.match_time
-        )
-            ? formatDate(
-                source.time ||
-                source.start_time ||
-                source.match_time
-            )
-            : "";
-
-
-    /* =====================================================
-       DESTINATION
-       ===================================================== */
-
-    let actionUrl =
-        "#";
-
-
-    let actionText =
-        "VIEW MATCH";
-
-
-    if (
-        item.storedMatch &&
-        item.storedMatch.id
-    ) {
-
-        actionUrl =
-            `/stream.html?match=${
-                encodeURIComponent(
-                    item.storedMatch.id
-                )
-            }`;
-
-
-        actionText =
-            item.streamCount > 0
-                ? "▶ WATCH MATCH"
-                : "VIEW MATCH";
-
-    } else if (
-        source.url
-    ) {
-
-        actionUrl =
-            normalizeUrl(
-                source.url
-            );
-
-        actionText =
-            "VIEW MATCH";
-
+    if (item.storedMatch && item.storedMatch.id) {
+        actionUrl = `/stream.html?match=${encodeURIComponent(item.storedMatch.id)}`;
+        actionText = item.streamCount > 0 ? "▶ WATCH MATCH" : "VIEW MATCH";
+    } else if (source.url) {
+        actionUrl = normalizeUrl(source.url);
+        actionText = "VIEW MATCH";
     }
 
+    const streamInfo = item.streamCount > 0
+        ? `<div class="stream-badge">🎥 ${item.streamCount} STREAM${item.streamCount === 1 ? "" : "S"} AVAILABLE</div>`
+        : `<div class="no-stream">⏳ Stream unavailable</div>`;
 
-    /* =====================================================
-       STREAM INFO
-       ===================================================== */
+    const homeLogo = source.home_logo || source.team1_logo || "";
+    const awayLogo = source.away_logo || source.team2_logo || "";
 
-    const streamInfo =
-        item.streamCount > 0
-
-            ? `
-                <div class="stream-badge">
-
-                    🎥
-                    ${item.streamCount}
-                    STREAM${
-                        item.streamCount === 1
-                            ? ""
-                            : "S"
-                    }
-                    AVAILABLE
-
-                </div>
-              `
-
-            : `
-                <div class="no-stream">
-
-                    ⏳ Stream unavailable
-
-                </div>
-              `;
-
-
-    /* =====================================================
-       TEAM LOGOS
-       ===================================================== */
-
-    const homeLogo =
-        source.home_logo ||
-        source.team1_logo ||
-        "";
-
-
-    const awayLogo =
-        source.away_logo ||
-        source.team2_logo ||
-        "";
-
-
-    const homeLogoHtml =
-        homeLogo
-
-            ? `
-                <img
-                    class="team-logo"
-                    src="${esc(
-                        homeLogo
-                    )}"
-                    alt=""
-                    loading="lazy"
-                    onerror="
-                        this.style.display='none'
-                    "
-                >
-              `
-
-            : "";
-
-
-    const awayLogoHtml =
-        awayLogo
-
-            ? `
-                <img
-                    class="team-logo"
-                    src="${esc(
-                        awayLogo
-                    )}"
-                    alt=""
-                    loading="lazy"
-                    onerror="
-                        this.style.display='none'
-                    "
-                >
-              `
-
-            : "";
-
-
-    /* =====================================================
-       CARD
-       ===================================================== */
+    const homeLogoHtml = homeLogo ? `<img class="team-logo" src="${esc(homeLogo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : "";
+    const awayLogoHtml = awayLogo ? `<img class="team-logo" src="${esc(awayLogo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : "";
 
     return `
-
-        <article
-            class="match-card ${
-                item.hasStream
-                    ? "has-stream"
-                    : ""
-            }"
-        >
-
-
+        <article class="match-card ${item.hasStream ? "has-stream" : ""}">
             <div class="match-header">
-
-
                 <div class="match-name">
-
-
                     <div class="team-line">
-
                         ${homeLogoHtml}
-
-                        <span class="team-name">
-
-                            ${esc(
-                                team1
-                            )}
-
-                        </span>
-
+                        <span class="team-name">${esc(team1)}</span>
+                        <!-- HOME SCORE -->
+                        <strong style="margin-left:auto; color:#fff; font-size: 16px;">
+                            ${esc(source.home_score && source.home_score !== "-" ? source.home_score : "")}
+                        </strong>
                     </div>
 
-
-                    <div class="vs">
-                        VS
-                    </div>
-
+                    <div class="vs">VS</div>
 
                     <div class="team-line">
-
                         ${awayLogoHtml}
-
-                        <span class="team-name">
-
-                            ${esc(
-                                team2
-                            )}
-
-                        </span>
-
+                        <span class="team-name">${esc(team2)}</span>
+                        <!-- AWAY SCORE -->
+                        <strong style="margin-left:auto; color:#fff; font-size: 16px;">
+                            ${esc(source.away_score && source.away_score !== "-" ? source.away_score : "")}
+                        </strong>
                     </div>
-
 
                     <div class="match-info">
-
-                        ${esc(
-                            source.competition ||
-                            "Cricket"
-                        )}
-
-                        <br>
-
-                        ${esc(
-                            time
-                        )}
-
+                        ${esc(source.competition || "Cricket")}<br>
+                        ${esc(time)}<br>
+                        <span style="color:#ffae42; font-weight:bold;">
+                            ${esc(source.status_text || "")}
+                        </span>
                     </div>
-
                 </div>
 
-
-                <span
-                    class="status ${
-                        isLive
-                            ? "live-status"
-                            : "upcoming-status"
-                    }"
-                >
-
-                    ${
-                        isLive
-                            ? "LIVE"
-                            : "UPCOMING"
-                    }
-
+                <span class="status ${isLive ? "live-status" : "upcoming-status"}">
+                    ${isLive ? "LIVE" : "UPCOMING"}
                 </span>
-
-
             </div>
-
-
-
             ${streamInfo}
-
-
-
-            <a
-                class="watch-button"
-                href="${esc(
-                    actionUrl
-                )}"
-            >
-
-                ${actionText}
-
-            </a>
-
-
+            <a class="watch-button" href="${esc(actionUrl)}">${actionText}</a>
         </article>
-
     `;
-
 }
-
 
 /* =========================================================
    HELPERS
    ========================================================= */
-
-function normalizeStatus(
-    status
-) {
-
-    const value =
-        String(
-            status || ""
-        )
-            .trim()
-            .toLowerCase();
-
-    if (
-        value === "live" ||
-        value === "in_progress" ||
-        value === "in progress"
-    ) {
-        return "Live";
-    }
-
-    if (
-        value === "finished" ||
-        value === "ended" ||
-        value === "completed"
-    ) {
-        return "Finished";
-    }
-
+function normalizeStatus(status) {
+    const value = String(status || "").trim().toLowerCase();
+    if (value === "live" || value === "in_progress" || value === "in progress") return "Live";
+    if (value === "finished" || value === "ended" || value === "completed") return "Finished";
     return "Upcoming";
-
 }
 
-
-function makeFixtureKey(
-    team1,
-    team2,
-    startTime
-) {
-
-    if (
-        !team1 ||
-        !team2 ||
-        !startTime
-    ) {
-        return "";
-    }
-
-
-    const teams =
-        [
-            normalizeName(team1),
-            normalizeName(team2)
-        ]
-            .sort()
-            .join("|");
-
-
-    return (
-        `${teams}|${String(startTime)}`
-    );
-
+function makeFixtureKey(team1, team2, startTime) {
+    if (!team1 || !team2 || !startTime) return "";
+    const teams = [normalizeName(team1), normalizeName(team2)].sort().join("|");
+    return `${teams}|${String(startTime)}`;
 }
 
-
-function makeTeamKey(
-    team1,
-    team2
-) {
-
-    if (
-        !team1 ||
-        !team2
-    ) {
-
-        return "";
-
-    }
-
-
-    return (
-
-        normalizeName(
-            team1
-        )
-
-        +
-
-        "|"
-
-        +
-
-        normalizeName(
-            team2
-        )
-
-    );
-
+function makeTeamKey(team1, team2) {
+    if (!team1 || !team2) return "";
+    return normalizeName(team1) + "|" + normalizeName(team2);
 }
 
-
-function normalizeName(
-    value
-) {
-
-    return String(
-        value || ""
-    )
-        .trim()
-        .toLowerCase();
-
+function normalizeName(value) {
+    return String(value || "").trim().toLowerCase();
 }
 
-
-function normalizeUrl(
-    value
-) {
-
-    if (
-        !value
-    ) {
-
-        return "";
-
-    }
-
-
-    const url =
-        String(
-            value
-        ).trim();
-
-
-    if (
-        url.startsWith(
-            "http"
-        )
-    ) {
-
-        return url.replace(
-            /\/+$/,
-            ""
-        );
-
-    }
-
-
-    return (
-
-        "https://sportscore.com"
-
-        +
-
-        (
-            url.startsWith("/")
-                ? url
-                : `/${url}`
-        )
-
-    ).replace(
-        /\/+$/,
-        ""
-    );
-
+function normalizeUrl(value) {
+    if (!value) return "";
+    const url = String(value).trim();
+    if (url.startsWith("http")) return url.replace(/\/+$/, "");
+    return ("https://sportscore.com" + (url.startsWith("/") ? url : `/${url}`)).replace(/\/+$/, "");
 }
 
-
-function getTime(
-    value
-) {
-
-    const time =
-        new Date(
-            value
-        ).getTime();
-
-
-    return Number.isFinite(
-        time
-    )
-
-        ? time
-
-        : Number.MAX_SAFE_INTEGER;
-
+function getTime(value) {
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
 }
 
-
-function formatDate(
-    value
-) {
-
-    const date =
-        new Date(
-            value
-        );
-
-
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
-
-        return "";
-
-    }
-
-
-    return date.toLocaleString(
-        [],
-        {
-            dateStyle:
-                "medium",
-
-            timeStyle:
-                "short"
-        }
-    );
-
+function formatDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
-
-function esc(
-    value
-) {
-
-    return String(
-        value ?? ""
-    )
-
-        .replace(
-            /&/g,
-            "&amp;"
-        )
-
-        .replace(
-            /</g,
-            "&lt;"
-        )
-
-        .replace(
-            />/g,
-            "&gt;"
-        )
-
-        .replace(
-            /"/g,
-            "&quot;"
-        )
-
-        .replace(
-            /'/g,
-            "&#039;"
-        );
-
+function esc(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
-
 
 /* =========================================================
    START
    ========================================================= */
-
 loadMatches();
-
-
-setInterval(
-    loadMatches,
-    60000
-);
-
+setInterval(loadMatches, 60000);
 </script>
-
 </body>
-
 </html>
