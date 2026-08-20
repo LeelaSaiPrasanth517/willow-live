@@ -216,13 +216,17 @@ async function handleCricketAPI() {
         5,
         async match => {
           let homeScore =
-            extractScore(
-              match.home_score
+            extractTeamScore(
+              match,
+              match,
+              "home"
             );
 
           let awayScore =
-            extractScore(
-              match.away_score
+            extractTeamScore(
+              match,
+              match,
+              "away"
             );
 
           let statusText =
@@ -256,13 +260,17 @@ async function handleCricketAPI() {
 
               if (details) {
                 const detailedHome =
-                  extractScore(
-                    details.home_score
+                  extractTeamScore(
+                    details,
+                    match,
+                    "home"
                   );
 
                 const detailedAway =
-                  extractScore(
-                    details.away_score
+                  extractTeamScore(
+                    details,
+                    match,
+                    "away"
                   );
 
                 if (
@@ -290,21 +298,14 @@ async function handleCricketAPI() {
                     details.status_text;
                 }
 
-                if (
-                  details.batting_team
-                ) {
-                  battingTeam =
-                    details.batting_team;
+                const detailedBatting = extractBattingTeam(details);
+                if (detailedBatting) {
+                  battingTeam = detailedBatting;
                 }
 
-                if (
-                  details.overs !==
-                  undefined
-                ) {
-                  overs =
-                    extractOvers(
-                      details.overs
-                    );
+                const detailedOvers = extractMatchOvers(details);
+                if (detailedOvers !== null) {
+                  overs = detailedOvers;
                 }
               }
 
@@ -358,7 +359,7 @@ async function handleCricketAPI() {
             url:
               match.url || "",
             score:
-              match.score || null,
+              match.score || match.scores || null,
             live_minute:
               match.live_minute || null
           };
@@ -486,31 +487,22 @@ async function getIndividualMatch(
    */
 
 
-  if (
-    payload &&
-    payload.match
-  ) {
-
+  if (payload && payload.match) {
     return payload.match;
-
   }
 
-
-  /*
-   * Some responses may be wrapped
-   * differently.
-   */
-
-  if (
-    payload &&
-    payload.data &&
-    payload.data.match
-  ) {
-
+  if (payload && payload.data && payload.data.match) {
     return payload.data.match;
-
   }
 
+  if (payload && payload.data && typeof payload.data === "object") {
+    return payload.data;
+  }
+
+  /* Some SportScore responses may expose the match object directly. */
+  if (payload && typeof payload === "object" && (payload.home_score || payload.away_score || payload.score || payload.scores || payload.innings || payload.status)) {
+    return payload;
+  }
 
   return null;
 
@@ -810,109 +802,262 @@ function shouldRefreshMatchDetails(
 
 
 /* =========================================================
+   CRICKET SCORE EXTRACTION
+
+   SportScore's cricket payload can expose scores in more than one
+   shape (home_score/away_score, score.home/score.away, nested score
+   objects, or innings arrays). Keep the extraction tolerant so a
+   schema variation does not turn a live score into "—".
+========================================================= */
+
+function cleanScoreText(value) {
+  if (value === null || value === undefined) return null;
+
+  const text = String(value).trim();
+  if (!text || text === "-" || text === "—") return null;
+
+  return text;
+}
+
+function scoreObjectToText(value) {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === "string" || typeof value === "number") {
+    const text = cleanScoreText(value);
+    if (!text) return null;
+
+    /* Accept normal cricket score strings such as 225/1, 225/1 (48.2). */
+    if (/^\d+(?:\.\d+)?(?:\/\d+)?(?:\s*\([^)]*\))?$/.test(text)) {
+      return text;
+    }
+
+    /* Also accept provider strings that contain a score. */
+    const match = text.match(/\b\d+(?:\.\d+)?\/\d+\b/);
+    return match ? match[0] : text;
+  }
+
+  if (typeof value !== "object") return null;
+
+  const runs =
+    value.runs ??
+    value.run ??
+    value.total_runs ??
+    value.total ??
+    value.score ??
+    value.points ??
+    null;
+
+  const wickets =
+    value.wickets ??
+    value.wicket ??
+    value.outs ??
+    value.dismissals ??
+    null;
+
+  if (runs !== null && runs !== undefined && runs !== "") {
+    const r = String(runs).trim();
+    if (wickets !== null && wickets !== undefined && wickets !== "") {
+      return `${r}/${wickets}`;
+    }
+    return r;
+  }
+
+  if (typeof value.score === "object") {
+    const nested = scoreObjectToText(value.score);
+    if (nested) return nested;
+  }
+
+  return null;
+}
+
+function getObjectValue(obj, keys) {
+  if (!obj || typeof obj !== "object") return undefined;
+
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const value = obj[key];
+      if (value !== null && value !== undefined && value !== "") {
+        return value;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function teamLooksLike(item, teamName) {
+  if (!item || typeof item !== "object" || !teamName) return false;
+
+  const target = normalizeTeamText(teamName);
+  if (!target) return false;
+
+  const candidates = [
+    item.team,
+    item.team_name,
+    item.name,
+    item.batting_team,
+    item.batting,
+    item.side,
+    item.label,
+    item.title
+  ];
+
+  return candidates.some(value => {
+    const normalized = normalizeTeamText(value);
+    return normalized && (normalized === target || normalized.includes(target) || target.includes(normalized));
+  });
+}
+
+function normalizeTeamText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findScoreInInnings(container, teamName) {
+  if (!container || typeof container !== "object") return null;
+
+  const arrays = [
+    container.innings,
+    container.innings_data,
+    container.inningsData,
+    container.scorecard,
+    container.scores
+  ];
+
+  for (const array of arrays) {
+    if (!Array.isArray(array)) continue;
+
+    /* Prefer the inning belonging to the requested team. */
+    for (const inning of array) {
+      if (teamLooksLike(inning, teamName)) {
+        const score = scoreObjectToText(inning);
+        if (score) return score;
+      }
+    }
+
+    /* Fall back to the first object that actually contains a cricket score. */
+    for (const inning of array) {
+      const score = scoreObjectToText(inning);
+      if (score) return score;
+    }
+  }
+
+  return null;
+}
+
+function extractTeamScore(container, match, side) {
+  if (!container || typeof container !== "object") return null;
+
+  const teamName =
+    side === "home"
+      ? (match?.home || container?.home || "")
+      : (match?.away || container?.away || "");
+
+  const directKeys =
+    side === "home"
+      ? ["home_score", "homeScore", "home_scorecard"]
+      : ["away_score", "awayScore", "away_scorecard"];
+
+  /* 1. Direct provider fields. */
+  const direct = getObjectValue(container, directKeys);
+  const directScore = scoreObjectToText(direct);
+  if (directScore) return directScore;
+
+  /* 2. score/scores wrappers. */
+  for (const wrapperKey of ["score", "scores", "result", "scoreboard", "live_score", "liveScore"]) {
+    const wrapper = container[wrapperKey];
+    if (!wrapper || typeof wrapper !== "object") continue;
+
+    const sideKeys =
+      side === "home"
+        ? ["home", "home_score", "homeScore", "team1", "team_1"]
+        : ["away", "away_score", "awayScore", "team2", "team_2"];
+
+    const value = getObjectValue(wrapper, sideKeys);
+    const score = scoreObjectToText(value);
+    if (score) return score;
+
+    const inningsScore = findScoreInInnings(wrapper, teamName);
+    if (inningsScore) return inningsScore;
+  }
+
+  /* 3. Nested team objects. */
+  const teamObject = container[side];
+  const teamScore = scoreObjectToText(teamObject);
+  if (teamScore) return teamScore;
+
+  if (teamObject && typeof teamObject === "object") {
+    const nested = scoreObjectToText(teamObject.score);
+    if (nested) return nested;
+  }
+
+  /* 4. Innings/scorecard arrays. */
+  const inningsScore = findScoreInInnings(container, teamName);
+  if (inningsScore) return inningsScore;
+
+  return null;
+}
+
+function extractBattingTeam(container) {
+  if (!container || typeof container !== "object") return null;
+
+  const direct = getObjectValue(container, [
+    "batting_team",
+    "battingTeam",
+    "batting",
+    "current_batting_team"
+  ]);
+
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  if (direct && typeof direct === "object") {
+    return getObjectValue(direct, ["name", "team", "title"]) || null;
+  }
+
+  for (const wrapperKey of ["score", "scores", "result", "scoreboard", "live_score", "liveScore"]) {
+    const wrapper = container[wrapperKey];
+    if (!wrapper || typeof wrapper !== "object") continue;
+    const value = getObjectValue(wrapper, ["batting_team", "battingTeam", "batting"]);
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (value && typeof value === "object") {
+      const name = getObjectValue(value, ["name", "team", "title"]);
+      if (name) return String(name);
+    }
+  }
+
+  return null;
+}
+
+function extractMatchOvers(container) {
+  if (!container || typeof container !== "object") return null;
+
+  const direct = getObjectValue(container, ["overs", "current_overs", "currentOvers"]);
+  const directOvers = extractOvers(direct);
+  if (directOvers !== null) return directOvers;
+
+  for (const wrapperKey of ["score", "scores", "result", "scoreboard", "live_score", "liveScore"]) {
+    const wrapper = container[wrapperKey];
+    if (!wrapper || typeof wrapper !== "object") continue;
+    const value = getObjectValue(wrapper, ["overs", "current_overs", "currentOvers"]);
+    const overs = extractOvers(value);
+    if (overs !== null) return overs;
+  }
+
+  return null;
+}
+
+/* =========================================================
    SCORE EXTRACTION
 ========================================================= */
 
 function extractScore(
   value
 ) {
-
-  /*
-   * Empty / dash
-   */
-
-  if (
-    value === null ||
-    value === undefined ||
-    value === "" ||
-    value === "-"
-  ) {
-
-    return null;
-
-  }
-
-
-  /*
-   * String:
-   *
-   * "225/1"
-   */
-
-  if (
-    typeof value === "string"
-  ) {
-
-    return value;
-
-  }
-
-
-  /*
-   * Number
-   */
-
-  if (
-    typeof value === "number"
-  ) {
-
-    return String(
-      value
-    );
-
-  }
-
-
-  /*
-   * Object
-   */
-
-  if (
-    typeof value === "object"
-  ) {
-
-    const runs =
-      value.runs ??
-      value.total ??
-      value.score ??
-      null;
-
-
-    const wickets =
-      value.wickets ??
-      value.outs ??
-      null;
-
-
-    if (
-      runs !== null &&
-      wickets !== null
-    ) {
-
-      return (
-        `${runs}/${wickets}`
-      );
-
-    }
-
-
-    if (
-      runs !== null
-    ) {
-
-      return String(
-        runs
-      );
-
-    }
-
-  }
-
-
-  return null;
-
+  return scoreObjectToText(value);
 }
-
 
 /* =========================================================
    REAL SCORE CHECK
@@ -1158,8 +1303,8 @@ async function handleLiveScores(request) {
           source.status_text,
           source.time,
           source.competition,
-          extractScore(source.home_score),
-          extractScore(source.away_score),
+          extractTeamScore(source, source, "home"),
+          extractTeamScore(source, source, "away"),
           extractOvers(source.overs),
           source.batting_team || null
         );
@@ -1189,15 +1334,17 @@ async function handleLiveScores(request) {
             away:
               source.away || "",
             home_score:
-              extractScore(
-                details?.home_score ??
-                source.home_score
-              ),
+              extractTeamScore(
+                details || source,
+                source,
+                "home"
+              ) || extractTeamScore(source, source, "home"),
             away_score:
-              extractScore(
-                details?.away_score ??
-                source.away_score
-              ),
+              extractTeamScore(
+                details || source,
+                source,
+                "away"
+              ) || extractTeamScore(source, source, "away"),
             status:
               details?.status ||
               source.status ||
@@ -1237,13 +1384,9 @@ async function handleLiveScores(request) {
             away:
               source.away || "",
             home_score:
-              extractScore(
-                source.home_score
-              ),
+              extractTeamScore(source, source, "home"),
             away_score:
-              extractScore(
-                source.away_score
-              ),
+              extractTeamScore(source, source, "away"),
             status:
               source.status || null,
             status_text:
@@ -1299,15 +1442,17 @@ async function handleLiveScores(request) {
                 away:
                   match.away || "",
                 home_score:
-                  extractScore(
-                    details?.home_score ??
-                    match.home_score
-                  ),
+                  extractTeamScore(
+                    details || match,
+                    match,
+                    "home"
+                  ) || extractTeamScore(match, match, "home"),
                 away_score:
-                  extractScore(
-                    details?.away_score ??
-                    match.away_score
-                  ),
+                  extractTeamScore(
+                    details || match,
+                    match,
+                    "away"
+                  ) || extractTeamScore(match, match, "away"),
                 status:
                   details?.status ||
                   match.status ||
