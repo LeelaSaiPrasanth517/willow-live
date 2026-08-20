@@ -2,8 +2,14 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Existing match list endpoint
     if (url.pathname === "/api/cricket-matches") {
       return handleCricketAPI();
+    }
+
+    // NEW: Live scores endpoint
+    if (url.pathname === "/api/live-scores") {
+      return handleLiveScores(url);
     }
 
     return env.ASSETS.fetch(request);
@@ -11,209 +17,134 @@ export default {
 };
 
 /* =========================================================
-   SPORTScore DUAL MATCH & LIVE-TICKER FEED
+   SPORTScore MATCH FEED
    ========================================================= */
-
 async function handleCricketAPI() {
   try {
-    /*
-     * Fetch both the full schedule and the real-time live ticker concurrently.
-     */
-    const [matchesRes, tickerRes] = await Promise.allSettled([
-      fetch("https://sportscore.com/api/widget/matches/?sport=cricket&limit=50", {
-        cf: { cacheTtl: 30, cacheEverything: true }
-      }),
-      fetch("https://sportscore.com/api/widget/live-ticker/?sport=cricket", {
-        cf: { cacheTtl: 10, cacheEverything: true }
-      })
-    ]);
+    const response = await fetch(
+      "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
+      { cf: { cacheTtl: 30, cacheEverything: true } }
+    );
 
-    let matches = [];
-    let updated = null;
-
-    if (matchesRes.status === "fulfilled" && matchesRes.value.ok) {
-      const payload = await matchesRes.value.json();
-      matches = Array.isArray(payload.matches) ? payload.matches : [];
-      updated = payload.updated || null;
-    } else {
-      throw new Error("Unable to fetch schedule from SportScore.");
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`SportScore returned HTTP ${response.status}: ${body}`);
     }
 
-    /*
-     * Parse Live Ticker payload into lookup maps
-     */
-    const tickerByUrl = new Map();
-    const tickerByTeams = new Map();
+    const payload = await response.json();
+    const matches = Array.isArray(payload.matches) ? payload.matches : [];
 
-    if (tickerRes.status === "fulfilled" && tickerRes.value.ok) {
-      try {
-        const tickerPayload = await tickerRes.value.json();
-        const tickerMatches = Array.isArray(tickerPayload.matches) ? tickerPayload.matches : [];
-
-        for (const t of tickerMatches) {
-          const home = String(t.h || "").trim();
-          const away = String(t.a || "").trim();
-          const url = String(t.u || "").trim();
-
-          if (url) {
-            tickerByUrl.set(normalizeUrl(url), t);
-          }
-          if (home && away) {
-            tickerByTeams.set(makeTeamKey(home, away), t);
-          }
-        }
-      } catch (err) {
-        console.warn("Could not parse live ticker payload:", err);
-      }
-    }
-
-    /*
-     * Merge schedule with live ticker scores
-     */
-    const normalized = matches.map(match => {
-      const home = match.home || match.h || "";
-      const away = match.away || match.a || "";
-      const matchUrl = normalizeUrl(match.url || match.u || "");
-      const teamKey = makeTeamKey(home, away);
-
-      // Find real-time score overlay from the ticker
-      const ticker = tickerByUrl.get(matchUrl) || tickerByTeams.get(teamKey) || null;
-
-      const rawHomeScore = ticker ? ticker.hs : (match.home_score || match.hs || "");
-      const rawAwayScore = ticker ? ticker.as : (match.away_score || match.as || "");
-      const rawStatusText = ticker ? ticker.m : (match.status_text || match.m || "");
-
-      return {
-        home,
-        away,
-        home_logo: match.home_logo || match.hl || (ticker ? ticker.hl : ""),
-        away_logo: match.away_logo || match.al || (ticker ? ticker.al : ""),
-
-        /* Real-time score data */
-        home_score: rawHomeScore,
-        away_score: rawAwayScore,
-
-        /* Hybrid status */
-        status: normalizeSportScoreStatus(
-          match.status,
-          rawStatusText,
-          match.time,
-          match.competition
-        ),
-
-        status_text: rawStatusText,
-        time: match.time || null,
-        competition: match.competition || "Cricket",
-        competition_logo: match.competition_logo || "",
-        url: match.url || match.u || ""
-      };
-    });
+    const normalized = matches.map(match => ({
+      home: match.home || "",
+      away: match.away || "",
+      home_logo: match.home_logo || "",
+      away_logo: match.away_logo || "",
+      status: normalizeSportScoreStatus(match.status, match.status_text, match.time, match.competition),
+      status_text: match.status_text || "",
+      time: match.time || null,
+      competition: match.competition || "Cricket",
+      competition_logo: match.competition_logo || "",
+      url: match.url || "",
+      // Attach the score data (if available)
+      score: match.score || null
+    }));
 
     return json({
       sport: "cricket",
       count: normalized.length,
-      updated: updated || new Date().toISOString(),
+      updated: payload.updated || null,
       matches: normalized
     });
-
   } catch (error) {
     console.error("Cricketive Worker error:", error);
-    return json(
-      { error: error.message || "Unable to load cricket matches." },
-      500
+    return json({ error: error.message || "Unable to load cricket matches." }, 500);
+  }
+}
+
+/* =========================================================
+   NEW: LIVE SCORES ENDPOINT
+   ========================================================= */
+async function handleLiveScores(url) {
+  try {
+    // Fetch fresh data from SportScore
+    const response = await fetch(
+      "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
+      { cf: { cacheTtl: 10, cacheEverything: true } }
     );
+
+    if (!response.ok) {
+      throw new Error(`SportScore returned HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const matches = Array.isArray(payload.matches) ? payload.matches : [];
+
+    // Build a map of match scores
+    const scoreMap = {};
+    for (const match of matches) {
+      // Use match URL as the unique key
+      const key = match.url ? normalizeUrl(match.url) : null;
+      if (key) {
+        scoreMap[key] = {
+          home_score: match.home_score || match.score?.home || null,
+          away_score: match.away_score || match.score?.away || null,
+          status: match.status,
+          status_text: match.status_text,
+          overs: match.overs || null,
+          batting_team: match.batting_team || null
+        };
+      }
+    }
+
+    // Return all live scores
+    return json({ scores: scoreMap, updated: new Date().toISOString() });
+  } catch (error) {
+    console.error("Live scores error:", error);
+    return json({ error: error.message || "Unable to load live scores." }, 500);
   }
 }
 
 /* =========================================================
    HYBRID MATCH STATUS
    ========================================================= */
-
-function normalizeSportScoreStatus(
-  status,
-  statusText = "",
-  matchTime = null,
-  competition = ""
-) {
+function normalizeSportScoreStatus(status, statusText = "", matchTime = null, competition = "") {
   const value = String(status || "").trim().toLowerCase();
   const text = String(statusText || "").trim().toLowerCase();
 
-  /* 1. EXPLICIT LIVE STATUS */
-  if (
-    value === "live" ||
-    value === "in_progress" ||
-    value === "in progress" ||
-    value === "started" ||
-    value === "playing" ||
-    value === "ongoing" ||
-    text === "live" ||
-    text === "in progress" ||
-    text === "in_progress" ||
-    text === "started" ||
-    text === "playing" ||
-    text === "ongoing" ||
-    text.includes("inn") ||
-    text.includes("innings") ||
-    text.includes("over")
-  ) {
+  if (value === "live" || value === "in_progress" || value === "in progress" || 
+      value === "started" || value === "playing" || value === "ongoing" ||
+      text === "live" || text === "in progress" || text === "in_progress" || 
+      text === "started" || text === "playing" || text === "ongoing") {
     return "Live";
   }
 
-  /* 2. EXPLICIT FINISHED STATUS */
-  if (
-    value === "finished" ||
-    value === "ended" ||
-    value === "completed" ||
-    value === "complete" ||
-    value === "ft" ||
-    text === "finished" ||
-    text === "ended" ||
-    text === "completed" ||
-    text === "complete" ||
-    text.includes("won by")
-  ) {
+  if (value === "finished" || value === "ended" || value === "completed" || 
+      value === "complete" || value === "ft" ||
+      text === "finished" || text === "ended" || text === "completed" || text === "complete") {
     return "Finished";
   }
 
-  /* 3. START-TIME FALLBACK (Finished Cleanup Only) */
   if (matchTime) {
     const start = new Date(matchTime);
     const now = new Date();
-
     if (!Number.isNaN(start.getTime())) {
-      const elapsedMs = now.getTime() - start.getTime();
-      const elapsedHours = elapsedMs / (1000 * 60 * 60);
-
-      if (
-        elapsedHours > 6 &&
-        (
-          value === "upcoming" ||
-          value === "scheduled" ||
-          value === "not_started" ||
-          value === "not started" ||
-          value === ""
-        )
-      ) {
+      const elapsedHours = (now.getTime() - start.getTime()) / (1000 * 60 * 60);
+      if (elapsedHours >= 0 && elapsedHours <= 6) {
+        return "Live";
+      }
+      if (elapsedHours > 6 && (value === "upcoming" || value === "scheduled" || 
+          value === "not_started" || value === "not started" || value === "")) {
         return "Finished";
       }
     }
   }
 
-  /* 4. DEFAULT */
   return "Upcoming";
 }
 
 /* =========================================================
-   HELPERS
+   URL NORMALIZATION
    ========================================================= */
-
-function makeTeamKey(team1, team2) {
-  if (!team1 || !team2) return "";
-  return [String(team1).trim().toLowerCase(), String(team2).trim().toLowerCase()]
-    .sort()
-    .join("|");
-}
-
 function normalizeUrl(value) {
   if (!value) return "";
   const url = String(value).trim();
@@ -222,9 +153,8 @@ function normalizeUrl(value) {
 }
 
 /* =========================================================
-   JSON RESPONSE
+   JSON RESPONSE HELPER
    ========================================================= */
-
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
