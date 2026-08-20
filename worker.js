@@ -238,12 +238,15 @@ async function handleCricketAPI() {
               match.overs
             );
 
+          /*
+           * SportScore can occasionally return a stale/ambiguous
+           * status on the list endpoint.  If a match has already
+           * reached its scheduled start, fetch the individual match
+           * as well so we can resolve LIVE vs FINISHED instead of
+           * silently turning it into UPCOMING.
+           */
           if (
-            isLiveStatus(
-              match.status,
-              match.status_text
-            ) &&
-            match.url
+            shouldRefreshMatchDetails(match)
           ) {
             try {
               const details =
@@ -332,7 +335,11 @@ async function handleCricketAPI() {
                 match.status,
                 statusText,
                 match.time,
-                match.competition
+                match.competition,
+                homeScore,
+                awayScore,
+                overs,
+                battingTeam
               ),
             status_text:
               statusText,
@@ -583,19 +590,107 @@ function extractSlug(
    LIVE STATUS CHECK
 ========================================================= */
 
+function normalizeStatusValue(value) {
+
+  return String(
+    value ||
+    ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, "_");
+
+}
+
+
+function isExplicitFinishedStatus(
+  status,
+  statusText = ""
+) {
+
+  const value =
+    normalizeStatusValue(status);
+
+  const text =
+    normalizeStatusValue(statusText);
+
+  return (
+    value === "finished" ||
+    value === "finish" ||
+    value === "ended" ||
+    value === "end" ||
+    value === "completed" ||
+    value === "complete" ||
+    value === "ft" ||
+    value === "full_time" ||
+    text === "finished" ||
+    text === "ended" ||
+    text === "completed" ||
+    text === "complete" ||
+    text.includes("match_finished") ||
+    text.includes("match_ended") ||
+    text.includes("won_by") ||
+    text.includes("won_by_")
+  );
+
+}
+
+
+function isExplicitLiveStatus(
+  status,
+  statusText = ""
+) {
+
+  const value =
+    normalizeStatusValue(status);
+
+  const text =
+    normalizeStatusValue(statusText);
+
+  return (
+    value === "live" ||
+    value === "in_progress" ||
+    value === "started" ||
+    value === "playing" ||
+    value === "ongoing" ||
+    value === "inplay" ||
+    value === "in_play" ||
+    text === "live" ||
+    text === "in_progress" ||
+    text === "started" ||
+    text === "playing" ||
+    text === "ongoing" ||
+    text === "inplay" ||
+    text === "in_play" ||
+    text.includes("innings") ||
+    text.includes("batting") ||
+    text.includes("over_") ||
+    text.includes("overs")
+  );
+
+}
+
+
 function isLiveStatus(
   status,
   statusText
 ) {
 
-  const value =
-    String(
-      status ||
-      ""
-    )
-      .trim()
-      .toLowerCase();
+  return isExplicitLiveStatus(
+    status,
+    statusText
+  );
 
+}
+
+
+function hasLiveScoreEvidence(
+  homeScore,
+  awayScore,
+  overs,
+  battingTeam,
+  statusText = ""
+) {
 
   const text =
     String(
@@ -605,37 +700,110 @@ function isLiveStatus(
       .trim()
       .toLowerCase();
 
+  return (
+    isRealScore(homeScore) ||
+    isRealScore(awayScore) ||
+    overs !== null &&
+    overs !== undefined &&
+    String(overs).trim() !== "" ||
+    Boolean(battingTeam) ||
+    text.includes("innings") ||
+    text.includes("batting") ||
+    /\b\d+(?:\.\d+)?\s*overs?\b/.test(text) ||
+    /\b\d+\/\d+\b/.test(text)
+  );
+
+}
+
+
+function getMatchStartTime(
+  matchTime
+) {
+
+  if (!matchTime) {
+    return NaN;
+  }
+
+  const time =
+    new Date(matchTime).getTime();
+
+  return Number.isFinite(time)
+    ? time
+    : NaN;
+
+}
+
+
+function isLimitedOversCompetition(
+  competition = ""
+) {
+
+  const text =
+    String(competition)
+      .trim()
+      .toLowerCase();
 
   return (
+    /\bt20\b/.test(text) ||
+    /\bt20i\b/.test(text) ||
+    /\bodi\b/.test(text) ||
+    /\bt10\b/.test(text) ||
+    text.includes("the hundred") ||
+    text.includes("100-ball") ||
+    text.includes("one day") ||
+    text.includes("list a") ||
+    text.includes("premier league") ||
+    text.includes("premier league, women") ||
+    text.includes("world cup") ||
+    text.includes("qualifier") ||
+    text.includes("cpl") ||
+    text.includes("tnpl") ||
+    text.includes("dpl") ||
+    text.includes("sa20") ||
+    text.includes("bbl") ||
+    text.includes("psl") ||
+    text.includes("ipl")
+  );
 
-    value === "live" ||
+}
 
-    value === "in_progress" ||
 
-    value === "in progress" ||
+function shouldRefreshMatchDetails(
+  match
+) {
 
-    value === "started" ||
+  if (!match || !match.url) {
+    return false;
+  }
 
-    value === "playing" ||
-
-    value === "ongoing" ||
-
-    text === "live" ||
-
-    text === "in progress" ||
-
-    text === "in_progress" ||
-
-    text === "started" ||
-
-    text === "playing" ||
-
-    text === "ongoing" ||
-
-    text.includes(
-      "innings"
+  if (
+    isExplicitLiveStatus(
+      match.status,
+      match.status_text
     )
+  ) {
+    return true;
+  }
 
+  if (
+    isExplicitFinishedStatus(
+      match.status,
+      match.status_text
+    )
+  ) {
+    return false;
+  }
+
+  const startTime =
+    getMatchStartTime(
+      match.time ||
+      match.start_time ||
+      match.match_time
+    );
+
+  return (
+    Number.isFinite(startTime) &&
+    startTime <= Date.now() + 2 * 60 * 1000
   );
 
 }
@@ -836,92 +1004,86 @@ function normalizeSportScoreStatus(
   status,
   statusText = "",
   matchTime = null,
-  competition = ""
+  competition = "",
+  homeScore = null,
+  awayScore = null,
+  overs = null,
+  battingTeam = null
 ) {
 
-  const value =
-    String(
-      status ||
-      ""
-    )
-      .trim()
-      .toLowerCase();
-
-
-  const text =
-    String(
-      statusText ||
-      ""
-    )
-      .trim()
-      .toLowerCase();
-
-
+  /* Explicit provider status always wins. */
   if (
-
-    value === "live" ||
-
-    value === "in_progress" ||
-
-    value === "in progress" ||
-
-    value === "started" ||
-
-    value === "playing" ||
-
-    value === "ongoing" ||
-
-    text === "live" ||
-
-    text === "in progress" ||
-
-    text === "in_progress" ||
-
-    text === "started" ||
-
-    text === "playing" ||
-
-    text === "ongoing" ||
-
-    text.includes(
-      "innings"
+    isExplicitFinishedStatus(
+      status,
+      statusText
     )
-
   ) {
-
-    return "Live";
-
-  }
-
-
-  if (
-
-    value === "finished" ||
-
-    value === "ended" ||
-
-    value === "completed" ||
-
-    value === "complete" ||
-
-    value === "ft" ||
-
-    text === "finished" ||
-
-    text === "ended" ||
-
-    text === "completed" ||
-
-    text === "complete"
-
-  ) {
-
     return "Finished";
-
   }
 
+  if (
+    isExplicitLiveStatus(
+      status,
+      statusText
+    )
+  ) {
+    return "Live";
+  }
 
-  return "Upcoming";
+  /* A score/innings is stronger evidence than a vague list status. */
+  if (
+    hasLiveScoreEvidence(
+      homeScore,
+      awayScore,
+      overs,
+      battingTeam,
+      statusText
+    )
+  ) {
+    return "Live";
+  }
+
+  const startTime =
+    getMatchStartTime(matchTime);
+
+  if (!Number.isFinite(startTime)) {
+    return "Upcoming";
+  }
+
+  const now = Date.now();
+
+  /* Future fixtures are genuinely upcoming. */
+  if (startTime > now) {
+    return "Upcoming";
+  }
+
+  /*
+   * We have a past-start match with no explicit status.  It must NOT
+   * fall through to Upcoming.  If the individual endpoint was
+   * temporarily unavailable, use a conservative format-aware fallback.
+   * Limited-overs matches older than 6 hours are overwhelmingly likely
+   * to be finished; first-class/Test matches remain Live until the
+   * provider gives us a finished status.
+   */
+  const ageMs =
+    now - startTime;
+
+  const sixHours =
+    6 * 60 * 60 * 1000;
+
+  if (
+    isLimitedOversCompetition(competition) &&
+    ageMs >= sixHours
+  ) {
+    return "Finished";
+  }
+
+  /*
+   * A match already past its scheduled start and still present in the
+   * live/recent feed is not an Upcoming fixture.  Keep it visible as
+   * Live rather than silently hiding/reclassifying it.
+   */
+  return "Live";
 
 }
 
@@ -990,16 +1152,25 @@ async function handleLiveScores(request) {
         });
       }
 
-      if (
-        !isLiveStatus(
+      const sourceStatus =
+        normalizeSportScoreStatus(
           source.status,
-          source.status_text
-        )
+          source.status_text,
+          source.time,
+          source.competition,
+          extractScore(source.home_score),
+          extractScore(source.away_score),
+          extractOvers(source.overs),
+          source.batting_team || null
+        );
+
+      if (
+        sourceStatus === "Finished"
       ) {
         return json({
           score: null,
           error:
-            "Match is not currently live.",
+            "Match is no longer live.",
           updated:
             new Date().toISOString()
         });
