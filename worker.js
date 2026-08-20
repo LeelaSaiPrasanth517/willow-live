@@ -1,11 +1,8 @@
 export default {
   async fetch(request, env) {
-
     const url = new URL(request.url);
 
-    if (
-      url.pathname === "/api/cricket-matches"
-    ) {
+    if (url.pathname === "/api/cricket-matches") {
       return handleCricketAPI();
     }
 
@@ -18,20 +15,16 @@ export default {
    ========================================================= */
 
 async function handleCricketAPI() {
-
   try {
-
-    const response =
-      await fetch(
-        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
-        {
-          cf: {
-            cacheTtl: 30,
-            cacheEverything: true
-          }
+    const response = await fetch(
+      "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
+      {
+        cf: {
+          cacheTtl: 30,
+          cacheEverything: true
         }
-      );
-
+      }
+    );
 
     if (!response.ok) {
       const body = await response.text();
@@ -44,38 +37,30 @@ async function handleCricketAPI() {
     /*
      * Normalize matches.
      */
-    const normalized =
-      matches.map(
-        match => ({
+    const normalized = matches.map(match => ({
+      home: match.home || match.h || "",
+      away: match.away || match.a || "",
+      home_logo: match.home_logo || match.hl || "",
+      away_logo: match.away_logo || match.al || "",
 
-          home: match.home || "",
-          away: match.away || "",
-          home_logo: match.home_logo || "",
-          away_logo: match.away_logo || "",
+      /* Grab the scores! */
+      home_score: match.home_score || match.hs || "",
+      away_score: match.away_score || match.as || "",
 
-          /*
-           * Hybrid status:
-           * 1. SportScore status
-           * 2. SportScore status text
-           * 3. Start-time fallback (Finished cleanup)
-           */
-          status:
-            normalizeSportScoreStatus(
-              match.status,
-              match.status_text,
-              match.time,
-              match.competition
-            ),
+      /* Hybrid status */
+      status: normalizeSportScoreStatus(
+        match.status,
+        match.status_text || match.m,
+        match.time,
+        match.competition
+      ),
 
-          status_text: match.status_text || "",
-          time: match.time || null,
-          competition: match.competition || "Cricket",
-          competition_logo: match.competition_logo || "",
-          url: match.url || ""
-
-        })
-      );
-
+      status_text: match.status_text || match.m || "",
+      time: match.time || null,
+      competition: match.competition || "Cricket",
+      competition_logo: match.competition_logo || "",
+      url: match.url || match.u || ""
+    }));
 
     return json({
       sport: "cricket",
@@ -85,18 +70,14 @@ async function handleCricketAPI() {
     });
 
   } catch (error) {
-
     console.error("Cricketive Worker error:", error);
-
     return json(
       {
         error: error.message || "Unable to load cricket matches."
       },
       500
     );
-
   }
-
 }
 
 /* =========================================================
@@ -109,7 +90,6 @@ function normalizeSportScoreStatus(
   matchTime = null,
   competition = ""
 ) {
-
   /*
    * SportScore status is the primary signal.
    */
