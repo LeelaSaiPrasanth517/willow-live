@@ -476,11 +476,6 @@ async function login() {
         document
             .getElementById("loginMessage");
 
-    const button =
-        document.querySelector(
-            '#loginPanel button[onclick="login()"]'
-        );
-
     if (!email || !password) {
 
         message.textContent =
@@ -492,59 +487,21 @@ async function login() {
     message.textContent =
         "Signing in...";
 
-    if (button) {
-        button.disabled = true;
-        button.textContent = "SIGNING IN...";
-    }
+    const { error } =
+        await client.auth.signInWithPassword({
+            email,
+            password
+        });
 
-    try {
-
-        const {
-            data,
-            error
-        } =
-            await client.auth.signInWithPassword({
-                email,
-                password
-            });
-
-        if (error) {
-            throw error;
-        }
-
-        if (
-            !data ||
-            !data.session
-        ) {
-            throw new Error(
-                "Login succeeded, but no session was created."
-            );
-        }
+    if (error) {
 
         message.textContent =
-            "Login successful. Loading admin...";
+            error.message;
 
-        showAdmin();
-
-    } catch (error) {
-
-        console.error(
-            "Cricketive login error:",
-            error
-        );
-
-        message.textContent =
-            error?.message ||
-            "Login failed. Please try again.";
-
-    } finally {
-
-        if (button) {
-            button.disabled = false;
-            button.textContent = "LOGIN";
-        }
-
+        return;
     }
+
+    showAdmin();
 
 }
 
@@ -1501,10 +1458,12 @@ async function loadMatches() {
             "liveMatches"
         );
 
+
     const upcomingContainer =
         document.getElementById(
             "upcomingMatches"
         );
+
 
     liveContainer.innerHTML =
         "Loading...";
@@ -1513,13 +1472,8 @@ async function loadMatches() {
         "Loading...";
 
 
-    /*
-     * IMPORTANT:
-     * Do NOT filter by the stored status here.
-     *
-     * The stored status can be stale. We calculate the
-     * current status from start_time below.
-     */
+    await cleanStaleMatches();
+
 
     const {
         data,
@@ -1546,6 +1500,7 @@ async function loadMatches() {
                 </p>
             `;
 
+
         liveContainer.innerHTML =
             msg;
 
@@ -1557,10 +1512,163 @@ async function loadMatches() {
     }
 
 
-    const currentMatches =
+    /*
+     * Calculate CURRENT status for every match.
+     *
+     * Never use the stored status to decide which section
+     * the match belongs to.
+     */
+
+    /*
+     * Calculate the CURRENT status from start_time.
+     *
+     * We deliberately do not trust the stored status because
+     * it can be stale between SportScore syncs.
+     */
+
+    const rawMatches =
         (data || [])
             .filter(
-                match => {
+                match =>
+                    match.team1 &&
+                    match.team2 &&
+                    !isPlaceholder(
+                        match.team1
+                    ) &&
+                    !isPlaceholder(
+                        match.team2
+                    )
+            );
+
+
+    /*
+     * Remove duplicate database records representing the
+     * same fixture. The key uses both teams, competition,
+     * and scheduled start time so genuine repeat fixtures
+     * are not accidentally merged.
+     */
+
+    const uniqueMatches = [];
+    const seenMatchKeys = new Set();
+
+    for (
+        const match of rawMatches
+    ) {
+
+        const teamA =
+            String(match.team1)
+                .trim()
+                .toLowerCase();
+
+        const teamB =
+            String(match.team2)
+                .trim()
+                .toLowerCase();
+
+        const teams =
+            [teamA, teamB]
+                .sort()
+                .join("|");
+
+        const competition =
+            String(
+                match.competition || ""
+            )
+                .trim()
+                .toLowerCase();
+
+        const start =
+            match.start_time ||
+            match.match_time ||
+            "";
+
+        const key =
+            `${teams}|${competition}|${start}`;
+
+        if (
+            seenMatchKeys.has(key)
+        ) {
+            continue;
+        }
+
+        seenMatchKeys.add(key);
+
+        uniqueMatches.push(match);
+
+    }
+
+
+    const currentMatches =
+        uniqueMatches.map(
+            match => ({
+
+                ...match,
+
+                currentStatus:
+                    getCurrentMatchStatus(
+                        match.status,
+                        match.start_time ||
+                            match.match_time,
+                        match.status_text
+                    )
+
+            })
+        );
+
+
+    const liveMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus === "Live"
+        );
+
+
+    const upcomingMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus === "Upcoming"
+        );
+
+
+    const finishedMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus === "Finished"
+        );
+
+
+    /*
+     * IMPORTANT:
+     * The summary uses these EXACT same arrays as the
+     * rendered sections. This prevents "Live: 0" while
+     * a Live match is visibly displayed below.
+     */
+
+    const syncMessage =
+        document.getElementById(
+            "syncMessage"
+        );
+
+    if (
+        syncMessage
+    ) {
+
+        syncMessage.innerHTML =
+            `Current schedule: ` +
+            `<strong>${currentMatches.length}</strong> matches.` +
+            `<br>🔴 Live: ${liveMatches.length}` +
+            ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingMatches.length}` +
+            ` &nbsp;·&nbsp; ✅ Finished: ${finishedMatches.length}`;
+
+    }
+
+
+    /*
+     * Only Live and Upcoming are rendered in the active
+     * schedule. Finished matches remain in the database.
+     */
+
+
 
                     return (
                         match.team1 &&
@@ -1574,33 +1682,18 @@ async function loadMatches() {
                     );
 
                 }
-            )
-            .map(
-                match => ({
-
-                    ...match,
-
-                    currentStatus:
-                        getCurrentMatchStatus(
-                            match.status,
-                            match.start_time ||
-                                match.match_time,
-                            match.status_text
-                        )
-
-                })
             );
 
 
-    const liveMatches =
-        currentMatches.filter(
+    const live =
+        validMatches.filter(
             match =>
                 match.currentStatus === "Live"
         );
 
 
-    const upcomingMatches =
-        currentMatches.filter(
+    const upcoming =
+        validMatches.filter(
             match =>
                 match.currentStatus === "Upcoming"
         );
@@ -1620,6 +1713,7 @@ async function loadMatches() {
     );
 
 }
+
 
 /* =========================================================
    RENDER MATCH LIST
@@ -1754,9 +1848,7 @@ function renderMatchList(
                         }"
                     >
                         ${escapeHtml(
-                            match.currentStatus ||
-                            match.status ||
-                            "Upcoming"
+                            match.status
                         )}
                     </span>
 
@@ -2524,39 +2616,6 @@ function escapeHtml(
         );
 
 }
-
-
-/* =========================================================
-   AUTH STATE
-   ========================================================= */
-
-/*
- * Supabase can restore the session asynchronously.
- * Listen for auth changes so the UI cannot get stuck on
- * the login screen after a successful sign-in.
- */
-
-client.auth.onAuthStateChange(
-    (
-        event,
-        session
-    ) => {
-
-        if (
-            session &&
-            (
-                event === "SIGNED_IN" ||
-                event === "INITIAL_SESSION" ||
-                event === "TOKEN_REFRESHED"
-            )
-        ) {
-
-            showAdmin();
-
-        }
-
-    }
-);
 
 
 /* =========================================================
