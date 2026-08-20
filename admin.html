@@ -566,31 +566,114 @@ function showAdmin() {
    SYNC MATCHES
    ========================================================= */
 
+/*
+ * =========================================================
+ * SYNC IDENTITY HELPERS
+ * ========================================================= */
+
+function makeFixtureKey(
+    team1,
+    team2,
+    startTime
+) {
+
+    if (
+        !team1 ||
+        !team2 ||
+        !startTime
+    ) {
+        return "";
+    }
+
+
+    const teams =
+        [
+            String(team1)
+                .trim()
+                .toLowerCase(),
+
+            String(team2)
+                .trim()
+                .toLowerCase()
+        ]
+            .sort()
+            .join("|");
+
+
+    return (
+        `${teams}|${String(startTime)}`
+    );
+
+}
+
+
+function getExistingStream(
+    match
+) {
+
+    if (!match) {
+        return "";
+    }
+
+
+    /*
+     * Current schema uses embed_url for the saved stream.
+     */
+
+    if (
+        match.embed_url
+    ) {
+
+        return String(
+            match.embed_url
+        );
+
+    }
+
+
+    return "";
+
+}
+
+
+function hasStream(
+    match
+) {
+
+    return Boolean(
+        getExistingStream(
+            match
+        )
+    );
+
+}
+
+
 async function syncMatches() {
 
     const message =
-        document
-            .getElementById("syncMessage");
+        document.getElementById(
+            "syncMessage"
+        );
 
     const button =
-        document
-            .getElementById("syncButton");
+        document.getElementById(
+            "syncButton"
+        );
+
 
     message.textContent =
         "Syncing SportScore matches...";
 
     button.disabled = true;
-
-    button.textContent =
-        "SYNCING...";
+    button.textContent = "SYNCING...";
 
 
     try {
 
-
         /* -----------------------------------------------
            Fetch SportScore matches
-        ----------------------------------------------- */
+           ----------------------------------------------- */
 
         const response =
             await fetch(
@@ -639,7 +722,7 @@ async function syncMatches() {
 
         /* -----------------------------------------------
            Load existing Supabase matches
-        ----------------------------------------------- */
+           ----------------------------------------------- */
 
         const {
             data: existingMatches,
@@ -658,74 +741,93 @@ async function syncMatches() {
             existingMatches || [];
 
 
-        /* -----------------------------------------------
-           Build lookup maps
-        ----------------------------------------------- */
+        /*
+         * Build lookup maps.
+         *
+         * api_match_id is the strongest identity.
+         * SportScore URL is next.
+         * Team + scheduled start time is the fallback.
+         */
 
-        const bySportScoreUrl = {};
-        const byTeams = {};
-        const byApiMatchId = {};
-
-
-        existing.forEach(
-            match => {
-
-
-                if (
-                    match.sportscore_url
-                ) {
-
-                    bySportScoreUrl[
-                        normalizeUrl(
-                            match.sportscore_url
-                        )
-                    ] = match;
-
-                }
+        const byApiMatchId = new Map();
+        const bySportScoreUrl = new Map();
+        const byFixture = new Map();
 
 
-                if (
-                    match.api_match_id
-                ) {
+        for (const match of existing) {
 
-                    byApiMatchId[
-                        String(
-                            match.api_match_id
-                        )
-                    ] = match;
+            if (match.api_match_id) {
 
-                }
+                byApiMatchId.set(
+                    String(
+                        match.api_match_id
+                    ),
+                    match
+                );
+
+            }
 
 
-                const key =
-                    makeTeamKey(
-                        match.team1,
-                        match.team2
+            if (match.sportscore_url) {
+
+                bySportScoreUrl.set(
+                    normalizeUrl(
+                        match.sportscore_url
+                    ),
+                    match
+                );
+
+            }
+
+
+            const fixtureKey =
+                makeFixtureKey(
+                    match.team1,
+                    match.team2,
+                    match.start_time ||
+                        match.match_time
+                );
+
+
+            if (fixtureKey) {
+
+                /*
+                 * If duplicate database rows already exist,
+                 * prefer the row that has a stream.
+                 */
+
+                const previous =
+                    byFixture.get(
+                        fixtureKey
                     );
 
+                if (
+                    !previous ||
+                    hasStream(match) &&
+                    !hasStream(previous)
+                ) {
 
-                if (key) {
-
-                    byTeams[key] =
-                        match;
+                    byFixture.set(
+                        fixtureKey,
+                        match
+                    );
 
                 }
 
             }
-        );
+
+        }
 
 
         /* -----------------------------------------------
-           Build rows
-        ----------------------------------------------- */
+           Deduplicate SportScore response
+           ----------------------------------------------- */
 
-        const rows = [];
+        const uniqueSportScoreMatches = [];
+        const seenIncoming = new Set();
 
 
-        for (
-            const match of matches
-        ) {
-
+        for (const match of matches) {
 
             const team1 =
                 String(
@@ -734,14 +836,12 @@ async function syncMatches() {
                     ""
                 ).trim();
 
-
             const team2 =
                 String(
                     match.away ??
                     match.team2 ??
                     ""
                 ).trim();
-
 
             const startTime =
                 match.time ??
@@ -753,32 +853,13 @@ async function syncMatches() {
             if (
                 !team1 ||
                 !team2 ||
-                !startTime
-            ) {
-
-                console.warn(
-                    "Skipping invalid SportScore match:",
-                    match
-                );
-
-                continue;
-
-            }
-
-
-            if (
+                !startTime ||
                 isPlaceholder(team1) ||
                 isPlaceholder(team2)
             ) {
-
                 continue;
-
             }
 
-
-            /* -------------------------------------------
-               SportScore URL
-            ------------------------------------------- */
 
             const rawUrl =
                 match.url ??
@@ -792,84 +873,123 @@ async function syncMatches() {
                     : null;
 
 
-            /* -------------------------------------------
-               Stable SportScore identifier
-            ------------------------------------------- */
+            const fixtureKey =
+                makeFixtureKey(
+                    team1,
+                    team2,
+                    startTime
+                );
+
+
+            /*
+             * Prefer URL identity when available; otherwise
+             * use the fixture key.
+             */
+
+            const incomingKey =
+                sportscoreUrl
+                    ? `url:${sportscoreUrl}`
+                    : `fixture:${fixtureKey}`;
+
+
+            if (
+                seenIncoming.has(
+                    incomingKey
+                )
+            ) {
+                continue;
+            }
+
+
+            seenIncoming.add(
+                incomingKey
+            );
+
+
+            uniqueSportScoreMatches.push({
+                match,
+                team1,
+                team2,
+                startTime,
+                sportscoreUrl,
+                fixtureKey
+            });
+
+        }
+
+
+        /* -----------------------------------------------
+           Process each fixture exactly once
+           ----------------------------------------------- */
+
+        let inserted = 0;
+        let updated = 0;
+        let merged = 0;
+
+
+        for (
+            const item of uniqueSportScoreMatches
+        ) {
+
+            const {
+                match,
+                team1,
+                team2,
+                startTime,
+                sportscoreUrl,
+                fixtureKey
+            } = item;
+
+
+            /*
+             * Stable ID used for future syncs.
+             */
 
             const apiMatchId =
                 sportscoreUrl
                     ? `sportscore:${sportscoreUrl}`
-                    : `sportscore:${makeTeamKey(
-                        team1,
-                        team2
-                    )}`;
+                    : `sportscore:${fixtureKey}`;
 
 
-            /* -------------------------------------------
-               Find existing record
-            ------------------------------------------- */
+            /*
+             * Find the existing row.
+             *
+             * Order matters:
+             * 1. Exact API ID
+             * 2. Exact SportScore URL
+             * 3. Same fixture
+             */
 
             let existingMatch =
+                byApiMatchId.get(
+                    apiMatchId
+                ) ||
+                (
+                    sportscoreUrl
+                        ? bySportScoreUrl.get(
+                            sportscoreUrl
+                        )
+                        : null
+                ) ||
+                byFixture.get(
+                    fixtureKey
+                ) ||
                 null;
 
 
             /*
-             * 1. Match by API ID
+             * If the exact API ID is different but a fixture
+             * match exists, update that existing row instead
+             * of creating a second record.
              */
 
-            existingMatch =
-                byApiMatchId[
-                    apiMatchId
-                ] || null;
+            const currentStream =
+                existingMatch
+                    ? getExistingStream(
+                        existingMatch
+                    )
+                    : "";
 
-
-            /*
-             * 2. Match by SportScore URL
-             */
-
-            if (
-                !existingMatch &&
-                sportscoreUrl
-            ) {
-
-                existingMatch =
-                    bySportScoreUrl[
-                        sportscoreUrl
-                    ] || null;
-
-            }
-
-
-            /*
-             * 3. Match by team names
-             */
-
-            if (
-                !existingMatch
-            ) {
-
-                const teamKey =
-                    makeTeamKey(
-                        team1,
-                        team2
-                    );
-
-
-                if (teamKey) {
-
-                    existingMatch =
-                        byTeams[
-                            teamKey
-                        ] || null;
-
-                }
-
-            }
-
-
-            /* -------------------------------------------
-               Build row
-            ------------------------------------------- */
 
             const row = {
 
@@ -877,6 +997,7 @@ async function syncMatches() {
                     apiMatchId,
 
                 title:
+                    match.title ||
                     `${team1} vs ${team2}`,
 
                 team1:
@@ -899,20 +1020,23 @@ async function syncMatches() {
                     match.venue ||
                     "",
 
+                /*
+                 * Keep the SportScore status for reference.
+                 * The Admin display status is calculated from
+                 * start_time separately.
+                 */
+
                 status:
-                    getCurrentMatchStatus(
-                        match.status,
-                        match.time,
-                        match.status_text
+                    normalizeSportScoreStatus(
+                        match.status
                     ),
 
                 /*
-                 * Preserve existing embed URL.
+                 * NEVER erase a stream during sync.
                  */
 
                 embed_url:
-                    existingMatch?.embed_url ||
-                    "",
+                    currentStream,
 
                 team1_logo:
                     match.home_logo ||
@@ -922,197 +1046,112 @@ async function syncMatches() {
                 team2_logo:
                     match.away_logo ||
                     match.team2_logo ||
-                    "",
-
-                sportscore_url:
-                    sportscoreUrl
+                    ""
 
             };
 
-
-            /* -------------------------------------------
-               Preserve existing UUID
-            ------------------------------------------- */
 
             if (
                 existingMatch &&
                 existingMatch.id
             ) {
 
-                row.id =
-                    existingMatch.id;
-
-            }
-
-
-            rows.push(row);
-
-        }
-
-
-        if (!rows.length) {
-
-            message.textContent =
-                `SportScore returned ${matches.length} matches, but none were valid.`;
-
-            await loadMatches();
-
-            return;
-
-        }
+                const {
+                    error: updateError
+                } = await client
+                    .from("Matches")
+                    .update(row)
+                    .eq(
+                        "id",
+                        existingMatch.id
+                    );
 
 
-        /* -----------------------------------------------
-           DEDUPLICATE ROWS BEFORE DATABASE WRITES
-
-           PostgreSQL rejects a bulk upsert when the same
-           conflict key appears more than once in the input.
-
-           Use the database UUID when present, otherwise
-           use the SportScore/API match identity.
-        ----------------------------------------------- */
-
-        const uniqueRows = [];
-        const seenKeys = new Set();
-
-        for (
-            const row of rows
-        ) {
-
-            const key =
-                row.id
-                    ? `id:${row.id}`
-                    : row.api_match_id
-                        ? `api:${row.api_match_id}`
-                        : row.sportscore_url
-                            ? `url:${row.sportscore_url}`
-                            : `row:${uniqueRows.length}`;
-
-            if (
-                seenKeys.has(key)
-            ) {
-
-                continue;
-
-            }
-
-            seenKeys.add(key);
-
-            uniqueRows.push(row);
-
-        }
+                if (updateError) {
+                    throw updateError;
+                }
 
 
-        /* -----------------------------------------------
-           Separate existing vs new
-        ----------------------------------------------- */
-
-        const existingRows =
-            uniqueRows.filter(
-                row =>
-                    Boolean(row.id)
-            );
+                updated++;
 
 
-        const newRows =
-            uniqueRows.filter(
-                row =>
-                    !row.id
-            );
+                /*
+                 * Keep the lookup maps pointed at the
+                 * surviving record.
+                 */
+
+                const surviving = {
+                    ...existingMatch,
+                    ...row
+                };
 
 
-        /* -----------------------------------------------
-           UPDATE EXISTING MATCHES
-
-           Do NOT bulk-upsert existing rows.
-           Update each UUID individually so duplicate
-           conflict keys can never cause PostgreSQL's:
-
-           ON CONFLICT DO UPDATE command cannot affect
-           row a second time
-        ----------------------------------------------- */
-
-        for (
-            const row of existingRows
-        ) {
-
-            const {
-                id,
-                ...updateData
-            } = row;
-
-
-            const {
-                error: updateError
-            } = await client
-                .from("Matches")
-                .update(updateData)
-                .eq(
-                    "id",
-                    id
+                byApiMatchId.set(
+                    apiMatchId,
+                    surviving
                 );
 
 
-            if (
-                updateError
-            ) {
+                if (sportscoreUrl) {
 
-                throw updateError;
+                    bySportScoreUrl.set(
+                        sportscoreUrl,
+                        surviving
+                    );
 
-            }
-
-        }
+                }
 
 
-        /* -----------------------------------------------
-           INSERT NEW MATCHES
-        ----------------------------------------------- */
+                byFixture.set(
+                    fixtureKey,
+                    surviving
+                );
 
-        if (
-            newRows.length
-        ) {
 
-            /*
-             * Insert individually.
-             *
-             * If a duplicate somehow appears,
-             * skip it and continue syncing.
-             */
-
-            for (
-                const row of newRows
-            ) {
+            } else {
 
                 const {
+                    data: insertedRows,
                     error: insertError
                 } = await client
                     .from("Matches")
-                    .insert(row);
+                    .insert(row)
+                    .select();
 
 
-                if (
-                    insertError
-                ) {
+                if (insertError) {
+                    throw insertError;
+                }
 
-                    /*
-                     * PostgreSQL duplicate-key code.
-                     */
 
-                    if (
-                        insertError.code === "23505"
-                    ) {
+                inserted++;
 
-                        console.warn(
-                            "Duplicate match skipped:",
-                            row.api_match_id
+
+                const insertedMatch =
+                    insertedRows &&
+                    insertedRows[0];
+
+
+                if (insertedMatch) {
+
+                    byApiMatchId.set(
+                        apiMatchId,
+                        insertedMatch
+                    );
+
+                    if (sportscoreUrl) {
+
+                        bySportScoreUrl.set(
+                            sportscoreUrl,
+                            insertedMatch
                         );
-
-                        continue;
 
                     }
 
-
-                    throw insertError;
+                    byFixture.set(
+                        fixtureKey,
+                        insertedMatch
+                    );
 
                 }
 
@@ -1121,66 +1160,38 @@ async function syncMatches() {
         }
 
 
-        /* -----------------------------------------------
-           Result
-        ----------------------------------------------- */
-
-        const liveCount =
-            rows.filter(
-                match =>
-                    match.status === "Live"
-            ).length;
-
-
-        const upcomingCount =
-            rows.filter(
-                match =>
-                    match.status === "Upcoming"
-            ).length;
-
-
-        const finishedCount =
-            rows.filter(
-                match =>
-                    match.status === "Finished"
-            ).length;
-
+        /*
+         * Reload the actual database schedule.
+         * loadMatches() calculates current Live/Upcoming/
+         * Finished counts from start_time.
+         */
 
         message.innerHTML =
-            `Synced <strong>${uniqueRows.length}</strong> matches.` +
-            `<br>🔴 Live: ${liveCount}` +
-            ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingCount}` +
-            ` &nbsp;·&nbsp; ✅ Finished: ${finishedCount}`;
-
+            `Sync complete. ` +
+            `Updated <strong>${updated}</strong>, ` +
+            `inserted <strong>${inserted}</strong>.`;
 
         await loadMatches();
 
 
-    } catch (
-        error
-    ) {
-
+    } catch (error) {
 
         console.error(
-            "SportScore sync error:",
+            "Cricketive sync error:",
             error
         );
 
 
         message.textContent =
             `Sync failed: ${
-                error.message ||
-                String(error)
+                error?.message ||
+                "Unknown error"
             }`;
 
 
     } finally {
 
-
-        button.disabled =
-            false;
-
-
+        button.disabled = false;
         button.textContent =
             "SYNC MATCHES";
 
@@ -1188,142 +1199,26 @@ async function syncMatches() {
 
 }
 
-
 /* =========================================================
-   CURRENT MATCH STATUS
+   SPORTScore STATUS
    ========================================================= */
 
-/*
- * IMPORTANT:
- * The database status is NOT trusted for display.
- *
- * Every time the Admin page renders matches, the status is
- * calculated from the stored start_time and the current clock.
- *
- * Rules:
- *
- *   Explicit finished status       -> Finished
- *   Start time in the future       -> Upcoming
- *   Start time passed <= 6 hours   -> Live
- *   Start time passed > 6 hours    -> Finished
- *
- * This prevents yesterday's matches from remaining Live.
- */
-
-function getCurrentMatchStatus(
-    storedStatus,
-    startTime,
-    statusText = ""
+function normalizeSportScoreStatus(
+    status
 ) {
 
-    const stored =
+    const value =
         String(
-            storedStatus || ""
-        )
-            .trim()
-            .toLowerCase();
-
-    const text =
-        String(
-            statusText || ""
+            status || ""
         )
             .trim()
             .toLowerCase();
 
 
-    /* -----------------------------------------------------
-       Parse start time
-       ----------------------------------------------------- */
-
-    const start =
-        startTime
-            ? new Date(startTime)
-            : null;
-
-
-    const hasValidStart =
-        start &&
-        !Number.isNaN(
-            start.getTime()
-        );
-
-
-    /*
-     * If we have a valid timestamp, it is the source of
-     * truth for the Admin display.
-     */
-
     if (
-        hasValidStart
-    ) {
-
-        const elapsedHours =
-            (
-                Date.now() -
-                start.getTime()
-            ) /
-            (1000 * 60 * 60);
-
-
-        /*
-         * Future match.
-         */
-
-        if (
-            elapsedHours < 0
-        ) {
-
-            return "Upcoming";
-
-        }
-
-
-        /*
-         * Match started within the last 6 hours.
-         */
-
-        if (
-            elapsedHours <= 6
-        ) {
-
-            return "Live";
-
-        }
-
-
-        /*
-         * Older than 6 hours.
-         *
-         * Do not allow an old stored "Live" value to
-         * keep the match in the Live section.
-         */
-
-        return "Finished";
-
-    }
-
-
-    /* -----------------------------------------------------
-       No valid start_time
-       ----------------------------------------------------- */
-
-    /*
-     * If timestamp data is unavailable, fall back to the
-     * explicit SportScore/database status.
-     */
-
-    if (
-        stored === "live" ||
-        stored === "in_progress" ||
-        stored === "in progress" ||
-        stored === "started" ||
-        stored === "playing" ||
-        stored === "ongoing" ||
-        text === "live" ||
-        text === "in progress" ||
-        text === "started" ||
-        text === "playing" ||
-        text === "ongoing"
+        value === "live" ||
+        value === "in_progress" ||
+        value === "in progress"
     ) {
 
         return "Live";
@@ -1332,15 +1227,9 @@ function getCurrentMatchStatus(
 
 
     if (
-        stored === "finished" ||
-        stored === "ended" ||
-        stored === "completed" ||
-        stored === "complete" ||
-        stored === "ft" ||
-        text === "finished" ||
-        text === "ended" ||
-        text === "completed" ||
-        text === "complete"
+        value === "finished" ||
+        value === "ended" ||
+        value === "completed"
     ) {
 
         return "Finished";
@@ -1437,12 +1326,37 @@ function normalizeUrl(
 
 async function cleanStaleMatches() {
 
-    /*
-     * No database status mutation is required anymore.
-     * Current display status is calculated from start_time.
-     */
+    const cutoff =
+        new Date(
+            Date.now() -
+            24 * 60 * 60 * 1000
+        ).toISOString();
 
-    return;
+
+    const { error } =
+        await client
+            .from("Matches")
+            .update({
+                status: "Finished"
+            })
+            .eq(
+                "status",
+                "Live"
+            )
+            .lt(
+                "start_time",
+                cutoff
+            );
+
+
+    if (error) {
+
+        console.error(
+            "Could not clean stale live matches:",
+            error
+        );
+
+    }
 
 }
 
@@ -1458,10 +1372,12 @@ async function loadMatches() {
             "liveMatches"
         );
 
+
     const upcomingContainer =
         document.getElementById(
             "upcomingMatches"
         );
+
 
     liveContainer.innerHTML =
         "Loading...";
@@ -1470,12 +1386,22 @@ async function loadMatches() {
         "Loading...";
 
 
+    await cleanStaleMatches();
+
+
     const {
         data,
         error
     } = await client
         .from("Matches")
         .select("*")
+        .in(
+            "status",
+            [
+                "Live",
+                "Upcoming"
+            ]
+        )
         .order(
             "start_time",
             {
@@ -1495,139 +1421,62 @@ async function loadMatches() {
                 </p>
             `;
 
-        liveContainer.innerHTML = msg;
-        upcomingContainer.innerHTML = msg;
+
+        liveContainer.innerHTML =
+            msg;
+
+        upcomingContainer.innerHTML =
+            msg;
 
         return;
+
     }
 
 
-    /*
-     * Calculate CURRENT status from start_time.
-     * Stored status is not used for section selection.
-     */
-
-    const rawMatches =
+    const validMatches =
         (data || [])
             .filter(
-                match =>
-                    match.team1 &&
-                    match.team2 &&
-                    !isPlaceholder(match.team1) &&
-                    !isPlaceholder(match.team2)
+                match => {
+
+                    return (
+                        match.team1 &&
+                        match.team2 &&
+                        !isPlaceholder(
+                            match.team1
+                        ) &&
+                        !isPlaceholder(
+                            match.team2
+                        )
+                    );
+
+                }
             );
 
 
-    /*
-     * Deduplicate identical fixtures for display/counting.
-     */
-
-    const uniqueMatches = [];
-    const seenKeys = new Set();
-
-    for (const match of rawMatches) {
-
-        const teamA =
-            String(match.team1)
-                .trim()
-                .toLowerCase();
-
-        const teamB =
-            String(match.team2)
-                .trim()
-                .toLowerCase();
-
-        const teams =
-            [teamA, teamB]
-                .sort()
-                .join("|");
-
-        const competition =
-            String(match.competition || "")
-                .trim()
-                .toLowerCase();
-
-        const startTime =
-            match.start_time ||
-            match.match_time ||
-            "";
-
-        const key =
-            `${teams}|${competition}|${startTime}`;
-
-        if (seenKeys.has(key)) {
-            continue;
-        }
-
-        seenKeys.add(key);
-        uniqueMatches.push(match);
-    }
-
-
-    const currentMatches =
-        uniqueMatches.map(
-            match => ({
-                ...match,
-                currentStatus:
-                    getCurrentMatchStatus(
-                        match.status,
-                        match.start_time ||
-                            match.match_time,
-                        match.status_text
-                    )
-            })
-        );
-
-
-    const liveMatches =
-        currentMatches.filter(
+    const live =
+        validMatches.filter(
             match =>
-                match.currentStatus === "Live"
+                match.status === "Live"
         );
 
-    const upcomingMatches =
-        currentMatches.filter(
+
+    const upcoming =
+        validMatches.filter(
             match =>
-                match.currentStatus === "Upcoming"
+                match.status === "Upcoming"
         );
-
-    const finishedMatches =
-        currentMatches.filter(
-            match =>
-                match.currentStatus === "Finished"
-        );
-
-
-    /*
-     * The counters and the rendered lists use these
-     * exact same arrays.
-     */
-
-    const syncMessage =
-        document.getElementById(
-            "syncMessage"
-        );
-
-    if (syncMessage) {
-
-        syncMessage.innerHTML =
-            `Current schedule: ` +
-            `<strong>${currentMatches.length}</strong> matches.` +
-            `<br>🔴 Live: ${liveMatches.length}` +
-            ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingMatches.length}` +
-            ` &nbsp;·&nbsp; ✅ Finished: ${finishedMatches.length}`;
-    }
 
 
     renderMatchList(
         liveContainer,
-        liveMatches,
+        live,
         "live"
     );
 
+
     renderMatchList(
         upcomingContainer,
-        upcomingMatches,
+        upcoming,
         "upcoming"
     );
 
@@ -1767,9 +1616,7 @@ function renderMatchList(
                         }"
                     >
                         ${escapeHtml(
-                            match.currentStatus ||
-                            match.status ||
-                            "Upcoming"
+                            match.status
                         )}
                     </span>
 
