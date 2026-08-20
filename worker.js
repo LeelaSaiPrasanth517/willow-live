@@ -3,25 +3,13 @@ export default {
 
     const url = new URL(request.url);
 
-    /*
-     * Cricket match API
-     */
     if (
       url.pathname === "/api/cricket-matches"
     ) {
-
       return handleCricketAPI();
-
     }
 
-
-    /*
-     * Everything else goes to
-     * Cloudflare Assets.
-     */
-
     return env.ASSETS.fetch(request);
-
   }
 };
 
@@ -39,16 +27,12 @@ async function handleCricketAPI() {
         "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
         {
           cf: {
-            cacheTtl: 60,
+            cacheTtl: 30,
             cacheEverything: true
           }
         }
       );
 
-
-    /* -----------------------------------------------------
-       Check SportScore response
-       ----------------------------------------------------- */
 
     if (!response.ok) {
 
@@ -62,41 +46,30 @@ async function handleCricketAPI() {
     }
 
 
-    /* -----------------------------------------------------
-       Parse JSON
-       ----------------------------------------------------- */
-
     const payload =
       await response.json();
 
 
-    /* -----------------------------------------------------
-       Get matches
-       ----------------------------------------------------- */
-
     const matches =
-      Array.isArray(
-        payload.matches
-      )
+      Array.isArray(payload.matches)
         ? payload.matches
         : [];
 
 
-    /* -----------------------------------------------------
-       Normalize matches
-       
-       IMPORTANT:
-       We are intentionally exposing the raw SportScore
-       status values for debugging.
-       ----------------------------------------------------- */
+    /*
+     * TEMPORARY DIAGNOSTIC VERSION
+     *
+     * We keep the normal Cricketive fields but also expose
+     * the complete original SportScore match object.
+     *
+     * This lets us discover whether SportScore provides
+     * another field that tells us the match has actually
+     * started.
+     */
 
     const normalized =
       matches.map(
         match => ({
-
-          /* ---------------------------------------------
-             Teams
-             --------------------------------------------- */
 
           home:
             match.home || "",
@@ -104,21 +77,11 @@ async function handleCricketAPI() {
           away:
             match.away || "",
 
-
-          /* ---------------------------------------------
-             Team logos
-             --------------------------------------------- */
-
           home_logo:
             match.home_logo || "",
 
           away_logo:
             match.away_logo || "",
-
-
-          /* ---------------------------------------------
-             Original status
-             --------------------------------------------- */
 
           status:
             match.status || "",
@@ -126,32 +89,8 @@ async function handleCricketAPI() {
           status_text:
             match.status_text || "",
 
-
-          /* ---------------------------------------------
-             RAW STATUS DEBUG FIELDS
-             
-             These are temporary and will let us see
-             exactly what SportScore is returning.
-             --------------------------------------------- */
-
-          raw_status:
-            match.status ?? null,
-
-          raw_status_text:
-            match.status_text ?? null,
-
-
-          /* ---------------------------------------------
-             Match time
-             --------------------------------------------- */
-
           time:
             match.time || null,
-
-
-          /* ---------------------------------------------
-             Competition
-             --------------------------------------------- */
 
           competition:
             match.competition ||
@@ -161,21 +100,21 @@ async function handleCricketAPI() {
             match.competition_logo ||
             "",
 
-
-          /* ---------------------------------------------
-             SportScore match URL
-             --------------------------------------------- */
-
           url:
-            match.url || ""
+            match.url || "",
+
+
+          /*
+           * TEMPORARY:
+           * Return the original SportScore object.
+           */
+
+          sportscore_raw:
+            match
 
         })
       );
 
-
-    /* -----------------------------------------------------
-       Return Cricketive API response
-       ----------------------------------------------------- */
 
     return json({
 
@@ -204,11 +143,9 @@ async function handleCricketAPI() {
 
     return json(
       {
-
         error:
           error.message ||
           "Unable to load cricket matches."
-
       },
       500
     );
@@ -228,13 +165,8 @@ function json(
 ) {
 
   return new Response(
-
-    JSON.stringify(
-      data
-    ),
-
+    JSON.stringify(data),
     {
-
       status,
 
       headers: {
@@ -243,7 +175,7 @@ function json(
           "application/json",
 
         "cache-control":
-          "public, max-age=15",
+          "public, max-age=10",
 
         "access-control-allow-origin":
           "*"
@@ -251,7 +183,6 @@ function json(
       }
 
     }
-
   );
 
 }
