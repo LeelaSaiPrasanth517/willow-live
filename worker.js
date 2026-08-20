@@ -639,6 +639,12 @@ function isExplicitLiveStatus(
   const text =
     normalizeStatusValue(statusText);
 
+  /*
+   * Only an explicit provider LIVE state is authoritative here.
+   * Do NOT infer LIVE merely because status_text contains "batting",
+   * "innings", "overs", etc. Those fields can remain populated for
+   * recently finished/recent matches in SportScore's feed.
+   */
   return (
     value === "live" ||
     value === "in_progress" ||
@@ -653,11 +659,45 @@ function isExplicitLiveStatus(
     text === "playing" ||
     text === "ongoing" ||
     text === "inplay" ||
-    text === "in_play" ||
-    text.includes("innings") ||
-    text.includes("batting") ||
-    text.includes("over_") ||
-    text.includes("overs")
+    text === "in_play"
+  );
+
+}
+
+
+function isExplicitNonLiveStatus(
+  status,
+  statusText = ""
+) {
+
+  const value = normalizeStatusValue(status);
+  const text = normalizeStatusValue(statusText);
+
+  return (
+    value === "scheduled" ||
+    value === "upcoming" ||
+    value === "not_started" ||
+    value === "notstarted" ||
+    value === "pre_match" ||
+    value === "prematch" ||
+    value === "postponed" ||
+    value === "delayed" ||
+    value === "cancelled" ||
+    value === "canceled" ||
+    value === "abandoned" ||
+    value === "suspended" ||
+    text === "scheduled" ||
+    text === "upcoming" ||
+    text === "not_started" ||
+    text === "notstarted" ||
+    text === "pre_match" ||
+    text === "prematch" ||
+    text === "postponed" ||
+    text === "delayed" ||
+    text === "cancelled" ||
+    text === "canceled" ||
+    text === "abandoned" ||
+    text === "suspended"
   );
 
 }
@@ -826,14 +866,18 @@ function scoreObjectToText(value) {
     const text = cleanScoreText(value);
     if (!text) return null;
 
-    /* Accept normal cricket score strings such as 225/1, 225/1 (48.2). */
-    if (/^\d+(?:\.\d+)?(?:\/\d+)?(?:\s*\([^)]*\))?$/.test(text)) {
+    /*
+     * IMPORTANT: only accept actual cricket score-shaped strings.
+     * SportScore can sometimes put a team name in a score field
+     * (for example "Leicestershire"). Never render that as a score.
+     */
+    if (/^\d+(?:\/\d+)?(?:\s*\([^)]*\))?$/.test(text)) {
       return text;
     }
 
-    /* Also accept provider strings that contain a score. */
-    const match = text.match(/\b\d+(?:\.\d+)?\/\d+\b/);
-    return match ? match[0] : text;
+    /* If a provider string contains a score, extract the score. */
+    const match = text.match(/\b\d+(?:\/\d+)(?:\s*\([^)]*\))?\b/);
+    return match ? match[0] : null;
   }
 
   if (typeof value !== "object") return null;
@@ -1070,24 +1114,16 @@ function isRealScore(
   if (
     value === null ||
     value === undefined ||
-    value === ""
+    value === "" ||
+    value === "-" ||
+    value === "—"
   ) {
-
     return false;
-
   }
 
-
-  if (
-    value === "-"
-  ) {
-
-    return false;
-
-  }
-
-
-  return true;
+  return /^\d+(?:\/\d+)?(?:\s*\([^)]*\))?$/.test(
+    String(value).trim()
+  );
 
 }
 
@@ -1156,7 +1192,22 @@ function normalizeSportScoreStatus(
   battingTeam = null
 ) {
 
-  /* Explicit provider status always wins. */
+  const startTime =
+    getMatchStartTime(matchTime);
+
+  /*
+   * A future scheduled match can never be LIVE, even if a provider
+   * sends a stale/incorrect live flag. This prevents fixtures such as
+   * tomorrow's CPL match from appearing in Live Now.
+   */
+  if (
+    Number.isFinite(startTime) &&
+    startTime > Date.now()
+  ) {
+    return "Upcoming";
+  }
+
+  /* Explicit provider status wins for matches that have already started. */
   if (
     isExplicitFinishedStatus(
       status,
@@ -1175,7 +1226,20 @@ function normalizeSportScoreStatus(
     return "Live";
   }
 
-  /* A score/innings is stronger evidence than a vague list status. */
+  /*
+   * If SportScore explicitly says this fixture is scheduled/not started
+   * (or otherwise non-live), that must win over stale score/innings data.
+   */
+  if (
+    isExplicitNonLiveStatus(
+      status,
+      statusText
+    )
+  ) {
+    return "Upcoming";
+  }
+
+  /* A score/innings is stronger evidence than an unknown/vague status. */
   if (
     hasLiveScoreEvidence(
       homeScore,
@@ -1187,9 +1251,6 @@ function normalizeSportScoreStatus(
   ) {
     return "Live";
   }
-
-  const startTime =
-    getMatchStartTime(matchTime);
 
   if (!Number.isFinite(startTime)) {
     return "Upcoming";
@@ -1224,11 +1285,12 @@ function normalizeSportScoreStatus(
   }
 
   /*
-   * A match already past its scheduled start and still present in the
-   * live/recent feed is not an Upcoming fixture.  Keep it visible as
-   * Live rather than silently hiding/reclassifying it.
+   * Unknown past-start fixtures are deliberately NOT promoted to LIVE.
+   * A recent/recently-finished SportScore fixture can remain in the feed
+   * after play has ended. Without an explicit LIVE state or live-score
+   * evidence, showing it as LIVE is worse than keeping it out of Live Now.
    */
-  return "Live";
+  return "Finished";
 
 }
 
