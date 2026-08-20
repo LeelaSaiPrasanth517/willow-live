@@ -1207,7 +1207,7 @@ async function loadMatches() {
 }
 
 /* =========================================================
-   FETCH LIVE SCORES (ULTIMATE FRONTEND FIX)
+   FETCH LIVE SCORES (DIAGNOSTIC VERSION)
    ========================================================= */
 async function fetchLiveScores() {
     const scoreElements = document.querySelectorAll('[id^="score-"]');
@@ -1234,34 +1234,33 @@ async function fetchLiveScores() {
         if (!response.ok) throw new Error("Failed to fetch scores");
 
         const data = await response.json();
+        console.log("✅ RAW SCORE DATA FROM WORKER:", data); // <--- THIS IS THE KEY
+
         const scores = data.scores || {};
 
         for (const [url, el] of Object.entries(elementsMap)) {
             const scoreData = scores[url];
             
+            // Log the specific match data
+            console.log(`🔍 Match URL: ${url}`, scoreData);
+
             if (scoreData) {
-                
-                // 1. Extract the raw numbers from the Worker JSON
                 let homeScore = scoreData.home_score;
                 let awayScore = scoreData.away_score;
                 let overs = scoreData.overs;
 
-                // 2. Convert null/undefined to empty string
                 if (homeScore === null || homeScore === undefined) homeScore = "";
                 if (awayScore === null || awayScore === undefined) awayScore = "";
                 if (overs === null || overs === undefined) overs = "";
 
-                // 3. Get team names
                 const card = el.closest('.match-card');
                 const teamNames = card.querySelectorAll('.team-name');
                 const team1Name = teamNames[0]?.textContent || "Home";
                 const team2Name = teamNames[1]?.textContent || "Away";
 
-                // 4. If the score is empty, show "Yet to bat"
                 const homeDisplay = (homeScore === "" || homeScore === 0) ? "Yet to bat" : homeScore;
                 const awayDisplay = (awayScore === "" || awayScore === 0) ? "Yet to bat" : awayScore;
 
-                // 5. Render it cleanly
                 el.innerHTML = `
                     <div class="score-team">
                         <span>${esc(team1Name)}</span>
