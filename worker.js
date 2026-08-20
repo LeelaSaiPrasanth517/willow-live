@@ -33,6 +33,20 @@ export default {
 
 
     /* =====================================================
+       TEMPORARY SCORE DEBUG
+    ===================================================== */
+
+    if (
+      url.pathname ===
+      "/api/debug-score"
+    ) {
+
+      return handleDebugScore(url);
+
+    }
+
+
+    /* =====================================================
        STATIC ASSETS
     ===================================================== */
 
@@ -185,10 +199,6 @@ async function handleCricketAPI() {
 
 /* =========================================================
    LIVE SCORE ENDPOINT
-
-   Called by stream.html:
-
-   /api/live-scores?url=<SportScore match URL>
 ========================================================= */
 
 async function handleLiveScores(
@@ -248,10 +258,6 @@ async function handleLiveScores(
 
     }
 
-
-    /*
-     * SportScore single-match endpoint.
-     */
 
     const endpoint =
       `https://sportscore.com/api/widget/match/?sport=cricket&slug=${encodeURIComponent(slug)}`;
@@ -316,10 +322,6 @@ async function handleLiveScores(
       );
 
 
-    /*
-     * Never invent a score.
-     */
-
     if (!score) {
 
       return json({
@@ -367,11 +369,6 @@ async function handleLiveScores(
     );
 
 
-    /*
-     * Do not break stream.html if SportScore
-     * temporarily fails.
-     */
-
     return json({
 
       score:
@@ -385,6 +382,171 @@ async function handleLiveScores(
         new Date().toISOString()
 
     });
+
+  }
+
+}
+
+
+/* =========================================================
+   TEMPORARY DEBUG ENDPOINT
+
+   USE:
+
+   /api/debug-score?url=<SPORTSCORE_MATCH_URL>
+
+   This returns the RAW SportScore response so we can see
+   exactly where SportScore puts the cricket score.
+========================================================= */
+
+async function handleDebugScore(
+  url
+) {
+
+  const sourceUrl =
+    url.searchParams.get(
+      "url"
+    );
+
+
+  if (!sourceUrl) {
+
+    return json(
+      {
+        error:
+          "Missing ?url=<SportScore match URL>"
+      },
+      400
+    );
+
+  }
+
+
+  const normalizedSourceUrl =
+    normalizeUrl(
+      sourceUrl
+    );
+
+
+  const slug =
+    extractMatchSlug(
+      normalizedSourceUrl
+    );
+
+
+  if (!slug) {
+
+    return json(
+      {
+        error:
+          "Could not extract SportScore match slug.",
+
+        sourceUrl:
+          normalizedSourceUrl
+
+      },
+      400
+    );
+
+  }
+
+
+  const endpoint =
+    `https://sportscore.com/api/widget/match/?sport=cricket&slug=${encodeURIComponent(slug)}`;
+
+
+  try {
+
+    /*
+     * IMPORTANT:
+     * No Cloudflare cache here.
+     *
+     * We want to see the actual response.
+     */
+
+    const response =
+      await fetch(
+        endpoint,
+        {
+          cf: {
+            cacheTtl: 0,
+            cacheEverything: false
+          }
+        }
+      );
+
+
+    const rawBody =
+      await response.text();
+
+
+    return new Response(
+
+      JSON.stringify(
+
+        {
+
+          requested_url:
+            endpoint,
+
+          sportscore_http_status:
+            response.status,
+
+          sportscore_ok:
+            response.ok,
+
+          response:
+            rawBody
+
+        },
+
+        null,
+
+        2
+
+      ),
+
+      {
+
+        status:
+          200,
+
+        headers: {
+
+          "content-type":
+            "application/json",
+
+          "cache-control":
+            "no-store",
+
+          "access-control-allow-origin":
+            "*"
+
+        }
+
+      }
+
+    );
+
+
+  } catch (error) {
+
+    return json(
+
+      {
+
+        error:
+          error.message ||
+          "Debug request failed.",
+
+        requested_url:
+          endpoint
+
+      },
+
+      500
+
+    );
 
   }
 
@@ -449,7 +611,7 @@ function extractMatchObject(
 
 
 /* =========================================================
-   EXTRACT SCORE
+   CURRENT SCORE EXTRACTION
 ========================================================= */
 
 function extractScore(
@@ -477,10 +639,6 @@ function extractScore(
   let battingTeam =
     null;
 
-
-  /*
-   * Normal score object.
-   */
 
   if (
     rawScore &&
@@ -530,10 +688,6 @@ function extractScore(
 
   }
 
-
-  /*
-   * Scores directly on match object.
-   */
 
   if (
     homeScore === null
@@ -588,10 +742,6 @@ function extractScore(
 
   }
 
-
-  /*
-   * Nothing usable.
-   */
 
   if (
     homeScore === null &&
@@ -829,7 +979,7 @@ function extractMatchSlug(
    SPORTScore STATUS
 
    IMPORTANT:
-   We do NOT calculate Live from start_time.
+   Never infer Live from start_time.
 ========================================================= */
 
 function normalizeSportScoreStatus(
@@ -977,30 +1127,20 @@ async function fetchWithRetry(
         );
 
 
-      /*
-       * Retry temporary upstream errors.
-       */
-
       if (
         (
-          response.status ===
-            429 ||
-          response.status ===
-            500 ||
-          response.status ===
-            502 ||
-          response.status ===
-            503 ||
-          response.status ===
-            504
+          response.status === 429 ||
+          response.status === 500 ||
+          response.status === 502 ||
+          response.status === 503 ||
+          response.status === 504
         ) &&
         attempt <
           maxAttempts
       ) {
 
         await sleep(
-          700 *
-          attempt
+          700 * attempt
         );
 
         continue;
@@ -1011,9 +1151,7 @@ async function fetchWithRetry(
       return response;
 
 
-    } catch (
-      error
-    ) {
+    } catch (error) {
 
       lastError =
         error;
@@ -1025,8 +1163,7 @@ async function fetchWithRetry(
       ) {
 
         await sleep(
-          700 *
-          attempt
+          700 * attempt
         );
 
         continue;
