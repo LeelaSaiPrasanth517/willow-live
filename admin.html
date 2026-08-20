@@ -12,9 +12,7 @@
 
     <title>Cricketive Admin</title>
 
-
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 
     <style>
 
@@ -22,410 +20,257 @@
             box-sizing: border-box;
         }
 
-
         body {
-
             margin: 0;
-
             background: #070707;
-
             color: white;
-
             font-family:
                 Arial,
                 Helvetica,
                 sans-serif;
         }
 
-
         .container {
-
             width: 100%;
-
             max-width: 1000px;
-
             margin: auto;
-
             padding: 30px 18px;
         }
 
-
         .header {
-
             display: flex;
-
             justify-content: space-between;
-
             align-items: center;
-
             margin-bottom: 30px;
         }
 
-
         .logo {
-
             font-size: 24px;
-
             font-weight: 800;
         }
 
-
         button {
-
             border: none;
-
             cursor: pointer;
         }
 
-
         .logout {
-
             padding: 9px 14px;
-
             border-radius: 7px;
-
             background: #222;
-
             color: white;
         }
 
-
         .card {
-
             background: #111;
-
             border: 1px solid #242424;
-
             border-radius: 12px;
-
             padding: 22px;
-
             margin-bottom: 25px;
         }
 
-
         h2 {
-
             margin-top: 0;
         }
 
-
         label {
-
             display: block;
-
             margin-top: 15px;
-
             margin-bottom: 6px;
-
             font-size: 13px;
-
             color: #bbb;
         }
 
-
         input,
         select {
-
             width: 100%;
-
             padding: 12px;
-
             background: #080808;
-
             color: white;
-
             border: 1px solid #333;
-
             border-radius: 7px;
-
             outline: none;
         }
 
-
         input:focus,
         select:focus {
-
             border-color: #5865f2;
         }
 
-
         .primary {
-
             margin-top: 20px;
-
             padding: 12px 18px;
-
             background: #5865f2;
-
             color: white;
-
             border-radius: 7px;
-
             font-weight: bold;
         }
 
-
         .primary:hover {
-
             background: #4752c4;
         }
 
-
         .secondary {
-
             padding: 9px 13px;
-
             background: #222;
-
             color: white;
-
             border-radius: 6px;
         }
-
 
         .danger {
-
             padding: 9px 13px;
-
             background: #b42323;
-
             color: white;
-
             border-radius: 6px;
         }
 
-
         .match {
-
             background: #0a0a0a;
-
             border: 1px solid #292929;
-
             border-radius: 10px;
-
             padding: 18px;
-
             margin-top: 12px;
         }
 
-
         .match-title {
-
             font-size: 17px;
-
             font-weight: bold;
         }
 
-
         .match-meta {
-
             color: #999;
-
             font-size: 13px;
-
             margin-top: 7px;
-
             line-height: 1.6;
         }
 
-
         .actions {
-
             display: flex;
-
             gap: 8px;
-
             margin-top: 15px;
         }
 
-
         .status {
-
             display: inline-block;
-
             margin-top: 10px;
-
             padding: 5px 9px;
-
             border-radius: 20px;
-
             background: #222;
-
             font-size: 11px;
         }
 
-
         .message {
-
             margin-top: 12px;
-
             font-size: 13px;
         }
 
-
         #adminPanel {
-
             display: none;
         }
 
-
         #loginPanel {
-
             max-width: 450px;
-
             margin: 80px auto;
         }
 
-
         .hidden {
-
             display: none !important;
         }
 
-
         .toolbar {
-
             display: flex;
-
             gap: 10px;
-
             flex-wrap: wrap;
-
             margin-top: 10px;
         }
 
-
         .match-header {
-
             display: flex;
-
             justify-content: space-between;
-
             gap: 12px;
-
             align-items: flex-start;
         }
 
-
         .stream-box {
-
             margin-top: 16px;
-
             padding-top: 14px;
-
             border-top: 1px solid #292929;
         }
 
-
         .stream-row {
-
             display: grid;
-
             grid-template-columns:
                 120px
                 1fr
                 150px
                 auto;
-
             gap: 8px;
-
             align-items: center;
-
             margin-top: 8px;
         }
-
 
         .stream-row input,
         .stream-row select {
-
             margin: 0;
         }
 
-
         .stream-list {
-
             margin-top: 12px;
         }
 
-
         .empty {
-
             color: #888;
-
             padding: 10px 0;
         }
 
-
         .badge-live {
-
             background: #8b1e1e;
         }
 
-
         .badge-upcoming {
-
             background: #234d2d;
         }
 
-
         .sync-note {
-
             color: #999;
-
             font-size: 12px;
-
             line-height: 1.5;
-
             margin-top: 8px;
         }
 
-
         .api-id {
-
             color: #555;
-
             font-size: 10px;
-
             margin-top: 6px;
-
             word-break: break-all;
         }
-
 
         @media (max-width: 700px) {
 
             .stream-row {
-
                 grid-template-columns: 1fr;
             }
 
-
             .match-header {
-
                 flex-direction: column;
             }
-        }
 
+        }
 
         @media (max-width: 600px) {
 
             .container {
-
                 padding: 20px 12px;
             }
 
-
             .header {
-
                 align-items: flex-start;
             }
 
-
             .logo {
-
                 font-size: 20px;
             }
+
         }
 
     </style>
@@ -452,19 +297,14 @@
             🏏 Cricketive Admin
         </h2>
 
-
         <p style="color:#999;font-size:13px;">
-
             Sign in to manage cricket matches
             and streams.
-
         </p>
-
 
         <label>
             Email
         </label>
-
 
         <input
             id="email"
@@ -472,11 +312,9 @@
             placeholder="Admin email"
         >
 
-
         <label>
             Password
         </label>
-
 
         <input
             id="password"
@@ -484,16 +322,12 @@
             placeholder="Admin password"
         >
 
-
         <button
             class="primary"
             onclick="login()"
         >
-
             LOGIN
-
         </button>
-
 
         <div
             id="loginMessage"
@@ -501,7 +335,6 @@
         ></div>
 
     </div>
-
 
 
     <!-- =====================================================
@@ -513,26 +346,18 @@
 
         <div class="header">
 
-
             <div class="logo">
-
                 CRICKETIVE 🏏
-
             </div>
-
 
             <button
                 class="logout"
                 onclick="logout()"
             >
-
                 LOGOUT
-
             </button>
 
-
         </div>
-
 
 
         <!-- =================================================
@@ -541,11 +366,9 @@
 
         <div class="card">
 
-
             <h2>
                 Match Schedule
             </h2>
-
 
             <p class="sync-note">
 
@@ -557,26 +380,20 @@
 
             </p>
 
-
             <button
                 id="syncButton"
                 class="primary"
                 onclick="syncMatches()"
             >
-
                 SYNC MATCHES
-
             </button>
-
 
             <div
                 id="syncMessage"
                 class="message"
             ></div>
 
-
         </div>
-
 
 
         <!-- =================================================
@@ -585,21 +402,15 @@
 
         <div class="card">
 
-
             <h2>
                 🔴 Live Matches
             </h2>
 
-
             <div id="liveMatches">
-
                 Loading...
-
             </div>
 
-
         </div>
-
 
 
         <!-- =================================================
@@ -608,18 +419,13 @@
 
         <div class="card">
 
-
             <h2>
                 📅 Upcoming Matches
             </h2>
 
-
             <div id="upcomingMatches">
-
                 Loading...
-
             </div>
-
 
         </div>
 
@@ -629,7 +435,6 @@
 </div>
 
 
-
 <script>
 
 
@@ -637,14 +442,11 @@
    SUPABASE
    ========================================================= */
 
-
 const SUPABASE_URL =
     "https://qkzwzdyahwzcwtqgcbud.supabase.co";
 
-
 const SUPABASE_ANON_KEY =
     "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
-
 
 const client =
     supabase.createClient(
@@ -653,14 +455,11 @@ const client =
     );
 
 
-
 /* =========================================================
    LOGIN
    ========================================================= */
 
-
 async function login() {
-
 
     const email =
         document
@@ -668,22 +467,16 @@ async function login() {
             .value
             .trim();
 
-
     const password =
         document
             .getElementById("password")
             .value;
 
-
     const message =
         document
             .getElementById("loginMessage");
 
-
-    if (
-        !email ||
-        !password
-    ) {
+    if (!email || !password) {
 
         message.textContent =
             "Enter your email and password.";
@@ -691,20 +484,14 @@ async function login() {
         return;
     }
 
-
     message.textContent =
         "Signing in...";
 
-
     const { error } =
         await client.auth.signInWithPassword({
-
             email,
-
             password
-
         });
-
 
     if (error) {
 
@@ -714,28 +501,22 @@ async function login() {
         return;
     }
 
-
     showAdmin();
 
 }
-
 
 
 /* =========================================================
    LOGOUT
    ========================================================= */
 
-
 async function logout() {
 
-
     await client.auth.signOut();
-
 
     document
         .getElementById("adminPanel")
         .style.display = "none";
-
 
     document
         .getElementById("loginPanel")
@@ -745,90 +526,60 @@ async function logout() {
 }
 
 
-
 /* =========================================================
    CHECK SESSION
    ========================================================= */
 
-
 async function checkSession() {
-
 
     const { data } =
         await client.auth.getSession();
 
-
-    if (
-        data.session
-    ) {
-
+    if (data.session) {
         showAdmin();
-
     }
 
 }
-
 
 
 /* =========================================================
    SHOW ADMIN
    ========================================================= */
 
-
 function showAdmin() {
-
 
     document
         .getElementById("loginPanel")
         .classList
         .add("hidden");
 
-
     document
         .getElementById("adminPanel")
         .style.display = "block";
-
-
-    /*
-     * IMPORTANT:
-     *
-     * We DO NOT automatically sync here.
-     *
-     * Sync happens only when the
-     * administrator clicks SYNC MATCHES.
-     */
-
 
     loadMatches();
 
 }
 
 
-
 /* =========================================================
    SYNC MATCHES
    ========================================================= */
 
-
 async function syncMatches() {
-
 
     const message =
         document
             .getElementById("syncMessage");
 
-
     const button =
         document
             .getElementById("syncButton");
 
-
     message.textContent =
         "Syncing SportScore matches...";
 
-
     button.disabled = true;
-
 
     button.textContent =
         "SYNCING...";
@@ -839,8 +590,7 @@ async function syncMatches() {
 
         /* -----------------------------------------------
            Fetch SportScore matches
-           ----------------------------------------------- */
-
+        ----------------------------------------------- */
 
         const response =
             await fetch(
@@ -851,13 +601,10 @@ async function syncMatches() {
             );
 
 
-        if (
-            !response.ok
-        ) {
+        if (!response.ok) {
 
             const errorText =
                 await response.text();
-
 
             throw new Error(
                 `API HTTP ${response.status}: ${errorText}`
@@ -871,14 +618,14 @@ async function syncMatches() {
 
 
         const matches =
-            Array.isArray(payload.matches)
+            Array.isArray(
+                payload.matches
+            )
                 ? payload.matches
                 : [];
 
 
-        if (
-            !matches.length
-        ) {
+        if (!matches.length) {
 
             message.textContent =
                 "SportScore returned 0 matches.";
@@ -892,8 +639,7 @@ async function syncMatches() {
 
         /* -----------------------------------------------
            Load existing Supabase matches
-           ----------------------------------------------- */
-
+        ----------------------------------------------- */
 
         const {
             data: existingMatches,
@@ -903,12 +649,8 @@ async function syncMatches() {
             .select("*");
 
 
-        if (
-            existingError
-        ) {
-
+        if (existingError) {
             throw existingError;
-
         }
 
 
@@ -916,8 +658,13 @@ async function syncMatches() {
             existingMatches || [];
 
 
+        /* -----------------------------------------------
+           Build lookup maps
+        ----------------------------------------------- */
+
         const bySportScoreUrl = {};
         const byTeams = {};
+        const byApiMatchId = {};
 
 
         existing.forEach(
@@ -937,6 +684,19 @@ async function syncMatches() {
                 }
 
 
+                if (
+                    match.api_match_id
+                ) {
+
+                    byApiMatchId[
+                        String(
+                            match.api_match_id
+                        )
+                    ] = match;
+
+                }
+
+
                 const key =
                     makeTeamKey(
                         match.team1,
@@ -944,9 +704,7 @@ async function syncMatches() {
                     );
 
 
-                if (
-                    key
-                ) {
+                if (key) {
 
                     byTeams[key] =
                         match;
@@ -959,8 +717,7 @@ async function syncMatches() {
 
         /* -----------------------------------------------
            Build rows
-           ----------------------------------------------- */
-
+        ----------------------------------------------- */
 
         const rows = [];
 
@@ -1021,8 +778,7 @@ async function syncMatches() {
 
             /* -------------------------------------------
                SportScore URL
-               ------------------------------------------- */
-
+            ------------------------------------------- */
 
             const rawUrl =
                 match.url ??
@@ -1037,15 +793,42 @@ async function syncMatches() {
 
 
             /* -------------------------------------------
-               Find existing record
-               ------------------------------------------- */
+               Stable SportScore identifier
+            ------------------------------------------- */
 
+            const apiMatchId =
+                sportscoreUrl
+                    ? `sportscore:${sportscoreUrl}`
+                    : `sportscore:${makeTeamKey(
+                        team1,
+                        team2
+                    )}`;
+
+
+            /* -------------------------------------------
+               Find existing record
+            ------------------------------------------- */
 
             let existingMatch =
                 null;
 
 
+            /*
+             * 1. Match by API ID
+             */
+
+            existingMatch =
+                byApiMatchId[
+                    apiMatchId
+                ] || null;
+
+
+            /*
+             * 2. Match by SportScore URL
+             */
+
             if (
+                !existingMatch &&
                 sportscoreUrl
             ) {
 
@@ -1056,6 +839,10 @@ async function syncMatches() {
 
             }
 
+
+            /*
+             * 3. Match by team names
+             */
 
             if (
                 !existingMatch
@@ -1068,9 +855,7 @@ async function syncMatches() {
                     );
 
 
-                if (
-                    teamKey
-                ) {
+                if (teamKey) {
 
                     existingMatch =
                         byTeams[
@@ -1083,84 +868,59 @@ async function syncMatches() {
 
 
             /* -------------------------------------------
-               Stable SportScore identifier
-               ------------------------------------------- */
-
-
-            const apiMatchId =
-                sportscoreUrl
-                    ? `sportscore:${sportscoreUrl}`
-                    : `sportscore:${makeTeamKey(
-                          team1,
-                          team2
-                      )}`;
-
-
-            /* -------------------------------------------
-               Build row WITHOUT id by default.
-               Existing rows get their current id below.
-               New rows rely on PostgreSQL's
-               gen_random_uuid() default.
-               ------------------------------------------- */
-
+               Build row
+            ------------------------------------------- */
 
             const row = {
 
                 api_match_id:
                     apiMatchId,
 
-
                 title:
                     `${team1} vs ${team2}`,
-
 
                 team1:
                     team1,
 
-
                 team2:
                     team2,
-
 
                 competition:
                     match.competition ||
                     "Cricket",
 
-
                 match_time:
                     startTime,
-
 
                 start_time:
                     startTime,
 
-
                 venue:
                     match.venue ||
                     "",
-
 
                 status:
                     normalizeSportScoreStatus(
                         match.status
                     ),
 
+                /*
+                 * Preserve existing embed URL.
+                 */
 
                 embed_url:
+                    existingMatch?.embed_url ||
                     "",
-
 
                 team1_logo:
                     match.home_logo ||
                     match.team1_logo ||
                     "",
 
-
                 team2_logo:
                     match.away_logo ||
                     match.team2_logo ||
                     "",
-
 
                 sportscore_url:
                     sportscoreUrl
@@ -1169,10 +929,8 @@ async function syncMatches() {
 
 
             /* -------------------------------------------
-               Preserve existing UUIDs so existing streams
-               remain attached to the same match.
-               ------------------------------------------- */
-
+               Preserve existing UUID
+            ------------------------------------------- */
 
             if (
                 existingMatch &&
@@ -1190,9 +948,7 @@ async function syncMatches() {
         }
 
 
-        if (
-            !rows.length
-        ) {
+        if (!rows.length) {
 
             message.textContent =
                 `SportScore returned ${matches.length} matches, but none were valid.`;
@@ -1205,9 +961,8 @@ async function syncMatches() {
 
 
         /* -----------------------------------------------
-           Separate existing vs new rows
-           ----------------------------------------------- */
-
+           Separate existing vs new
+        ----------------------------------------------- */
 
         const existingRows =
             rows.filter(
@@ -1225,8 +980,7 @@ async function syncMatches() {
 
         /* -----------------------------------------------
            UPDATE EXISTING MATCHES
-           ----------------------------------------------- */
-
+        ----------------------------------------------- */
 
         if (
             existingRows.length
@@ -1244,12 +998,8 @@ async function syncMatches() {
                 );
 
 
-            if (
-                updateError
-            ) {
-
+            if (updateError) {
                 throw updateError;
-
             }
 
         }
@@ -1257,27 +1007,55 @@ async function syncMatches() {
 
         /* -----------------------------------------------
            INSERT NEW MATCHES
-           ----------------------------------------------- */
-
+        ----------------------------------------------- */
 
         if (
             newRows.length
         ) {
 
-            const {
-                error: insertError
-            } = await client
-                .from("Matches")
-                .insert(
-                    newRows
-                );
+            /*
+             * Insert individually.
+             *
+             * If a duplicate somehow appears,
+             * skip it and continue syncing.
+             */
 
-
-            if (
-                insertError
+            for (
+                const row of newRows
             ) {
 
-                throw insertError;
+                const {
+                    error: insertError
+                } = await client
+                    .from("Matches")
+                    .insert(row);
+
+
+                if (
+                    insertError
+                ) {
+
+                    /*
+                     * PostgreSQL duplicate-key code.
+                     */
+
+                    if (
+                        insertError.code === "23505"
+                    ) {
+
+                        console.warn(
+                            "Duplicate match skipped:",
+                            row.api_match_id
+                        );
+
+                        continue;
+
+                    }
+
+
+                    throw insertError;
+
+                }
 
             }
 
@@ -1286,8 +1064,7 @@ async function syncMatches() {
 
         /* -----------------------------------------------
            Result
-           ----------------------------------------------- */
-
+        ----------------------------------------------- */
 
         const liveCount =
             rows.filter(
@@ -1357,11 +1134,9 @@ async function syncMatches() {
    SPORTScore STATUS
    ========================================================= */
 
-
 function normalizeSportScoreStatus(
     status
 ) {
-
 
     const value =
         String(
@@ -1402,12 +1177,10 @@ function normalizeSportScoreStatus(
    TEAM KEY
    ========================================================= */
 
-
 function makeTeamKey(
     team1,
     team2
 ) {
-
 
     if (
         !team1 ||
@@ -1437,11 +1210,9 @@ function makeTeamKey(
    URL NORMALIZATION
    ========================================================= */
 
-
 function normalizeUrl(
     value
 ) {
-
 
     if (!value) {
         return "";
@@ -1484,16 +1255,7 @@ function normalizeUrl(
    CLEAN STALE LIVE MATCHES
    ========================================================= */
 
-
 async function cleanStaleMatches() {
-
-
-    /*
-     * Any Live match whose scheduled start time
-     * is more than 24 hours old is no longer allowed
-     * to remain Live.
-     */
-
 
     const cutoff =
         new Date(
@@ -1506,10 +1268,7 @@ async function cleanStaleMatches() {
         await client
             .from("Matches")
             .update({
-
-                status:
-                    "Finished"
-
+                status: "Finished"
             })
             .eq(
                 "status",
@@ -1521,9 +1280,7 @@ async function cleanStaleMatches() {
             );
 
 
-    if (
-        error
-    ) {
+    if (error) {
 
         console.error(
             "Could not clean stale live matches:",
@@ -1535,61 +1292,40 @@ async function cleanStaleMatches() {
 }
 
 
-
 /* =========================================================
    LOAD MATCHES
    ========================================================= */
 
-
 async function loadMatches() {
 
-
     const liveContainer =
-        document
-            .getElementById(
-                "liveMatches"
-            );
+        document.getElementById(
+            "liveMatches"
+        );
 
 
     const upcomingContainer =
-        document
-            .getElementById(
-                "upcomingMatches"
-            );
+        document.getElementById(
+            "upcomingMatches"
+        );
 
 
     liveContainer.innerHTML =
         "Loading...";
 
-
     upcomingContainer.innerHTML =
         "Loading...";
 
 
-
-    /* -----------------------------------------------
-       Clean stale matches before displaying them
-       ----------------------------------------------- */
-
-
     await cleanStaleMatches();
-
-
-
-    /* -----------------------------------------------
-       Get current Live + Upcoming matches
-       ----------------------------------------------- */
 
 
     const {
         data,
         error
     } = await client
-
         .from("Matches")
-
         .select("*")
-
         .in(
             "status",
             [
@@ -1597,7 +1333,6 @@ async function loadMatches() {
                 "Upcoming"
             ]
         )
-
         .order(
             "start_time",
             {
@@ -1606,11 +1341,7 @@ async function loadMatches() {
         );
 
 
-
-    if (
-        error
-    ) {
-
+    if (error) {
 
         const msg =
             `
@@ -1625,44 +1356,32 @@ async function loadMatches() {
         liveContainer.innerHTML =
             msg;
 
-
         upcomingContainer.innerHTML =
             msg;
-
 
         return;
 
     }
 
 
-
-    /* -----------------------------------------------
-       Filter invalid placeholder matches
-       ----------------------------------------------- */
-
-
     const validMatches =
         (data || [])
-            .filter(match => {
+            .filter(
+                match => {
 
-                return (
+                    return (
+                        match.team1 &&
+                        match.team2 &&
+                        !isPlaceholder(
+                            match.team1
+                        ) &&
+                        !isPlaceholder(
+                            match.team2
+                        )
+                    );
 
-                    match.team1 &&
-
-                    match.team2 &&
-
-                    !isPlaceholder(
-                        match.team1
-                    ) &&
-
-                    !isPlaceholder(
-                        match.team2
-                    )
-
-                );
-
-            });
-
+                }
+            );
 
 
     const live =
@@ -1677,7 +1396,6 @@ async function loadMatches() {
             match =>
                 match.status === "Upcoming"
         );
-
 
 
     renderMatchList(
@@ -1696,18 +1414,15 @@ async function loadMatches() {
 }
 
 
-
 /* =========================================================
    RENDER MATCH LIST
    ========================================================= */
-
 
 function renderMatchList(
     container,
     matches,
     type
 ) {
-
 
     if (
         !matches.length
@@ -1729,10 +1444,8 @@ function renderMatchList(
         "";
 
 
-
     matches.forEach(
         match => {
-
 
             const div =
                 document.createElement(
@@ -1746,12 +1459,9 @@ function renderMatchList(
 
             div.innerHTML = `
 
-
                 <div class="match-header">
 
-
                     <div>
-
 
                         <div class="match-title">
 
@@ -1765,7 +1475,6 @@ function renderMatchList(
 
                         <div class="match-meta">
 
-
                             ${escapeHtml(
                                 match.team1
                             )}
@@ -1775,7 +1484,6 @@ function renderMatchList(
                             ${escapeHtml(
                                 match.team2
                             )}
-
 
                             ${
                                 match.competition
@@ -1812,33 +1520,23 @@ function renderMatchList(
                                     : ""
                             }
 
-
                         </div>
-
 
 
                         ${
                             match.api_match_id
-
                                 ? `
-
                                     <div class="api-id">
-
                                         API ID:
                                         ${escapeHtml(
                                             match.api_match_id
                                         )}
-
                                     </div>
-
                                   `
-
                                 : ""
                         }
 
-
                     </div>
-
 
 
                     <span
@@ -1848,23 +1546,17 @@ function renderMatchList(
                                 : "badge-upcoming"
                         }"
                     >
-
                         ${escapeHtml(
                             match.status
                         )}
-
                     </span>
-
 
                 </div>
 
 
-
                 <!-- STREAMS -->
 
-
                 <div class="stream-box">
-
 
                     <strong>
                         Streams
@@ -1875,15 +1567,11 @@ function renderMatchList(
                         id="streams-${match.id}"
                         class="stream-list"
                     >
-
                         Loading streams...
-
                     </div>
 
 
-
                     <div class="toolbar">
-
 
                         <button
                             class="secondary"
@@ -1891,43 +1579,31 @@ function renderMatchList(
                                 '${match.id}'
                             )"
                         >
-
                             + ADD STREAM
-
                         </button>
-
 
 
                         ${
                             !match.api_match_id
-
                                 ? `
-
                                     <button
                                         class="danger"
                                         onclick="deleteManualMatch(
                                             '${match.id}'
                                         )"
                                     >
-
                                         DELETE MANUAL MATCH
-
                                     </button>
-
                                   `
-
                                 : ""
                         }
 
-
                     </div>
-
 
 
                     <div
                         id="add-stream-${match.id}"
                     ></div>
-
 
                 </div>
 
@@ -1949,40 +1625,30 @@ function renderMatchList(
 }
 
 
-
 /* =========================================================
    DELETE MANUAL MATCH
    ========================================================= */
-
 
 async function deleteManualMatch(
     matchId
 ) {
 
-
     const {
         data: match,
         error: fetchError
     } = await client
-
         .from("Matches")
-
         .select(
             "id, api_match_id, title"
         )
-
         .eq(
             "id",
             matchId
         )
-
         .single();
 
 
-
-    if (
-        fetchError
-    ) {
+    if (fetchError) {
 
         alert(
             fetchError.message
@@ -1991,7 +1657,6 @@ async function deleteManualMatch(
         return;
 
     }
-
 
 
     if (
@@ -2007,7 +1672,6 @@ async function deleteManualMatch(
     }
 
 
-
     if (
         !confirm(
             `Delete manual match "${match.title}"?`
@@ -2019,25 +1683,18 @@ async function deleteManualMatch(
     }
 
 
-
     const {
         error
     } = await client
-
         .from("Matches")
-
         .delete()
-
         .eq(
             "id",
             matchId
         );
 
 
-
-    if (
-        error
-    ) {
+    if (error) {
 
         alert(
             error.message
@@ -2048,22 +1705,18 @@ async function deleteManualMatch(
     }
 
 
-
     await loadMatches();
 
 }
-
 
 
 /* =========================================================
    LOAD STREAMS
    ========================================================= */
 
-
 async function loadStreams(
     matchId
 ) {
-
 
     const container =
         document.getElementById(
@@ -2071,30 +1724,21 @@ async function loadStreams(
         );
 
 
-    if (
-        !container
-    ) {
-
+    if (!container) {
         return;
-
     }
-
 
 
     const {
         data,
         error
     } = await client
-
         .from("streams")
-
         .select("*")
-
         .eq(
             "match_id",
             matchId
         )
-
         .order(
             "created_at",
             {
@@ -2103,28 +1747,20 @@ async function loadStreams(
         );
 
 
-
-    if (
-        error
-    ) {
-
+    if (error) {
 
         container.innerHTML =
             `
                 <span style="color:#ff6666;">
-
                     ${escapeHtml(
                         error.message
                     )}
-
                 </span>
             `;
-
 
         return;
 
     }
-
 
 
     if (
@@ -2132,32 +1768,24 @@ async function loadStreams(
         !data.length
     ) {
 
-
         container.innerHTML =
             `
                 <span style="color:#888;">
-
                     No streams added yet.
-
                 </span>
             `;
-
 
         return;
 
     }
 
 
-
     container.innerHTML =
-
         data
             .map(
                 stream => `
 
-
                     <div class="stream-row">
-
 
                         <select
                             id="lang-${stream.id}"
@@ -2201,7 +1829,6 @@ async function loadStreams(
                         </select>
 
 
-
                         <input
                             id="url-${stream.id}"
                             type="url"
@@ -2210,7 +1837,6 @@ async function loadStreams(
                             )}"
                             placeholder="https://..."
                         >
-
 
 
                         <input
@@ -2223,12 +1849,10 @@ async function loadStreams(
                         >
 
 
-
                         <div
                             class="toolbar"
                             style="margin:0;"
                         >
-
 
                             <button
                                 class="secondary"
@@ -2236,11 +1860,8 @@ async function loadStreams(
                                     '${stream.id}'
                                 )"
                             >
-
                                 SAVE
-
                             </button>
-
 
 
                             <button
@@ -2250,14 +1871,10 @@ async function loadStreams(
                                     '${matchId}'
                                 )"
                             >
-
                                 DELETE
-
                             </button>
 
-
                         </div>
-
 
                     </div>
 
@@ -2268,16 +1885,13 @@ async function loadStreams(
 }
 
 
-
 /* =========================================================
    ADD STREAM FORM
    ========================================================= */
 
-
 function addStreamForm(
     matchId
 ) {
-
 
     const container =
         document.getElementById(
@@ -2287,9 +1901,7 @@ function addStreamForm(
 
     container.innerHTML = `
 
-
         <div class="stream-row">
-
 
             <select
                 id="new-lang-${matchId}"
@@ -2333,13 +1945,11 @@ function addStreamForm(
             </select>
 
 
-
             <input
                 id="new-url-${matchId}"
                 type="url"
                 placeholder="https://your-embed-url..."
             >
-
 
 
             <input
@@ -2349,7 +1959,6 @@ function addStreamForm(
             >
 
 
-
             <button
                 class="primary"
                 style="margin-top:0;"
@@ -2357,11 +1966,8 @@ function addStreamForm(
                     '${matchId}'
                 )"
             >
-
                 ADD
-
             </button>
-
 
         </div>
 
@@ -2370,16 +1976,13 @@ function addStreamForm(
 }
 
 
-
 /* =========================================================
    CREATE STREAM
    ========================================================= */
 
-
 async function createStream(
     matchId
 ) {
-
 
     const language =
         document
@@ -2408,10 +2011,7 @@ async function createStream(
         || "Stream";
 
 
-
-    if (
-        !embed_url
-    ) {
+    if (!embed_url) {
 
         alert(
             "Enter a stream embed URL."
@@ -2422,13 +2022,10 @@ async function createStream(
     }
 
 
-
     const {
         error
     } = await client
-
         .from("streams")
-
         .insert([{
 
             match_id:
@@ -2449,10 +2046,7 @@ async function createStream(
         }]);
 
 
-
-    if (
-        error
-    ) {
+    if (error) {
 
         alert(
             error.message
@@ -2461,7 +2055,6 @@ async function createStream(
         return;
 
     }
-
 
 
     await loadStreams(
@@ -2473,22 +2066,18 @@ async function createStream(
         .getElementById(
             `add-stream-${matchId}`
         )
-        .innerHTML =
-        "";
+        .innerHTML = "";
 
 }
-
 
 
 /* =========================================================
    UPDATE STREAM
    ========================================================= */
 
-
 async function updateStream(
     streamId
 ) {
-
 
     const language =
         document
@@ -2517,13 +2106,10 @@ async function updateStream(
         || "Stream";
 
 
-
     const {
         error
     } = await client
-
         .from("streams")
-
         .update({
 
             language,
@@ -2533,17 +2119,13 @@ async function updateStream(
             stream_name
 
         })
-
         .eq(
             "id",
             streamId
         );
 
 
-
-    if (
-        error
-    ) {
+    if (error) {
 
         alert(
             error.message
@@ -2554,7 +2136,6 @@ async function updateStream(
     }
 
 
-
     alert(
         "Stream updated."
     );
@@ -2562,17 +2143,14 @@ async function updateStream(
 }
 
 
-
 /* =========================================================
    DELETE STREAM
    ========================================================= */
-
 
 async function deleteStream(
     streamId,
     matchId
 ) {
-
 
     if (
         !confirm(
@@ -2585,25 +2163,18 @@ async function deleteStream(
     }
 
 
-
     const {
         error
     } = await client
-
         .from("streams")
-
         .delete()
-
         .eq(
             "id",
             streamId
         );
 
 
-
-    if (
-        error
-    ) {
+    if (error) {
 
         alert(
             error.message
@@ -2614,7 +2185,6 @@ async function deleteStream(
     }
 
 
-
     await loadStreams(
         matchId
     );
@@ -2622,17 +2192,14 @@ async function deleteStream(
 }
 
 
-
 /* =========================================================
    LANGUAGE OPTION
    ========================================================= */
-
 
 function languageOption(
     value,
     selected
 ) {
-
 
     return `
 
@@ -2644,9 +2211,7 @@ function languageOption(
                     : ""
             }
         >
-
             ${escapeHtml(value)}
-
         </option>
 
     `;
@@ -2654,16 +2219,13 @@ function languageOption(
 }
 
 
-
 /* =========================================================
    DATE FORMAT
    ========================================================= */
 
-
 function formatDate(
     value
 ) {
-
 
     const date =
         new Date(value);
@@ -2680,7 +2242,6 @@ function formatDate(
     }
 
 
-
     return date.toLocaleString(
         [],
         {
@@ -2695,46 +2256,34 @@ function formatDate(
 }
 
 
-
 /* =========================================================
    PLACEHOLDER CHECK
    ========================================================= */
-
 
 function isPlaceholder(
     value
 ) {
 
-
-    if (
-        !value
-    ) {
-
+    if (!value) {
         return true;
-
     }
 
 
     return /^(tbc|tbd|to be confirmed|to be decided)$/i
         .test(
-            String(
-                value
-            ).trim()
+            String(value).trim()
         );
 
 }
-
 
 
 /* =========================================================
    ESCAPE HTML
    ========================================================= */
 
-
 function escapeHtml(
     value
 ) {
-
 
     return String(
         value ?? ""
@@ -2768,16 +2317,15 @@ function escapeHtml(
 }
 
 
-
 /* =========================================================
    START
    ========================================================= */
-
 
 checkSession();
 
 
 </script>
+
 
 </body>
 
