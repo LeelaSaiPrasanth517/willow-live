@@ -1,3 +1,133 @@
+/* =========================================================
+   RUNTIME RESILIENCE
+========================================================= */
+
+let lastSuccessfulMatchFeed = null;
+let lastSuccessfulMatchFeedAt = 0;
+
+const MATCH_FEED_STALE_MS = 5 * 60 * 1000;
+
+async function fetchWithRetry(
+  url,
+  options = {},
+  attempts = 3,
+  timeoutMs = 8000
+) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(),
+      timeoutMs
+    );
+
+    try {
+      const response = await fetch(
+        url,
+        {
+          ...options,
+          signal: controller.signal
+        }
+      );
+
+      if (response.ok) {
+        return response;
+      }
+
+      lastError = new Error(
+        `HTTP ${response.status}`
+      );
+
+      if (
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 429
+      ) {
+        throw lastError;
+      }
+
+    } catch (error) {
+      lastError = error;
+
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (attempt < attempts) {
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            250 * Math.pow(2, attempt - 1)
+          )
+      );
+    }
+  }
+
+  throw lastError ||
+    new Error("Request failed.");
+}
+
+async function fetchJsonWithRetry(
+  url,
+  options = {},
+  attempts = 3,
+  timeoutMs = 8000
+) {
+  const response =
+    await fetchWithRetry(
+      url,
+      options,
+      attempts,
+      timeoutMs
+    );
+
+  return response.json();
+}
+
+async function mapWithConcurrency(
+  items,
+  limit,
+  mapper
+) {
+  const results =
+    new Array(items.length);
+
+  let nextIndex = 0;
+
+  async function worker() {
+    while (true) {
+      const index = nextIndex++;
+
+      if (index >= items.length) {
+        return;
+      }
+
+      results[index] =
+        await mapper(
+          items[index],
+          index
+        );
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      {
+        length:
+          Math.min(
+            limit,
+            items.length
+          )
+      },
+      () => worker()
+    )
+  );
+
+  return results;
+}
+
 export default {
   async fetch(request, env) {
 
@@ -30,7 +160,7 @@ export default {
       url.pathname === "/api/live-scores"
     ) {
 
-      return handleLiveScores();
+      return handleLiveScores(request);
 
     }
 
@@ -54,42 +184,19 @@ export default {
 ========================================================= */
 
 async function handleCricketAPI() {
-
   try {
-
-    /*
-     * -----------------------------------------------------
-     * GET MATCH LIST
-     * -----------------------------------------------------
-     */
-
-    const response =
-      await fetch(
-        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
+    const payload =
+      await fetchJsonWithRetry(
+        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50&src=cricketive",
         {
           cf: {
-            cacheTtl: 5,
+            cacheTtl: 10,
             cacheEverything: true
           }
-        }
+        },
+        3,
+        8000
       );
-
-
-    if (!response.ok) {
-
-      const body =
-        await response.text();
-
-      throw new Error(
-        `SportScore returned HTTP ${response.status}: ${body}`
-      );
-
-    }
-
-
-    const payload =
-      await response.json();
-
 
     const matches =
       Array.isArray(
@@ -98,316 +205,198 @@ async function handleCricketAPI() {
         ? payload.matches
         : [];
 
-
     /*
-     * -----------------------------------------------------
-     * PROCESS MATCHES
-     * -----------------------------------------------------
+     * Enrich only live matches and cap concurrency.
+     * This avoids a burst of individual requests when many
+     * cricket matches are live at the same time.
      */
-
     const normalized =
-      await Promise.all(
+      await mapWithConcurrency(
+        matches,
+        5,
+        async match => {
+          let homeScore =
+            extractScore(
+              match.home_score
+            );
 
-        matches.map(
-          async match => {
+          let awayScore =
+            extractScore(
+              match.away_score
+            );
 
-            /*
-             * Start with scores from
-             * the list endpoint.
-             */
+          let statusText =
+            match.status_text ||
+            "";
 
-            let homeScore =
-              extractScore(
-                match.home_score
-              );
+          let battingTeam =
+            match.batting_team ||
+            null;
 
+          let overs =
+            extractOvers(
+              match.overs
+            );
 
-            let awayScore =
-              extractScore(
-                match.away_score
-              );
-
-
-            let statusText =
-              match.status_text ||
-              "";
-
-
-            let battingTeam =
-              match.batting_team ||
-              null;
-
-
-            let overs =
-              extractOvers(
-                match.overs
-              );
-
-
-            /*
-             * -------------------------------------------------
-             * LIVE MATCH:
-             *
-             * Get the INDIVIDUAL match endpoint.
-             * This is where SportScore has the real score.
-             * -------------------------------------------------
-             */
-
-            const isLive =
-              isLiveStatus(
-                match.status,
-                match.status_text
-              );
-
-
-            if (
-              isLive &&
-              match.url
-            ) {
-
-              try {
-
-                const details =
-                  await getIndividualMatch(
-                    match.url
-                  );
-
-
-                if (
-                  details
-                ) {
-
-                  /*
-                   * Use individual endpoint
-                   * values when available.
-                   */
-
-                  const detailedHome =
-                    extractScore(
-                      details.home_score
-                    );
-
-
-                  const detailedAway =
-                    extractScore(
-                      details.away_score
-                    );
-
-
-                  if (
-                    isRealScore(
-                      detailedHome
-                    )
-                  ) {
-
-                    homeScore =
-                      detailedHome;
-
-                  }
-
-
-                  if (
-                    isRealScore(
-                      detailedAway
-                    )
-                  ) {
-
-                    awayScore =
-                      detailedAway;
-
-                  }
-
-
-                  if (
-                    details.status_text
-                  ) {
-
-                    statusText =
-                      details.status_text;
-
-                  }
-
-
-                  if (
-                    details.batting_team
-                  ) {
-
-                    battingTeam =
-                      details.batting_team;
-
-                  }
-
-
-                  if (
-                    details.overs !==
-                    undefined
-                  ) {
-
-                    overs =
-                      extractOvers(
-                        details.overs
-                      );
-
-                  }
-
-                }
-
-              } catch (
-                detailError
-              ) {
-
-                console.error(
-                  "Individual match error:",
-                  match.url,
-                  detailError
+          if (
+            isLiveStatus(
+              match.status,
+              match.status_text
+            ) &&
+            match.url
+          ) {
+            try {
+              const details =
+                await getIndividualMatch(
+                  match.url
                 );
 
+              if (details) {
+                const detailedHome =
+                  extractScore(
+                    details.home_score
+                  );
+
+                const detailedAway =
+                  extractScore(
+                    details.away_score
+                  );
+
+                if (
+                  isRealScore(
+                    detailedHome
+                  )
+                ) {
+                  homeScore =
+                    detailedHome;
+                }
+
+                if (
+                  isRealScore(
+                    detailedAway
+                  )
+                ) {
+                  awayScore =
+                    detailedAway;
+                }
+
+                if (
+                  details.status_text
+                ) {
+                  statusText =
+                    details.status_text;
+                }
+
+                if (
+                  details.batting_team
+                ) {
+                  battingTeam =
+                    details.batting_team;
+                }
+
+                if (
+                  details.overs !==
+                  undefined
+                ) {
+                  overs =
+                    extractOvers(
+                      details.overs
+                    );
+                }
               }
 
+            } catch (detailError) {
+              console.error(
+                "Individual match error:",
+                match.url,
+                detailError
+              );
             }
-
-
-            /*
-             * -------------------------------------------------
-             * RETURN NORMALIZED MATCH
-             * -------------------------------------------------
-             */
-
-            return {
-
-              home:
-                match.home ||
-                "",
-
-
-              away:
-                match.away ||
-                "",
-
-
-              home_logo:
-                match.home_logo ||
-                "",
-
-
-              away_logo:
-                match.away_logo ||
-                "",
-
-
-              home_score:
-                homeScore,
-
-
-              away_score:
-                awayScore,
-
-
-              status:
-                normalizeSportScoreStatus(
-                  match.status,
-                  statusText,
-                  match.time,
-                  match.competition
-                ),
-
-
-              status_text:
-                statusText,
-
-
-              batting_team:
-                battingTeam,
-
-
-              overs:
-                overs,
-
-
-              time:
-                match.time ||
-                null,
-
-
-              competition:
-                match.competition ||
-                "Cricket",
-
-
-              competition_logo:
-                match.competition_logo ||
-                "",
-
-
-              url:
-                match.url ||
-                "",
-
-
-              score:
-                match.score ||
-                null,
-
-
-              live_minute:
-                match.live_minute ||
-                null
-
-            };
-
           }
-        )
 
+          return {
+            home:
+              match.home || "",
+            away:
+              match.away || "",
+            home_logo:
+              match.home_logo || "",
+            away_logo:
+              match.away_logo || "",
+            home_score:
+              homeScore,
+            away_score:
+              awayScore,
+            status:
+              normalizeSportScoreStatus(
+                match.status,
+                statusText,
+                match.time,
+                match.competition
+              ),
+            status_text:
+              statusText,
+            batting_team:
+              battingTeam,
+            overs:
+              overs,
+            time:
+              match.time || null,
+            competition:
+              match.competition ||
+              "Cricket",
+            competition_logo:
+              match.competition_logo ||
+              "",
+            url:
+              match.url || "",
+            score:
+              match.score || null,
+            live_minute:
+              match.live_minute || null
+          };
+        }
       );
 
-
-    /*
-     * -----------------------------------------------------
-     * DEBUG
-     * -----------------------------------------------------
-     */
-
-    console.log(
-      "FINAL MATCH DATA:",
-      JSON.stringify(
-        normalized
-      )
-    );
-
-
-    /*
-     * -----------------------------------------------------
-     * RESPONSE
-     * -----------------------------------------------------
-     */
-
-    return json({
-
-      sport:
-        "cricket",
-
-      count:
-        normalized.length,
-
+    const result = {
+      sport: "cricket",
+      count: normalized.length,
       updated:
         payload.updated ||
         new Date().toISOString(),
-
       matches:
-        normalized
+        normalized,
+      stale: false
+    };
 
-    });
+    lastSuccessfulMatchFeed =
+      result;
 
+    lastSuccessfulMatchFeedAt =
+      Date.now();
 
-  } catch (
-    error
-  ) {
+    return json(result);
 
+  } catch (error) {
     console.error(
       "Cricketive Worker error:",
       error
     );
 
+    if (
+      lastSuccessfulMatchFeed &&
+      (
+        Date.now() -
+        lastSuccessfulMatchFeedAt
+      ) <= MATCH_FEED_STALE_MS
+    ) {
+      return json({
+        ...lastSuccessfulMatchFeed,
+        stale: true,
+        stale_reason:
+          "SportScore temporarily unavailable; showing the last successful feed."
+      });
+    }
 
     return json(
       {
@@ -415,17 +404,15 @@ async function handleCricketAPI() {
           error.message ||
           "Unable to load cricket matches."
       },
-      500
+      503
     );
-
   }
-
 }
-
 
 /* =========================================================
    GET INDIVIDUAL SPORTSCORE MATCH
 ========================================================= */
+
 
 async function getIndividualMatch(
   matchUrl
@@ -467,29 +454,18 @@ async function getIndividualMatch(
   );
 
 
-  const response =
-    await fetch(
+  const payload =
+    await fetchJsonWithRetry(
       apiUrl,
       {
         cf: {
-          cacheTtl: 5,
+          cacheTtl: 10,
           cacheEverything: true
         }
-      }
+      },
+      2,
+      7000
     );
-
-
-  if (!response.ok) {
-
-    throw new Error(
-      `SportScore match endpoint returned HTTP ${response.status}`
-    );
-
-  }
-
-
-  const payload =
-    await response.json();
 
 
   /*
@@ -954,34 +930,30 @@ function normalizeSportScoreStatus(
    LIVE SCORES ENDPOINT
 ========================================================= */
 
-async function handleLiveScores() {
-
+async function handleLiveScores(request) {
   try {
+    const requestUrl =
+      new URL(
+        request.url
+      );
 
-    const response =
-      await fetch(
-        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=150",
+    const requestedSource =
+      requestUrl.searchParams.get(
+        "url"
+      ) || "";
+
+    const payload =
+      await fetchJsonWithRetry(
+        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50&src=cricketive",
         {
           cf: {
             cacheTtl: 5,
             cacheEverything: true
           }
-        }
+        },
+        3,
+        8000
       );
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        `SportScore returned HTTP ${response.status}`
-      );
-
-    }
-
-
-    const payload =
-      await response.json();
-
 
     const matches =
       Array.isArray(
@@ -990,163 +962,257 @@ async function handleLiveScores() {
         ? payload.matches
         : [];
 
-
-    const scores =
-      {};
-
-
     /*
-     * Only query individual
-     * endpoints for live matches.
+     * stream.html requests one match and expects payload.score.
      */
+    if (requestedSource) {
+      const normalizedRequested =
+        normalizeUrl(
+          requestedSource
+        );
 
-    await Promise.all(
-
-      matches
-        .filter(
+      const source =
+        matches.find(
           match =>
-            isLiveStatus(
-              match.status,
-              match.status_text
-            )
+            normalizeUrl(
+              match.url
+            ) ===
+            normalizedRequested
+        );
+
+      if (!source) {
+        return json({
+          score: null,
+          error:
+            "Live match not found in the current SportScore feed.",
+          updated:
+            new Date().toISOString()
+        });
+      }
+
+      if (
+        !isLiveStatus(
+          source.status,
+          source.status_text
         )
-        .map(
-          async match => {
+      ) {
+        return json({
+          score: null,
+          error:
+            "Match is not currently live.",
+          updated:
+            new Date().toISOString()
+        });
+      }
 
-            try {
+      try {
+        const details =
+          await getIndividualMatch(
+            source.url
+          );
 
-              const details =
-                await getIndividualMatch(
-                  match.url
-                );
+        return json({
+          score: {
+            home:
+              source.home || "",
+            away:
+              source.away || "",
+            home_score:
+              extractScore(
+                details?.home_score ??
+                source.home_score
+              ),
+            away_score:
+              extractScore(
+                details?.away_score ??
+                source.away_score
+              ),
+            status:
+              details?.status ||
+              source.status ||
+              null,
+            status_text:
+              details?.status_text ||
+              source.status_text ||
+              null,
+            batting_team:
+              details?.batting_team ||
+              source.batting_team ||
+              null,
+            overs:
+              extractOvers(
+                details?.overs ??
+                source.overs
+              ),
+            time:
+              details?.time ||
+              source.time ||
+              null
+          },
+          updated:
+            new Date().toISOString()
+        });
 
+      } catch (error) {
+        console.error(
+          "Requested live score failed:",
+          error
+        );
 
-              if (!details) {
+        return json({
+          score: {
+            home:
+              source.home || "",
+            away:
+              source.away || "",
+            home_score:
+              extractScore(
+                source.home_score
+              ),
+            away_score:
+              extractScore(
+                source.away_score
+              ),
+            status:
+              source.status || null,
+            status_text:
+              source.status_text || null,
+            batting_team:
+              source.batting_team ||
+              null,
+            overs:
+              extractOvers(
+                source.overs
+              ),
+            time:
+              source.time || null
+          },
+          stale: true,
+          stale_reason:
+            "Individual score endpoint temporarily unavailable.",
+          updated:
+            new Date().toISOString()
+        });
+      }
+    }
 
-                return;
+    const liveMatches =
+      matches.filter(
+        match =>
+          isLiveStatus(
+            match.status,
+            match.status_text
+          ) &&
+          match.url
+      );
 
-              }
-
-
-              const key =
-                normalizeUrl(
-                  match.url
-                );
-
-
-              scores[key] = {
-
-                home:
-                  match.home ||
-                  "",
-
-
-                away:
-                  match.away ||
-                  "",
-
-
-                home_score:
-                  extractScore(
-                    details.home_score
-                  ),
-
-
-                away_score:
-                  extractScore(
-                    details.away_score
-                  ),
-
-
-                status:
-                  details.status ||
-                  match.status ||
-                  null,
-
-
-                status_text:
-                  details.status_text ||
-                  match.status_text ||
-                  null,
-
-
-                batting_team:
-                  details.batting_team ||
-                  null,
-
-
-                overs:
-                  extractOvers(
-                    details.overs
-                  ),
-
-
-                time:
-                  details.time ||
-                  match.time ||
-                  null
-
-              };
-
-            } catch (
-              error
-            ) {
-
-              console.error(
-                "Live score lookup failed:",
-                match.url,
-                error
+    const scoreRows =
+      await mapWithConcurrency(
+        liveMatches,
+        5,
+        async match => {
+          try {
+            const details =
+              await getIndividualMatch(
+                match.url
               );
 
-            }
+            return {
+              key:
+                normalizeUrl(
+                  match.url
+                ),
+              score: {
+                home:
+                  match.home || "",
+                away:
+                  match.away || "",
+                home_score:
+                  extractScore(
+                    details?.home_score ??
+                    match.home_score
+                  ),
+                away_score:
+                  extractScore(
+                    details?.away_score ??
+                    match.away_score
+                  ),
+                status:
+                  details?.status ||
+                  match.status ||
+                  null,
+                status_text:
+                  details?.status_text ||
+                  match.status_text ||
+                  null,
+                batting_team:
+                  details?.batting_team ||
+                  match.batting_team ||
+                  null,
+                overs:
+                  extractOvers(
+                    details?.overs ??
+                    match.overs
+                  ),
+                time:
+                  details?.time ||
+                  match.time ||
+                  null
+              }
+            };
 
+          } catch (error) {
+            console.error(
+              "Live score lookup failed:",
+              match.url,
+              error
+            );
+
+            return null;
           }
-        )
+        }
+      );
 
+    const scores = {};
+
+    scoreRows.forEach(
+      row => {
+        if (row?.key) {
+          scores[row.key] =
+            row.score;
+        }
+      }
     );
 
-
     return json({
-
       scores,
-
       updated:
         new Date().toISOString()
-
     });
 
-
-  } catch (
-    error
-  ) {
-
+  } catch (error) {
     console.error(
       "Live scores error:",
       error
     );
 
-
     return json(
       {
         scores: {},
-
         error:
           error.message,
-
         updated:
           new Date().toISOString()
       },
       200
     );
-
   }
-
 }
-
 
 /* =========================================================
    URL NORMALIZATION
 ========================================================= */
+
 
 function normalizeUrl(
   value
