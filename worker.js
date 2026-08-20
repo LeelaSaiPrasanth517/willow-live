@@ -1,52 +1,78 @@
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
+
+    const url =
+      new URL(request.url);
+
 
     /*
-     * =======================================================
-     * SPORTScore MATCH FEED
-     * =======================================================
+     * =====================================================
+     * MATCH FEED
+     * =====================================================
      */
-    if (url.pathname === "/api/cricket-matches") {
+
+    if (
+      url.pathname === "/api/cricket-matches"
+    ) {
+
       return handleCricketAPI();
+
     }
 
+
     /*
-     * =======================================================
+     * =====================================================
      * LIVE SCORES
-     * =======================================================
+     * =====================================================
      */
-    if (url.pathname === "/api/live-scores") {
+
+    if (
+      url.pathname === "/api/live-scores"
+    ) {
+
       return handleLiveScores();
+
     }
 
+
     /*
-     * =======================================================
-     * EVERYTHING ELSE
-     * =======================================================
+     * =====================================================
+     * STATIC ASSETS
+     * =====================================================
      */
-    return env.ASSETS.fetch(request);
+
+    return env.ASSETS.fetch(
+      request
+    );
+
   }
 };
 
 
 /* =========================================================
-   SPORTScore MATCH FEED
+   MAIN CRICKET API
 ========================================================= */
 
 async function handleCricketAPI() {
 
   try {
 
-    const response = await fetch(
-      "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
-      {
-        cf: {
-          cacheTtl: 10,
-          cacheEverything: true
+    /*
+     * -----------------------------------------------------
+     * GET MATCH LIST
+     * -----------------------------------------------------
+     */
+
+    const response =
+      await fetch(
+        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
+        {
+          cf: {
+            cacheTtl: 5,
+            cacheEverything: true
+          }
         }
-      }
-    );
+      );
 
 
     if (!response.ok) {
@@ -66,142 +92,294 @@ async function handleCricketAPI() {
 
 
     const matches =
-      Array.isArray(payload.matches)
+      Array.isArray(
+        payload.matches
+      )
         ? payload.matches
         : [];
 
 
     /*
-     * IMPORTANT:
-     *
-     * We now explicitly pass:
-     *
-     * home_score
-     * away_score
-     * status_text
-     * batting_team
-     * overs
-     *
-     * to the homepage.
+     * -----------------------------------------------------
+     * PROCESS MATCHES
+     * -----------------------------------------------------
      */
 
     const normalized =
-      matches.map(match => {
+      await Promise.all(
 
-        return {
+        matches.map(
+          async match => {
 
-          home:
-            match.home ||
-            "",
+            /*
+             * Start with scores from
+             * the list endpoint.
+             */
 
-
-          away:
-            match.away ||
-            "",
-
-
-          home_logo:
-            match.home_logo ||
-            "",
+            let homeScore =
+              extractScore(
+                match.home_score
+              );
 
 
-          away_logo:
-            match.away_logo ||
-            "",
+            let awayScore =
+              extractScore(
+                match.away_score
+              );
 
 
-          /*
-           * THIS WAS THE MISSING PART
-           */
-
-          home_score:
-            extractScore(
-              match.home_score
-            ),
+            let statusText =
+              match.status_text ||
+              "";
 
 
-          away_score:
-            extractScore(
-              match.away_score
-            ),
+            let battingTeam =
+              match.batting_team ||
+              null;
 
 
-          /*
-           * Keep the raw score too,
-           * in case the frontend needs it.
-           */
-
-          score:
-            match.score ||
-            null,
+            let overs =
+              extractOvers(
+                match.overs
+              );
 
 
-          status:
-            normalizeSportScoreStatus(
-              match.status,
-              match.status_text,
-              match.time,
-              match.competition
-            ),
+            /*
+             * -------------------------------------------------
+             * LIVE MATCH:
+             *
+             * Get the INDIVIDUAL match endpoint.
+             * This is where SportScore has the real score.
+             * -------------------------------------------------
+             */
+
+            const isLive =
+              isLiveStatus(
+                match.status,
+                match.status_text
+              );
 
 
-          raw_status:
-            match.status ||
-            "",
+            if (
+              isLive &&
+              match.url
+            ) {
+
+              try {
+
+                const details =
+                  await getIndividualMatch(
+                    match.url
+                  );
 
 
-          status_text:
-            match.status_text ||
-            "",
+                if (
+                  details
+                ) {
+
+                  /*
+                   * Use individual endpoint
+                   * values when available.
+                   */
+
+                  const detailedHome =
+                    extractScore(
+                      details.home_score
+                    );
 
 
-          batting_team:
-            match.batting_team ||
-            null,
+                  const detailedAway =
+                    extractScore(
+                      details.away_score
+                    );
 
 
-          overs:
-            extractOvers(
-              match.overs
-            ),
+                  if (
+                    isRealScore(
+                      detailedHome
+                    )
+                  ) {
+
+                    homeScore =
+                      detailedHome;
+
+                  }
 
 
-          time:
-            match.time ||
-            null,
+                  if (
+                    isRealScore(
+                      detailedAway
+                    )
+                  ) {
+
+                    awayScore =
+                      detailedAway;
+
+                  }
 
 
-          competition:
-            match.competition ||
-            "Cricket",
+                  if (
+                    details.status_text
+                  ) {
+
+                    statusText =
+                      details.status_text;
+
+                  }
 
 
-          competition_logo:
-            match.competition_logo ||
-            "",
+                  if (
+                    details.batting_team
+                  ) {
+
+                    battingTeam =
+                      details.batting_team;
+
+                  }
 
 
-          url:
-            match.url ||
-            "",
+                  if (
+                    details.overs !==
+                    undefined
+                  ) {
+
+                    overs =
+                      extractOvers(
+                        details.overs
+                      );
+
+                  }
+
+                }
+
+              } catch (
+                detailError
+              ) {
+
+                console.error(
+                  "Individual match error:",
+                  match.url,
+                  detailError
+                );
+
+              }
+
+            }
 
 
-          live_minute:
-            match.live_minute ||
-            null
+            /*
+             * -------------------------------------------------
+             * RETURN NORMALIZED MATCH
+             * -------------------------------------------------
+             */
 
-        };
+            return {
 
-      });
+              home:
+                match.home ||
+                "",
 
+
+              away:
+                match.away ||
+                "",
+
+
+              home_logo:
+                match.home_logo ||
+                "",
+
+
+              away_logo:
+                match.away_logo ||
+                "",
+
+
+              home_score:
+                homeScore,
+
+
+              away_score:
+                awayScore,
+
+
+              status:
+                normalizeSportScoreStatus(
+                  match.status,
+                  statusText,
+                  match.time,
+                  match.competition
+                ),
+
+
+              status_text:
+                statusText,
+
+
+              batting_team:
+                battingTeam,
+
+
+              overs:
+                overs,
+
+
+              time:
+                match.time ||
+                null,
+
+
+              competition:
+                match.competition ||
+                "Cricket",
+
+
+              competition_logo:
+                match.competition_logo ||
+                "",
+
+
+              url:
+                match.url ||
+                "",
+
+
+              score:
+                match.score ||
+                null,
+
+
+              live_minute:
+                match.live_minute ||
+                null
+
+            };
+
+          }
+        )
+
+      );
+
+
+    /*
+     * -----------------------------------------------------
+     * DEBUG
+     * -----------------------------------------------------
+     */
 
     console.log(
-      "SportScore normalized matches:",
+      "FINAL MATCH DATA:",
       JSON.stringify(
         normalized
       )
     );
 
+
+    /*
+     * -----------------------------------------------------
+     * RESPONSE
+     * -----------------------------------------------------
+     */
 
     return json({
 
@@ -213,7 +391,7 @@ async function handleCricketAPI() {
 
       updated:
         payload.updated ||
-        null,
+        new Date().toISOString(),
 
       matches:
         normalized
@@ -221,7 +399,9 @@ async function handleCricketAPI() {
     });
 
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
 
     console.error(
       "Cricketive Worker error:",
@@ -244,15 +424,52 @@ async function handleCricketAPI() {
 
 
 /* =========================================================
-   LIVE SCORE ENDPOINT
+   GET INDIVIDUAL SPORTSCORE MATCH
 ========================================================= */
 
-async function handleLiveScores() {
+async function getIndividualMatch(
+  matchUrl
+) {
 
-  try {
+  /*
+   * matchUrl example:
+   *
+   * /cricket/match/
+   * nondescripts-vs-bloomfield-cricket-
+   * and-athletic-club/
+   */
 
-    const response = await fetch(
-      "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
+
+  const slug =
+    extractSlug(
+      matchUrl
+    );
+
+
+  if (!slug) {
+
+    throw new Error(
+      "Could not extract SportScore match slug."
+    );
+
+  }
+
+
+  const apiUrl =
+    "https://sportscore.com/api/widget/match/" +
+    "?sport=cricket" +
+    `&slug=${encodeURIComponent(slug)}`;
+
+
+  console.log(
+    "Fetching individual match:",
+    apiUrl
+  );
+
+
+  const response =
+    await fetch(
+      apiUrl,
       {
         cf: {
           cacheTtl: 5,
@@ -262,135 +479,188 @@ async function handleLiveScores() {
     );
 
 
-    if (!response.ok) {
+  if (!response.ok) {
 
-      throw new Error(
-        `SportScore returned HTTP ${response.status}`
-      );
-
-    }
-
-
-    const payload =
-      await response.json();
-
-
-    const matches =
-      Array.isArray(payload.matches)
-        ? payload.matches
-        : [];
-
-
-    const scores = {};
-
-
-    for (
-      const match of matches
-    ) {
-
-      const key =
-        match.url
-          ? normalizeUrl(
-              match.url
-            )
-          : null;
-
-
-      if (!key) {
-        continue;
-      }
-
-
-      scores[key] = {
-
-        home:
-          match.home ||
-          "",
-
-
-        away:
-          match.away ||
-          "",
-
-
-        home_score:
-          extractScore(
-            match.home_score
-          ),
-
-
-        away_score:
-          extractScore(
-            match.away_score
-          ),
-
-
-        status:
-          match.status ||
-          null,
-
-
-        status_text:
-          match.status_text ||
-          null,
-
-
-        batting_team:
-          match.batting_team ||
-          null,
-
-
-        overs:
-          extractOvers(
-            match.overs
-          ),
-
-
-        time:
-          match.time ||
-          null
-
-      };
-
-    }
-
-
-    return json({
-
-      scores,
-
-      updated:
-        new Date().toISOString()
-
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "Live scores error:",
-      error
-    );
-
-
-    /*
-     * Do NOT crash the homepage.
-     */
-
-    return json(
-      {
-        scores: {},
-
-        error:
-          error.message,
-
-        updated:
-          new Date().toISOString()
-      },
-      200
+    throw new Error(
+      `SportScore match endpoint returned HTTP ${response.status}`
     );
 
   }
+
+
+  const payload =
+    await response.json();
+
+
+  /*
+   * SportScore returns:
+   *
+   * {
+   *   sport: "cricket",
+   *   match: {...},
+   *   updated: "..."
+   * }
+   */
+
+
+  if (
+    payload &&
+    payload.match
+  ) {
+
+    return payload.match;
+
+  }
+
+
+  /*
+   * Some responses may be wrapped
+   * differently.
+   */
+
+  if (
+    payload &&
+    payload.data &&
+    payload.data.match
+  ) {
+
+    return payload.data.match;
+
+  }
+
+
+  return null;
+
+}
+
+
+/* =========================================================
+   EXTRACT SLUG
+========================================================= */
+
+function extractSlug(
+  value
+) {
+
+  if (!value) {
+
+    return null;
+
+  }
+
+
+  let url =
+    String(
+      value
+    ).trim();
+
+
+  /*
+   * Remove query string.
+   */
+
+  url =
+    url.split("?")[0];
+
+
+  /*
+   * Remove trailing slash.
+   */
+
+  url =
+    url.replace(
+      /\/+$/,
+      ""
+    );
+
+
+  /*
+   * Get final path segment.
+   */
+
+  const parts =
+    url.split("/");
+
+
+  const slug =
+    parts[
+      parts.length - 1
+    ];
+
+
+  if (
+    !slug ||
+    slug === "match"
+  ) {
+
+    return null;
+
+  }
+
+
+  return slug;
+
+}
+
+
+/* =========================================================
+   LIVE STATUS CHECK
+========================================================= */
+
+function isLiveStatus(
+  status,
+  statusText
+) {
+
+  const value =
+    String(
+      status ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  const text =
+    String(
+      statusText ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  return (
+
+    value === "live" ||
+
+    value === "in_progress" ||
+
+    value === "in progress" ||
+
+    value === "started" ||
+
+    value === "playing" ||
+
+    value === "ongoing" ||
+
+    text === "live" ||
+
+    text === "in progress" ||
+
+    text === "in_progress" ||
+
+    text === "started" ||
+
+    text === "playing" ||
+
+    text === "ongoing" ||
+
+    text.includes(
+      "innings"
+    )
+
+  );
 
 }
 
@@ -399,41 +669,63 @@ async function handleLiveScores() {
    SCORE EXTRACTION
 ========================================================= */
 
-function extractScore(value) {
+function extractScore(
+  value
+) {
 
   /*
-   * Normal SportScore response:
-   *
-   * "225/1"
+   * Empty / dash
    */
 
   if (
-    typeof value === "string" ||
-    typeof value === "number"
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    value === "-"
   ) {
 
-    return String(value);
+    return null;
 
   }
 
 
   /*
-   * Object response support.
+   * String:
+   *
+   * "225/1"
    */
 
   if (
-    value &&
-    typeof value === "object"
+    typeof value === "string"
   ) {
 
-    /*
-     * Sometimes:
-     *
-     * {
-     *   runs: 225,
-     *   wickets: 1
-     * }
-     */
+    return value;
+
+  }
+
+
+  /*
+   * Number
+   */
+
+  if (
+    typeof value === "number"
+  ) {
+
+    return String(
+      value
+    );
+
+  }
+
+
+  /*
+   * Object
+   */
+
+  if (
+    typeof value === "object"
+  ) {
 
     const runs =
       value.runs ??
@@ -453,7 +745,9 @@ function extractScore(value) {
       wickets !== null
     ) {
 
-      return `${runs}/${wickets}`;
+      return (
+        `${runs}/${wickets}`
+      );
 
     }
 
@@ -477,10 +771,45 @@ function extractScore(value) {
 
 
 /* =========================================================
-   OVERS EXTRACTION
+   REAL SCORE CHECK
 ========================================================= */
 
-function extractOvers(value) {
+function isRealScore(
+  value
+) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+
+    return false;
+
+  }
+
+
+  if (
+    value === "-"
+  ) {
+
+    return false;
+
+  }
+
+
+  return true;
+
+}
+
+
+/* =========================================================
+   OVERS
+========================================================= */
+
+function extractOvers(
+  value
+) {
 
   if (
     value === null ||
@@ -497,7 +826,9 @@ function extractOvers(value) {
     typeof value === "number"
   ) {
 
-    return String(value);
+    return String(
+      value
+    );
 
   }
 
@@ -550,10 +881,6 @@ function normalizeSportScoreStatus(
       .toLowerCase();
 
 
-  /*
-   * LIVE
-   */
-
   if (
 
     value === "live" ||
@@ -578,7 +905,11 @@ function normalizeSportScoreStatus(
 
     text === "playing" ||
 
-    text === "ongoing"
+    text === "ongoing" ||
+
+    text.includes(
+      "innings"
+    )
 
   ) {
 
@@ -586,10 +917,6 @@ function normalizeSportScoreStatus(
 
   }
 
-
-  /*
-   * FINISHED
-   */
 
   if (
 
@@ -618,76 +945,201 @@ function normalizeSportScoreStatus(
   }
 
 
-  /*
-   * TIME FALLBACK
-   */
+  return "Upcoming";
 
-  if (matchTime) {
+}
 
-    const start =
-      new Date(
-        matchTime
+
+/* =========================================================
+   LIVE SCORES ENDPOINT
+========================================================= */
+
+async function handleLiveScores() {
+
+  try {
+
+    const response =
+      await fetch(
+        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
+        {
+          cf: {
+            cacheTtl: 5,
+            cacheEverything: true
+          }
+        }
       );
 
 
-    const now =
-      new Date();
+    if (!response.ok) {
 
-
-    if (
-      !Number.isNaN(
-        start.getTime()
-      )
-    ) {
-
-      const elapsedHours =
-        (
-          now.getTime() -
-          start.getTime()
-        )
-        /
-        (
-          1000 *
-          60 *
-          60
-        );
-
-
-      /*
-       * Cricket matches can run
-       * for several hours.
-       */
-
-      if (
-        elapsedHours >= 0 &&
-        elapsedHours <= 8
-      ) {
-
-        /*
-         * Only use this fallback when
-         * SportScore didn't explicitly
-         * say upcoming.
-         */
-
-        if (
-          value !== "upcoming" &&
-          value !== "scheduled" &&
-          value !== "not_started" &&
-          value !== "not started"
-        ) {
-
-          return "Live";
-
-        }
-
-      }
+      throw new Error(
+        `SportScore returned HTTP ${response.status}`
+      );
 
     }
 
+
+    const payload =
+      await response.json();
+
+
+    const matches =
+      Array.isArray(
+        payload.matches
+      )
+        ? payload.matches
+        : [];
+
+
+    const scores =
+      {};
+
+
+    /*
+     * Only query individual
+     * endpoints for live matches.
+     */
+
+    await Promise.all(
+
+      matches
+        .filter(
+          match =>
+            isLiveStatus(
+              match.status,
+              match.status_text
+            )
+        )
+        .map(
+          async match => {
+
+            try {
+
+              const details =
+                await getIndividualMatch(
+                  match.url
+                );
+
+
+              if (!details) {
+
+                return;
+
+              }
+
+
+              const key =
+                normalizeUrl(
+                  match.url
+                );
+
+
+              scores[key] = {
+
+                home:
+                  match.home ||
+                  "",
+
+
+                away:
+                  match.away ||
+                  "",
+
+
+                home_score:
+                  extractScore(
+                    details.home_score
+                  ),
+
+
+                away_score:
+                  extractScore(
+                    details.away_score
+                  ),
+
+
+                status:
+                  details.status ||
+                  match.status ||
+                  null,
+
+
+                status_text:
+                  details.status_text ||
+                  match.status_text ||
+                  null,
+
+
+                batting_team:
+                  details.batting_team ||
+                  null,
+
+
+                overs:
+                  extractOvers(
+                    details.overs
+                  ),
+
+
+                time:
+                  details.time ||
+                  match.time ||
+                  null
+
+              };
+
+            } catch (
+              error
+            ) {
+
+              console.error(
+                "Live score lookup failed:",
+                match.url,
+                error
+              );
+
+            }
+
+          }
+        )
+
+    );
+
+
+    return json({
+
+      scores,
+
+      updated:
+        new Date().toISOString()
+
+    });
+
+
+  } catch (
+    error
+  ) {
+
+    console.error(
+      "Live scores error:",
+      error
+    );
+
+
+    return json(
+      {
+        scores: {},
+
+        error:
+          error.message,
+
+        updated:
+          new Date().toISOString()
+      },
+      200
+    );
+
   }
-
-
-  return "Upcoming";
 
 }
 
@@ -696,7 +1148,9 @@ function normalizeSportScoreStatus(
    URL NORMALIZATION
 ========================================================= */
 
-function normalizeUrl(value) {
+function normalizeUrl(
+  value
+) {
 
   if (!value) {
 
@@ -712,7 +1166,9 @@ function normalizeUrl(value) {
 
 
   if (
-    url.startsWith("http")
+    url.startsWith(
+      "http"
+    )
   ) {
 
     return url.replace(
@@ -754,6 +1210,7 @@ function json(
       data
     ),
     {
+
       status,
 
       headers: {
@@ -768,6 +1225,7 @@ function json(
           "*"
 
       }
+
     }
   );
 
