@@ -1,44 +1,18 @@
 export default {
   async fetch(request, env) {
-
     const url = new URL(request.url);
 
-    /* =====================================================
-       CRICKET MATCH FEED
-    ===================================================== */
-
-    if (
-      url.pathname === "/api/cricket-matches"
-    ) {
+    if (url.pathname === "/api/cricket-matches") {
       return handleCricketAPI();
     }
 
-
-    /* =====================================================
-       LIVE SCORE
-    ===================================================== */
-
-    if (
-      url.pathname === "/api/live-scores"
-    ) {
+    if (url.pathname === "/api/live-scores") {
       return handleLiveScores(url);
     }
 
-
-    /* =====================================================
-       TEMPORARY DEBUG SCORE
-    ===================================================== */
-
-    if (
-      url.pathname === "/api/debug-score"
-    ) {
+    if (url.pathname === "/api/debug-score") {
       return handleDebugScore(url);
     }
-
-
-    /* =====================================================
-       STATIC ASSETS
-    ===================================================== */
 
     return env.ASSETS.fetch(request);
   }
@@ -46,40 +20,32 @@ export default {
 
 
 /* =========================================================
-   SPORTScore MATCH FEED
+   CRICKET MATCH FEED
 ========================================================= */
 
 async function handleCricketAPI() {
 
   try {
 
-    const response =
-      await fetchWithRetry(
-        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
-        {
-          cf: {
-            cacheTtl: 30,
-            cacheEverything: true
-          }
+    const response = await fetchWithRetry(
+      "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
+      {
+        cf: {
+          cacheTtl: 30,
+          cacheEverything: true
         }
-      );
-
+      }
+    );
 
     if (!response.ok) {
-
-      const body =
-        await response.text();
+      const body = await response.text();
 
       throw new Error(
         `SportScore returned HTTP ${response.status}: ${body}`
       );
-
     }
 
-
-    const payload =
-      await response.json();
-
+    const payload = await response.json();
 
     const matches =
       Array.isArray(payload.matches)
@@ -87,51 +53,197 @@ async function handleCricketAPI() {
         : [];
 
 
-    const normalized =
-      matches.map(
-        match => ({
+    /*
+     * First normalize the normal SportScore feed.
+     */
 
-          home:
-            match.home || "",
+    const normalized = matches.map(match => ({
 
-          away:
-            match.away || "",
+      home:
+        match.home || "",
 
-          home_logo:
-            match.home_logo || "",
+      away:
+        match.away || "",
 
-          away_logo:
-            match.away_logo || "",
+      home_logo:
+        match.home_logo || "",
 
-          status:
-            normalizeSportScoreStatus(
-              match.status,
-              match.status_text,
-              match.time
-            ),
+      away_logo:
+        match.away_logo || "",
 
-          status_text:
-            match.status_text || "",
+      status:
+        normalizeSportScoreStatus(
+          match.status,
+          match.status_text,
+          match.time
+        ),
 
-          time:
-            match.time || null,
+      status_text:
+        match.status_text || "",
 
-          competition:
-            match.competition ||
-            "Cricket",
+      time:
+        match.time || null,
 
-          competition_logo:
-            match.competition_logo ||
-            "",
+      competition:
+        match.competition || "Cricket",
 
-          url:
-            match.url || "",
+      competition_logo:
+        match.competition_logo || "",
 
-          score:
-            match.score || null
+      url:
+        match.url || "",
 
-        })
+      score:
+        match.score || null,
+
+      home_score:
+        match.home_score ?? null,
+
+      away_score:
+        match.away_score ?? null
+
+    }));
+
+
+    /*
+     * IMPORTANT:
+     *
+     * Only request detailed information for matches that
+     * SportScore itself says are LIVE.
+     *
+     * Upcoming and Finished matches do NOT cause additional
+     * SportScore requests.
+     */
+
+    const liveMatches =
+      normalized.filter(
+        match =>
+          String(match.status).toLowerCase() === "live"
       );
+
+
+    /*
+     * Fetch detailed scores concurrently.
+     *
+     * This is the important change.
+     */
+
+    await Promise.all(
+      liveMatches.map(
+        async match => {
+
+          if (!match.url) {
+            return;
+          }
+
+          try {
+
+            const detail =
+              await fetchLiveMatchDetail(
+                match.url
+              );
+
+
+            if (!detail) {
+              return;
+            }
+
+
+            /*
+             * SportScore's actual response:
+             *
+             * match.home_score
+             * match.away_score
+             * match.status
+             * match.status_text
+             */
+
+            if (
+              detail.home_score !== undefined &&
+              detail.home_score !== null
+            ) {
+
+              match.home_score =
+                detail.home_score;
+
+            }
+
+
+            if (
+              detail.away_score !== undefined &&
+              detail.away_score !== null
+            ) {
+
+              match.away_score =
+                detail.away_score;
+
+            }
+
+
+            if (
+              detail.status_text
+            ) {
+
+              match.status_text =
+                detail.status_text;
+
+            }
+
+
+            if (
+              detail.status
+            ) {
+
+              match.status =
+                normalizeSportScoreStatus(
+                  detail.status,
+                  detail.status_text,
+                  detail.time
+                );
+
+            }
+
+
+            /*
+             * Keep the detailed score object too.
+             */
+
+            match.score = {
+
+              home_score:
+                detail.home_score ?? null,
+
+              away_score:
+                detail.away_score ?? null,
+
+              status:
+                detail.status ?? null,
+
+              status_text:
+                detail.status_text ?? null
+
+            };
+
+          } catch (error) {
+
+            /*
+             * One failed live match must NOT prevent
+             * the other live matches from loading.
+             */
+
+            console.error(
+              "Unable to fetch live score:",
+              match.home,
+              "vs",
+              match.away,
+              error
+            );
+
+          }
+
+        }
+      )
+    );
 
 
     return json({
@@ -143,7 +255,8 @@ async function handleCricketAPI() {
         normalized.length,
 
       updated:
-        payload.updated || null,
+        payload.updated ||
+        new Date().toISOString(),
 
       matches:
         normalized
@@ -157,7 +270,6 @@ async function handleCricketAPI() {
       "Cricketive Worker error:",
       error
     );
-
 
     return json(
       {
@@ -174,7 +286,79 @@ async function handleCricketAPI() {
 
 
 /* =========================================================
-   LIVE SCORE ENDPOINT
+   FETCH ONE LIVE MATCH DETAIL
+========================================================= */
+
+async function fetchLiveMatchDetail(
+  sourceUrl
+) {
+
+  const normalizedUrl =
+    normalizeUrl(sourceUrl);
+
+
+  const slug =
+    extractMatchSlug(
+      normalizedUrl
+    );
+
+
+  if (!slug) {
+    return null;
+  }
+
+
+  const endpoint =
+    `https://sportscore.com/api/widget/match/?sport=cricket&slug=${encodeURIComponent(slug)}`;
+
+
+  const response =
+    await fetchWithRetry(
+      endpoint,
+      {
+        cf: {
+          /*
+           * Short cache for live scores.
+           */
+
+          cacheTtl: 10,
+          cacheEverything: true
+        }
+      }
+    );
+
+
+  if (!response.ok) {
+
+    throw new Error(
+      `SportScore detail HTTP ${response.status}`
+    );
+
+  }
+
+
+  const payload =
+    await response.json();
+
+
+  if (
+    !payload ||
+    !payload.match ||
+    typeof payload.match !== "object"
+  ) {
+
+    return null;
+
+  }
+
+
+  return payload.match;
+
+}
+
+
+/* =========================================================
+   STREAM PAGE LIVE SCORE ENDPOINT
 ========================================================= */
 
 async function handleLiveScores(url) {
@@ -201,92 +385,10 @@ async function handleLiveScores(url) {
     }
 
 
-    const normalizedSourceUrl =
-      normalizeUrl(
+    const match =
+      await fetchLiveMatchDetail(
         sourceUrl
       );
-
-
-    const slug =
-      extractMatchSlug(
-        normalizedSourceUrl
-      );
-
-
-    if (!slug) {
-
-      return json(
-        {
-          error:
-            "Could not extract SportScore match slug.",
-
-          score:
-            null
-        },
-        400
-      );
-
-    }
-
-
-    /*
-     * SportScore's single-match endpoint.
-     */
-
-    const endpoint =
-      `https://sportscore.com/api/widget/match/?sport=cricket&slug=${encodeURIComponent(slug)}`;
-
-
-    const response =
-      await fetchWithRetry(
-        endpoint,
-        {
-          cf: {
-            cacheTtl: 30,
-            cacheEverything: true
-          }
-        }
-      );
-
-
-    if (!response.ok) {
-
-      const body =
-        await response.text();
-
-      throw new Error(
-        `SportScore score endpoint returned HTTP ${response.status}: ${body}`
-      );
-
-    }
-
-
-    const payload =
-      await response.json();
-
-
-    /*
-     * REAL SportScore structure:
-     *
-     * {
-     *   sport: "cricket",
-     *   match: {
-     *     home: "...",
-     *     away: "...",
-     *     home_score: "225/1",
-     *     away_score: "9/0",
-     *     status: "live",
-     *     status_text: "1st innings (away)"
-     *   }
-     * }
-     */
-
-    const match =
-      payload &&
-      payload.match &&
-      typeof payload.match === "object"
-        ? payload.match
-        : null;
 
 
     if (!match) {
@@ -307,34 +409,18 @@ async function handleLiveScores(url) {
     }
 
 
-    /*
-     * These are the actual score fields
-     * returned by SportScore.
-     */
-
     const homeScore =
-      match.home_score ??
-      null;
-
+      match.home_score ?? null;
 
     const awayScore =
-      match.away_score ??
-      null;
-
+      match.away_score ?? null;
 
     const status =
-      match.status ??
-      null;
-
+      match.status ?? null;
 
     const statusText =
-      match.status_text ??
-      null;
+      match.status_text ?? null;
 
-
-    /*
-     * Do not show a fake scorecard.
-     */
 
     if (
       homeScore === null &&
@@ -357,7 +443,6 @@ async function handleLiveScores(url) {
           statusText,
 
         updated:
-          payload.updated ||
           new Date().toISOString()
 
       });
@@ -374,13 +459,6 @@ async function handleLiveScores(url) {
 
         away_score:
           awayScore,
-
-        /*
-         * SportScore's current match response
-         * does not provide overs for this fixture.
-         *
-         * Do NOT invent them.
-         */
 
         overs:
           null,
@@ -415,7 +493,6 @@ async function handleLiveScores(url) {
         statusText,
 
       updated:
-        payload.updated ||
         new Date().toISOString()
 
     });
@@ -428,11 +505,6 @@ async function handleLiveScores(url) {
       error
     );
 
-
-    /*
-     * Keep stream.html working even if
-     * SportScore temporarily fails.
-     */
 
     return json({
 
@@ -454,7 +526,7 @@ async function handleLiveScores(url) {
 
 
 /* =========================================================
-   TEMPORARY DEBUG SCORE ENDPOINT
+   DEBUG SCORE ENDPOINT
 ========================================================= */
 
 async function handleDebugScore(url) {
@@ -510,11 +582,6 @@ async function handleDebugScore(url) {
 
   try {
 
-    /*
-     * Debug endpoint deliberately bypasses
-     * Cloudflare caching.
-     */
-
     const response =
       await fetch(
         endpoint,
@@ -532,10 +599,8 @@ async function handleDebugScore(url) {
 
 
     return new Response(
-
       JSON.stringify(
         {
-
           requested_url:
             endpoint,
 
@@ -547,18 +612,14 @@ async function handleDebugScore(url) {
 
           response:
             rawBody
-
         },
         null,
         2
       ),
-
       {
-        status:
-          200,
+        status: 200,
 
         headers: {
-
           "content-type":
             "application/json",
 
@@ -567,7 +628,6 @@ async function handleDebugScore(url) {
 
           "access-control-allow-origin":
             "*"
-
         }
       }
     );
@@ -577,14 +637,12 @@ async function handleDebugScore(url) {
 
     return json(
       {
-
         error:
           error.message ||
           "Debug request failed.",
 
         requested_url:
           endpoint
-
       },
       500
     );
@@ -595,7 +653,7 @@ async function handleDebugScore(url) {
 
 
 /* =========================================================
-   SPORTScore STATUS
+   STATUS
 ========================================================= */
 
 function normalizeSportScoreStatus(
@@ -620,10 +678,6 @@ function normalizeSportScoreStatus(
       .toLowerCase();
 
 
-  /*
-   * SportScore explicitly says Live.
-   */
-
   if (
     value === "live" ||
     value === "in_progress" ||
@@ -645,10 +699,6 @@ function normalizeSportScoreStatus(
   }
 
 
-  /*
-   * SportScore explicitly says Finished.
-   */
-
   if (
     value === "finished" ||
     value === "ended" ||
@@ -667,11 +717,6 @@ function normalizeSportScoreStatus(
   }
 
 
-  /*
-   * IMPORTANT:
-   * We do NOT calculate Live using the start time.
-   */
-
   return "Upcoming";
 
 }
@@ -684,16 +729,12 @@ function normalizeSportScoreStatus(
 function normalizeUrl(value) {
 
   if (!value) {
-
     return "";
-
   }
 
 
   const url =
-    String(
-      value
-    ).trim();
+    String(value).trim();
 
 
   if (
@@ -724,7 +765,7 @@ function normalizeUrl(value) {
 
 
 /* =========================================================
-   EXTRACT SPORTScore MATCH SLUG
+   EXTRACT MATCH SLUG
 ========================================================= */
 
 function extractMatchSlug(value) {
@@ -740,9 +781,7 @@ function extractMatchSlug(value) {
     const parts =
       parsed.pathname
         .split("/")
-        .filter(
-          Boolean
-        );
+        .filter(Boolean);
 
 
     const matchIndex =
@@ -755,9 +794,7 @@ function extractMatchSlug(value) {
 
     if (
       matchIndex === -1 ||
-      !parts[
-        matchIndex + 1
-      ]
+      !parts[matchIndex + 1]
     ) {
 
       return "";
@@ -779,7 +816,7 @@ function extractMatchSlug(value) {
 
 
 /* =========================================================
-   SPORTScore RETRY
+   RETRY
 ========================================================= */
 
 async function fetchWithRetry(
@@ -788,8 +825,7 @@ async function fetchWithRetry(
   maxAttempts = 3
 ) {
 
-  let lastError =
-    null;
+  let lastError = null;
 
 
   for (
@@ -807,11 +843,6 @@ async function fetchWithRetry(
         );
 
 
-      /*
-       * Retry temporary SportScore
-       * server/traffic errors.
-       */
-
       if (
         (
           response.status === 429 ||
@@ -820,8 +851,7 @@ async function fetchWithRetry(
           response.status === 503 ||
           response.status === 504
         ) &&
-        attempt <
-          maxAttempts
+        attempt < maxAttempts
       ) {
 
         await sleep(
@@ -835,16 +865,13 @@ async function fetchWithRetry(
 
       return response;
 
-
     } catch (error) {
 
-      lastError =
-        error;
+      lastError = error;
 
 
       if (
-        attempt <
-          maxAttempts
+        attempt < maxAttempts
       ) {
 
         await sleep(
@@ -874,9 +901,7 @@ async function fetchWithRetry(
    SLEEP
 ========================================================= */
 
-function sleep(
-  milliseconds
-) {
+function sleep(milliseconds) {
 
   return new Promise(
     resolve =>
@@ -890,7 +915,7 @@ function sleep(
 
 
 /* =========================================================
-   JSON RESPONSE
+   JSON
 ========================================================= */
 
 function json(
@@ -899,15 +924,11 @@ function json(
 ) {
 
   return new Response(
-    JSON.stringify(
-      data
-    ),
+    JSON.stringify(data),
     {
-
       status,
 
       headers: {
-
         "content-type":
           "application/json",
 
@@ -916,9 +937,7 @@ function json(
 
         "access-control-allow-origin":
           "*"
-
       }
-
     }
   );
 
