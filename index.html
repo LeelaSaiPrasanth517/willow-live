@@ -16,23 +16,43 @@
 
 <style>
 
+/* =========================================================
+   GLOBAL
+========================================================= */
+
 * {
     box-sizing: border-box;
 }
 
+html,
 body {
     margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+body {
     background: #050505;
     color: #fff;
     font-family: Arial, Helvetica, sans-serif;
 }
 
+
+/* =========================================================
+   HEADER
+========================================================= */
+
 .header {
+    width: 100%;
     height: 70px;
+
     padding: 0 28px;
+
     display: flex;
     align-items: center;
     justify-content: space-between;
+
     background: #090909;
     border-bottom: 1px solid #222;
 }
@@ -40,107 +60,201 @@ body {
 .brand {
     display: flex;
     align-items: center;
+
+    min-width: 0;
 }
 
 .brand img {
-    height: 48px;
     width: 48px;
+    height: 48px;
+
     object-fit: cover;
     border-radius: 8px;
+
+    flex: 0 0 48px;
 }
 
 .brand span {
-    font-weight: 800;
-    font-size: 21px;
     margin-left: 9px;
+
+    font-size: 21px;
+    font-weight: 800;
+
+    white-space: nowrap;
 }
 
 .live {
     display: flex;
     align-items: center;
+
     gap: 7px;
+
     font-size: 13px;
     font-weight: 700;
+
+    white-space: nowrap;
 }
 
 .live-dot {
     width: 9px;
     height: 9px;
+
     background: #ff3030;
+
     border-radius: 50%;
-    box-shadow: 0 0 10px rgba(255,48,48,.8);
+
+    box-shadow:
+        0 0 10px rgba(255,48,48,.8);
+
+    flex: 0 0 9px;
 }
+
+
+/* =========================================================
+   HERO
+========================================================= */
 
 .hero {
     text-align: center;
+
     padding: 38px 15px 28px;
 }
 
 .hero h1 {
     margin: 0;
+
     font-size: 30px;
 }
 
 .hero p {
     color: #999;
+
     font-size: 14px;
 }
+
+
+/* =========================================================
+   MATCH AREA
+========================================================= */
 
 .matches {
     width: 100%;
     max-width: 1050px;
+
     margin: auto;
+
     padding: 0 15px 35px;
 }
 
 .section-title {
-    font-size: 20px;
     margin: 20px 0 14px;
+
+    font-size: 20px;
 }
 
 .group-title {
     display: flex;
     align-items: center;
+
     gap: 8px;
+
     margin: 22px 0 12px;
+
     font-size: 17px;
+    font-weight: 700;
 }
 
 .group-count {
     color: #777;
+
     font-size: 12px;
 }
 
+
+/* =========================================================
+   GRID
+========================================================= */
+
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(280px, 1fr)
+        );
+
     gap: 12px;
+
+    width: 100%;
 }
 
+
+/* =========================================================
+   MATCH CARD
+========================================================= */
+
 .match-card {
+    width: 100%;
+    min-width: 0;
+
     background: #101010;
+
     border: 1px solid #252525;
+
     border-radius: 12px;
+
     padding: 18px;
+
+    overflow: hidden;
 }
 
 .match-card.has-stream {
     border-color: #355f42;
-    box-shadow: 0 0 0 1px rgba(53,95,66,.25);
+
+    box-shadow:
+        0 0 0 1px
+        rgba(53,95,66,.25);
 }
+
+
+/* =========================================================
+   MATCH HEADER
+
+   IMPORTANT:
+   The status badge and match content share the row,
+   but the content is allowed to shrink.
+========================================================= */
 
 .match-header {
+    width: 100%;
+    min-width: 0;
+
     display: flex;
-    justify-content: space-between;
-    gap: 12px;
+
     align-items: flex-start;
+
+    justify-content: space-between;
+
+    gap: 10px;
 }
 
+
+/* =========================================================
+   MATCH CONTENT
+========================================================= */
+
 .match-name {
+    flex: 1 1 auto;
+
+    min-width: 0;
+
+    width: auto;
+
     font-size: 17px;
     font-weight: 700;
+
     line-height: 1.25;
-    width: 100%;
 }
 
 
@@ -150,43 +264,93 @@ body {
 
 .team-line {
     width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 9px;
     min-width: 0;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
     margin-bottom: 7px;
 }
+
+
+/* =========================================================
+   TEAM LOGO
+========================================================= */
 
 .team-logo {
     width: 30px;
     height: 30px;
+
     object-fit: contain;
+
     border-radius: 50%;
+
     background: #181818;
-    flex-shrink: 0;
+
+    flex: 0 0 30px;
 }
+
+
+/* =========================================================
+   TEAM NAME
+========================================================= */
 
 .team-name {
+    flex: 1 1 auto;
+
     min-width: 0;
+
     overflow: hidden;
+
     text-overflow: ellipsis;
+
     white-space: nowrap;
 }
+
+
+/* =========================================================
+   SCORE
+========================================================= */
 
 .team-score {
+    flex: 0 0 auto;
+
     margin-left: auto;
-    padding-left: 10px;
+
+    padding-left: 8px;
+
     color: #fff;
+
     font-size: 16px;
+
     font-weight: 900;
+
     white-space: nowrap;
-    flex-shrink: 0;
 }
 
+
+/* =========================================================
+   VS
+========================================================= */
+
 .vs {
+    margin:
+
+        2px
+
+        0
+
+        6px
+
+        39px;
+
     color: #777;
-    margin: 2px 0 6px 39px;
+
     font-size: 11px;
+
     font-weight: 700;
 }
 
@@ -196,82 +360,164 @@ body {
 ========================================================= */
 
 .match-info {
-    color: #999;
-    font-size: 13px;
     margin-top: 11px;
-    line-height: 1.55;
-}
 
-.innings-text {
-    display: inline-block;
-    margin-top: 9px;
-    padding: 6px 9px;
-    background: #18251b;
-    border: 1px solid #29442e;
-    border-radius: 7px;
-    color: #7ee28e;
-    font-size: 11px;
-    font-weight: 800;
-    line-height: 1.3;
+    color: #999;
+
+    font-size: 13px;
+
+    line-height: 1.55;
 }
 
 
 /* =========================================================
-   STATUS
+   INNINGS
+========================================================= */
+
+.innings-text {
+    display: inline-block;
+
+    max-width: 100%;
+
+    margin-top: 9px;
+
+    padding: 6px 9px;
+
+    background: #18251b;
+
+    border: 1px solid #29442e;
+
+    border-radius: 7px;
+
+    color: #7ee28e;
+
+    font-size: 11px;
+
+    font-weight: 800;
+
+    line-height: 1.3;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+
+/* =========================================================
+   STATUS BADGE
+
+   IMPORTANT:
+   flex-shrink: 0 keeps LIVE/UPCOMING inside card.
 ========================================================= */
 
 .status {
-    display: inline-block;
-    margin-top: 11px;
+    flex: 0 0 auto;
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: auto;
+
+    max-width: 82px;
+
+    min-height: 28px;
+
+    margin-top: 1px;
+
     padding: 5px 9px;
+
     border-radius: 20px;
+
     background: #222;
-    font-size: 11px;
+
+    font-size: 10px;
+
+    font-weight: 700;
+
+    line-height: 1;
+
     white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
 }
 
 .live-status {
     background: #3a1010;
+
     color: #ff6666;
 }
 
 .upcoming-status {
     background: #1e2b39;
+
     color: #8fc7ff;
 }
 
 
 /* =========================================================
-   STREAM
+   STREAM BADGE
 ========================================================= */
 
 .stream-badge {
     display: inline-block;
+
+    max-width: 100%;
+
     margin-top: 11px;
+
     padding: 5px 9px;
+
     border-radius: 20px;
+
     background: #16321e;
+
     color: #72d38b;
+
     font-size: 10px;
+
     font-weight: 700;
 }
 
 .no-stream {
-    color: #999;
-    font-size: 12px;
     margin-top: 11px;
+
+    color: #999;
+
+    font-size: 12px;
 }
+
+
+/* =========================================================
+   BUTTON
+========================================================= */
 
 .watch-button {
     display: inline-block;
+
+    max-width: 100%;
+
     margin-top: 14px;
+
     padding: 10px 16px;
+
     background: #5865f2;
+
     color: #fff;
+
     text-decoration: none;
+
     border-radius: 7px;
+
     font-size: 13px;
+
     font-weight: 700;
+
+    white-space: nowrap;
 }
 
 .watch-button:hover {
@@ -284,18 +530,33 @@ body {
 ========================================================= */
 
 .empty {
+    width: 100%;
+
     color: #777;
+
     text-align: center;
+
     padding: 22px;
+
     background: #0b0b0b;
+
     border: 1px solid #1d1d1d;
+
     border-radius: 10px;
 }
 
+
+/* =========================================================
+   UPDATED TIME
+========================================================= */
+
 .updated {
     color: #666;
+
     font-size: 11px;
+
     text-align: center;
+
     margin-top: 8px;
 }
 
@@ -305,8 +566,12 @@ body {
 ========================================================= */
 
 .community {
+    width: 100%;
+
     text-align: center;
+
     padding: 38px 15px 48px;
+
     background: #090909;
 }
 
@@ -316,16 +581,23 @@ body {
 
 .community p {
     color: #999;
+
     font-size: 14px;
 }
 
 .community-button {
     display: inline-block;
+
     padding: 12px 20px;
+
     background: #5865f2;
+
     color: #fff;
+
     text-decoration: none;
+
     border-radius: 8px;
+
     font-weight: 700;
 }
 
@@ -335,11 +607,39 @@ body {
 ========================================================= */
 
 footer {
+    width: 100%;
+
     text-align: center;
+
     padding: 18px;
+
     background: #030303;
+
     color: #666;
+
     font-size: 11px;
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 700px) {
+
+    .matches {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .grid {
+        grid-template-columns:
+            repeat(
+                2,
+                minmax(0, 1fr)
+            );
+    }
+
 }
 
 
@@ -347,45 +647,156 @@ footer {
    MOBILE
 ========================================================= */
 
-@media(max-width:600px) {
+@media (max-width: 600px) {
 
     .header {
         height: 60px;
+
         padding: 0 14px;
     }
 
+
     .brand img {
-        height: 40px;
         width: 40px;
+        height: 40px;
+
+        flex-basis: 40px;
     }
+
 
     .brand span {
         font-size: 18px;
     }
 
+
+    .hero {
+        padding-top: 30px;
+    }
+
+
     .hero h1 {
         font-size: 23px;
     }
 
-    .match-header {
-        flex-direction: column;
+
+    .matches {
+        padding-left: 10px;
+        padding-right: 10px;
     }
 
-    .status {
-        align-self: flex-start;
+
+    /*
+     * IMPORTANT:
+     * Keep the status on the same row.
+     *
+     * Do NOT use:
+     *
+     * flex-direction: column;
+     *
+     * because that caused the layout
+     * to become awkward on smaller cards.
+     */
+
+    .match-header {
+        flex-direction: row;
+
+        align-items: flex-start;
+
+        gap: 7px;
     }
+
+
+    .match-name {
+        flex: 1 1 auto;
+
+        min-width: 0;
+
+        font-size: 16px;
+    }
+
+
+    .status {
+        flex: 0 0 auto;
+
+        max-width: 72px;
+
+        padding: 5px 7px;
+
+        font-size: 9px;
+    }
+
 
     .team-logo {
         width: 27px;
         height: 27px;
+
+        flex-basis: 27px;
     }
 
-    .match-name {
-        font-size: 16px;
-    }
 
     .team-score {
         font-size: 15px;
+
+        padding-left: 6px;
+    }
+
+
+    .vs {
+        margin-left: 36px;
+    }
+
+
+    .grid {
+        grid-template-columns: 1fr;
+
+        gap: 10px;
+    }
+
+}
+
+
+/* =========================================================
+   VERY SMALL PHONES
+========================================================= */
+
+@media (max-width: 360px) {
+
+    .brand span {
+        font-size: 16px;
+    }
+
+
+    .live {
+        font-size: 11px;
+    }
+
+
+    .match-card {
+        padding: 14px;
+    }
+
+
+    .match-name {
+        font-size: 15px;
+    }
+
+
+    .status {
+        max-width: 68px;
+
+        padding: 5px 6px;
+
+        font-size: 8px;
+    }
+
+
+    .team-name {
+        font-size: 14px;
+    }
+
+
+    .team-score {
+        font-size: 14px;
     }
 
 }
@@ -397,6 +808,10 @@ footer {
 
 <body>
 
+
+<!-- =======================================================
+     HEADER
+======================================================= -->
 
 <header class="header">
 
@@ -425,6 +840,10 @@ footer {
 </header>
 
 
+<!-- =======================================================
+     HERO
+======================================================= -->
+
 <section class="hero">
 
     <h1>
@@ -437,6 +856,10 @@ footer {
 
 </section>
 
+
+<!-- =======================================================
+     MATCHES
+======================================================= -->
 
 <main class="matches">
 
@@ -477,6 +900,10 @@ footer {
 </main>
 
 
+<!-- =======================================================
+     COMMUNITY
+======================================================= -->
+
 <section class="community">
 
     <h2>
@@ -498,6 +925,10 @@ footer {
 
 </section>
 
+
+<!-- =======================================================
+     FOOTER
+======================================================= -->
 
 <footer>
 
@@ -547,10 +978,12 @@ async function loadMatches() {
             "liveMatches"
         );
 
+
     const upcomingEl =
         document.getElementById(
             "upcomingMatches"
         );
+
 
     const updatedEl =
         document.getElementById(
@@ -794,16 +1227,6 @@ async function loadMatches() {
                             )
                             : 0;
 
-
-                    /*
-                     * IMPORTANT:
-                     *
-                     * Scores stay attached to
-                     * the SportScore object.
-                     *
-                     * We do NOT replace them
-                     * with Supabase values.
-                     */
 
                     console.log(
                         "MATCH SCORE:",
@@ -1072,7 +1495,7 @@ function findStoredMatch(
 ) {
 
     /*
-     * First try the SportScore URL.
+     * First try SportScore URL.
      */
 
     if (
@@ -1418,7 +1841,7 @@ function createCard(
 
 
     /* =====================================================
-       SCORES DIRECTLY FROM SPORTScore
+       SCORES
     ===================================================== */
 
     const homeScore =
@@ -1484,7 +1907,7 @@ function createCard(
 
 
     /* =====================================================
-       READABLE INNINGS
+       INNINGS
     ===================================================== */
 
     const inningsText =
@@ -1536,7 +1959,6 @@ function createCard(
         item.streamCount > 0
 
             ? `
-
                 <div class="stream-badge">
 
                     🎥
@@ -1549,17 +1971,14 @@ function createCard(
                     AVAILABLE
 
                 </div>
-
               `
 
             : `
-
                 <div class="no-stream">
 
                     ⏳ Stream unavailable
 
                 </div>
-
               `;
 
 
@@ -1580,14 +1999,13 @@ function createCard(
             "
         >
 
-
             <div class="match-header">
 
 
                 <div class="match-name">
 
 
-                    <!-- HOME -->
+                    <!-- HOME TEAM -->
 
                     <div class="team-line">
 
@@ -1619,7 +2037,7 @@ function createCard(
                     </div>
 
 
-                    <!-- AWAY -->
+                    <!-- AWAY TEAM -->
 
                     <div class="team-line">
 
@@ -1642,7 +2060,7 @@ function createCard(
                     </div>
 
 
-                    <!-- INFO -->
+                    <!-- MATCH INFO -->
 
                     <div class="match-info">
 
@@ -1660,7 +2078,6 @@ function createCard(
                             inningsText
 
                                 ? `
-
                                     <br>
 
                                     <span
@@ -1674,7 +2091,6 @@ function createCard(
                                         )}
 
                                     </span>
-
                                   `
 
                                 : ""
@@ -1860,27 +2276,17 @@ function formatScore(
     }
 
 
-    /*
-     * Normally SportScore sends:
-     *
-     * "225/1"
-     *
-     * so this simply preserves it.
-     */
-
     if (
         typeof value === "string" ||
         typeof value === "number"
     ) {
 
-        return String(value);
+        return String(
+            value
+        );
 
     }
 
-
-    /*
-     * Also support object scores.
-     */
 
     if (
         typeof value === "object"
@@ -1947,12 +2353,19 @@ function normalizeStatus(
 
 
     if (
+
         value === "live" ||
+
         value === "in_progress" ||
+
         value === "in progress" ||
+
         value === "started" ||
+
         value === "playing" ||
+
         value === "ongoing"
+
     ) {
 
         return "Live";
@@ -1961,11 +2374,17 @@ function normalizeStatus(
 
 
     if (
+
         value === "finished" ||
+
         value === "ended" ||
+
         value === "completed" ||
+
         value === "complete" ||
+
         value === "ft"
+
     ) {
 
         return "Finished";
