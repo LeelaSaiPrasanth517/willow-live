@@ -494,6 +494,7 @@ async function load() {
 
     currentMatch = m;
     await loadLiveScore();
+    startScorePolling();
 
 }
 
@@ -1203,8 +1204,6 @@ function stopPlayer() {
     );
 
     video.load();
-startScorePolling();
-
 
     iframe.src = "";
 
