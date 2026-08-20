@@ -3,18 +3,14 @@ export default {
 
     const url = new URL(request.url);
 
-
     /* =====================================================
        CRICKET MATCH FEED
     ===================================================== */
 
     if (
-      url.pathname ===
-      "/api/cricket-matches"
+      url.pathname === "/api/cricket-matches"
     ) {
-
       return handleCricketAPI();
-
     }
 
 
@@ -23,26 +19,20 @@ export default {
     ===================================================== */
 
     if (
-      url.pathname ===
-      "/api/live-scores"
+      url.pathname === "/api/live-scores"
     ) {
-
       return handleLiveScores(url);
-
     }
 
 
     /* =====================================================
-       TEMPORARY SCORE DEBUG
+       TEMPORARY DEBUG SCORE
     ===================================================== */
 
     if (
-      url.pathname ===
-      "/api/debug-score"
+      url.pathname === "/api/debug-score"
     ) {
-
       return handleDebugScore(url);
-
     }
 
 
@@ -50,10 +40,7 @@ export default {
        STATIC ASSETS
     ===================================================== */
 
-    return env.ASSETS.fetch(
-      request
-    );
-
+    return env.ASSETS.fetch(request);
   }
 };
 
@@ -95,9 +82,7 @@ async function handleCricketAPI() {
 
 
     const matches =
-      Array.isArray(
-        payload.matches
-      )
+      Array.isArray(payload.matches)
         ? payload.matches
         : [];
 
@@ -107,20 +92,16 @@ async function handleCricketAPI() {
         match => ({
 
           home:
-            match.home ||
-            "",
+            match.home || "",
 
           away:
-            match.away ||
-            "",
+            match.away || "",
 
           home_logo:
-            match.home_logo ||
-            "",
+            match.home_logo || "",
 
           away_logo:
-            match.away_logo ||
-            "",
+            match.away_logo || "",
 
           status:
             normalizeSportScoreStatus(
@@ -130,12 +111,10 @@ async function handleCricketAPI() {
             ),
 
           status_text:
-            match.status_text ||
-            "",
+            match.status_text || "",
 
           time:
-            match.time ||
-            null,
+            match.time || null,
 
           competition:
             match.competition ||
@@ -146,12 +125,10 @@ async function handleCricketAPI() {
             "",
 
           url:
-            match.url ||
-            "",
+            match.url || "",
 
           score:
-            match.score ||
-            null
+            match.score || null
 
         })
       );
@@ -166,8 +143,7 @@ async function handleCricketAPI() {
         normalized.length,
 
       updated:
-        payload.updated ||
-        null,
+        payload.updated || null,
 
       matches:
         normalized
@@ -201,16 +177,12 @@ async function handleCricketAPI() {
    LIVE SCORE ENDPOINT
 ========================================================= */
 
-async function handleLiveScores(
-  url
-) {
+async function handleLiveScores(url) {
 
   try {
 
     const sourceUrl =
-      url.searchParams.get(
-        "url"
-      );
+      url.searchParams.get("url");
 
 
     if (!sourceUrl) {
@@ -222,7 +194,6 @@ async function handleLiveScores(
 
           score:
             null
-
         },
         400
       );
@@ -251,13 +222,16 @@ async function handleLiveScores(
 
           score:
             null
-
         },
         400
       );
 
     }
 
+
+    /*
+     * SportScore's single-match endpoint.
+     */
 
     const endpoint =
       `https://sportscore.com/api/widget/match/?sport=cricket&slug=${encodeURIComponent(slug)}`;
@@ -291,10 +265,28 @@ async function handleLiveScores(
       await response.json();
 
 
+    /*
+     * REAL SportScore structure:
+     *
+     * {
+     *   sport: "cricket",
+     *   match: {
+     *     home: "...",
+     *     away: "...",
+     *     home_score: "225/1",
+     *     away_score: "9/0",
+     *     status: "live",
+     *     status_text: "1st innings (away)"
+     *   }
+     * }
+     */
+
     const match =
-      extractMatchObject(
-        payload
-      );
+      payload &&
+      payload.match &&
+      typeof payload.match === "object"
+        ? payload.match
+        : null;
 
 
     if (!match) {
@@ -315,14 +307,39 @@ async function handleLiveScores(
     }
 
 
-    const score =
-      extractScore(
-        match,
-        payload
-      );
+    /*
+     * These are the actual score fields
+     * returned by SportScore.
+     */
+
+    const homeScore =
+      match.home_score ??
+      null;
 
 
-    if (!score) {
+    const awayScore =
+      match.away_score ??
+      null;
+
+
+    const status =
+      match.status ??
+      null;
+
+
+    const statusText =
+      match.status_text ??
+      null;
+
+
+    /*
+     * Do not show a fake scorecard.
+     */
+
+    if (
+      homeScore === null &&
+      awayScore === null
+    ) {
 
       return json({
 
@@ -331,12 +348,16 @@ async function handleLiveScores(
 
         status:
           normalizeSportScoreStatus(
-            match.status,
-            match.status_text,
+            status,
+            statusText,
             match.time
           ),
 
+        status_text:
+          statusText,
+
         updated:
+          payload.updated ||
           new Date().toISOString()
 
       });
@@ -346,16 +367,55 @@ async function handleLiveScores(
 
     return json({
 
-      score,
+      score: {
+
+        home_score:
+          homeScore,
+
+        away_score:
+          awayScore,
+
+        /*
+         * SportScore's current match response
+         * does not provide overs for this fixture.
+         *
+         * Do NOT invent them.
+         */
+
+        overs:
+          null,
+
+        batting_team:
+          null,
+
+        status:
+          status,
+
+        status_text:
+          statusText,
+
+        home:
+          match.home ||
+          null,
+
+        away:
+          match.away ||
+          null
+
+      },
 
       status:
         normalizeSportScoreStatus(
-          match.status,
-          match.status_text,
+          status,
+          statusText,
           match.time
         ),
 
+      status_text:
+        statusText,
+
       updated:
+        payload.updated ||
         new Date().toISOString()
 
     });
@@ -368,6 +428,11 @@ async function handleLiveScores(
       error
     );
 
+
+    /*
+     * Keep stream.html working even if
+     * SportScore temporarily fails.
+     */
 
     return json({
 
@@ -389,24 +454,13 @@ async function handleLiveScores(
 
 
 /* =========================================================
-   TEMPORARY DEBUG ENDPOINT
-
-   USE:
-
-   /api/debug-score?url=<SPORTSCORE_MATCH_URL>
-
-   This returns the RAW SportScore response so we can see
-   exactly where SportScore puts the cricket score.
+   TEMPORARY DEBUG SCORE ENDPOINT
 ========================================================= */
 
-async function handleDebugScore(
-  url
-) {
+async function handleDebugScore(url) {
 
   const sourceUrl =
-    url.searchParams.get(
-      "url"
-    );
+    url.searchParams.get("url");
 
 
   if (!sourceUrl) {
@@ -443,7 +497,6 @@ async function handleDebugScore(
 
         sourceUrl:
           normalizedSourceUrl
-
       },
       400
     );
@@ -458,10 +511,8 @@ async function handleDebugScore(
   try {
 
     /*
-     * IMPORTANT:
-     * No Cloudflare cache here.
-     *
-     * We want to see the actual response.
+     * Debug endpoint deliberately bypasses
+     * Cloudflare caching.
      */
 
     const response =
@@ -483,7 +534,6 @@ async function handleDebugScore(
     return new Response(
 
       JSON.stringify(
-
         {
 
           requested_url:
@@ -499,15 +549,11 @@ async function handleDebugScore(
             rawBody
 
         },
-
         null,
-
         2
-
       ),
 
       {
-
         status:
           200,
 
@@ -523,16 +569,13 @@ async function handleDebugScore(
             "*"
 
         }
-
       }
-
     );
 
 
   } catch (error) {
 
     return json(
-
       {
 
         error:
@@ -543,9 +586,7 @@ async function handleDebugScore(
           endpoint
 
       },
-
       500
-
     );
 
   }
@@ -554,363 +595,129 @@ async function handleDebugScore(
 
 
 /* =========================================================
-   EXTRACT MATCH OBJECT
+   SPORTScore STATUS
 ========================================================= */
 
-function extractMatchObject(
-  payload
+function normalizeSportScoreStatus(
+  status,
+  statusText = "",
+  matchTime = null
 ) {
 
+  const value =
+    String(
+      status || ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  const text =
+    String(
+      statusText || ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  /*
+   * SportScore explicitly says Live.
+   */
+
   if (
-    !payload ||
-    typeof payload !==
-      "object"
+    value === "live" ||
+    value === "in_progress" ||
+    value === "in progress" ||
+    value === "started" ||
+    value === "playing" ||
+    value === "ongoing" ||
+
+    text === "live" ||
+    text === "in progress" ||
+    text === "in_progress" ||
+    text === "started" ||
+    text === "playing" ||
+    text === "ongoing"
   ) {
 
-    return null;
+    return "Live";
 
   }
 
 
+  /*
+   * SportScore explicitly says Finished.
+   */
+
   if (
-    payload.match &&
-    typeof payload.match ===
-      "object"
+    value === "finished" ||
+    value === "ended" ||
+    value === "completed" ||
+    value === "complete" ||
+    value === "ft" ||
+
+    text === "finished" ||
+    text === "ended" ||
+    text === "completed" ||
+    text === "complete"
   ) {
 
-    return payload.match;
+    return "Finished";
 
   }
 
 
-  if (
-    payload.data &&
-    typeof payload.data ===
-      "object"
-  ) {
+  /*
+   * IMPORTANT:
+   * We do NOT calculate Live using the start time.
+   */
 
-    if (
-      payload.data.match &&
-      typeof payload.data.match ===
-        "object"
-    ) {
-
-      return payload.data.match;
-
-    }
-
-
-    return payload.data;
-
-  }
-
-
-  return payload;
+  return "Upcoming";
 
 }
 
 
 /* =========================================================
-   CURRENT SCORE EXTRACTION
+   URL NORMALIZATION
 ========================================================= */
 
-function extractScore(
-  match,
-  payload
-) {
+function normalizeUrl(value) {
 
-  const rawScore =
-    match.score ||
-    match.scores ||
-    payload.score ||
-    payload.scores ||
-    null;
+  if (!value) {
 
-
-  let homeScore =
-    null;
-
-  let awayScore =
-    null;
-
-  let overs =
-    null;
-
-  let battingTeam =
-    null;
-
-
-  if (
-    rawScore &&
-    typeof rawScore ===
-      "object"
-  ) {
-
-    const home =
-      rawScore.home ??
-      rawScore.home_score ??
-      rawScore.homeScore ??
-      null;
-
-
-    const away =
-      rawScore.away ??
-      rawScore.away_score ??
-      rawScore.awayScore ??
-      null;
-
-
-    homeScore =
-      normalizeScoreValue(
-        home
-      );
-
-
-    awayScore =
-      normalizeScoreValue(
-        away
-      );
-
-
-    overs =
-      normalizeOvers(
-        rawScore.overs ??
-        rawScore.over ??
-        rawScore.current_over ??
-        null
-      );
-
-
-    battingTeam =
-      rawScore.batting_team ||
-      rawScore.battingTeam ||
-      null;
+    return "";
 
   }
 
 
-  if (
-    homeScore === null
-  ) {
-
-    homeScore =
-      normalizeScoreValue(
-        match.home_score ??
-        match.homeScore ??
-        null
-      );
-
-  }
+  const url =
+    String(
+      value
+    ).trim();
 
 
   if (
-    awayScore === null
+    url.startsWith("http")
   ) {
 
-    awayScore =
-      normalizeScoreValue(
-        match.away_score ??
-        match.awayScore ??
-        null
-      );
-
-  }
-
-
-  if (
-    overs === null
-  ) {
-
-    overs =
-      normalizeOvers(
-        match.overs ??
-        match.current_over ??
-        null
-      );
-
-  }
-
-
-  if (
-    !battingTeam
-  ) {
-
-    battingTeam =
-      match.batting_team ||
-      match.battingTeam ||
-      null;
-
-  }
-
-
-  if (
-    homeScore === null &&
-    awayScore === null &&
-    overs === null
-  ) {
-
-    return null;
-
-  }
-
-
-  return {
-
-    home_score:
-      homeScore,
-
-    away_score:
-      awayScore,
-
-    overs,
-
-    batting_team:
-      battingTeam,
-
-    raw_status:
-      match.status ||
-      null,
-
-    raw_status_text:
-      match.status_text ||
-      null
-
-  };
-
-}
-
-
-/* =========================================================
-   SCORE VALUE NORMALIZATION
-========================================================= */
-
-function normalizeScoreValue(
-  value
-) {
-
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-
-    return null;
-
-  }
-
-
-  if (
-    typeof value ===
-      "number" ||
-    typeof value ===
-      "string"
-  ) {
-
-    return value;
-
-  }
-
-
-  if (
-    typeof value !==
-      "object"
-  ) {
-
-    return null;
-
-  }
-
-
-  const runs =
-    value.runs ??
-    value.run ??
-    value.total ??
-    value.score ??
-    value.points ??
-    null;
-
-
-  const wickets =
-    value.wickets ??
-    value.wicket ??
-    value.outs ??
-    value.dismissals ??
-    null;
-
-
-  if (
-    runs !== null &&
-    wickets !== null
-  ) {
-
-    return `${runs}/${wickets}`;
-
-  }
-
-
-  if (
-    runs !== null
-  ) {
-
-    return String(
-      runs
+    return url.replace(
+      /\/+$/,
+      ""
     );
-
-  }
-
-
-  return null;
-
-}
-
-
-/* =========================================================
-   OVERS NORMALIZATION
-========================================================= */
-
-function normalizeOvers(
-  value
-) {
-
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-
-    return null;
-
-  }
-
-
-  if (
-    typeof value ===
-      "number" ||
-    typeof value ===
-      "string"
-  ) {
-
-    return value;
-
-  }
-
-
-  if (
-    typeof value !==
-      "object"
-  ) {
-
-    return null;
 
   }
 
 
   return (
-    value.current ??
-    value.overs ??
-    value.over ??
-    value.total ??
-    null
+    "https://sportscore.com" +
+    (
+      url.startsWith("/")
+        ? url
+        : `/${url}`
+    )
+  ).replace(
+    /\/+$/,
+    ""
   );
 
 }
@@ -920,17 +727,13 @@ function normalizeOvers(
    EXTRACT SPORTScore MATCH SLUG
 ========================================================= */
 
-function extractMatchSlug(
-  value
-) {
+function extractMatchSlug(value) {
 
   try {
 
     const parsed =
       new URL(
-        normalizeUrl(
-          value
-        )
+        normalizeUrl(value)
       );
 
 
@@ -976,129 +779,6 @@ function extractMatchSlug(
 
 
 /* =========================================================
-   SPORTScore STATUS
-
-   IMPORTANT:
-   Never infer Live from start_time.
-========================================================= */
-
-function normalizeSportScoreStatus(
-  status,
-  statusText = "",
-  matchTime = null
-) {
-
-  const value =
-    String(
-      status ||
-      ""
-    )
-      .trim()
-      .toLowerCase();
-
-
-  const text =
-    String(
-      statusText ||
-      ""
-    )
-      .trim()
-      .toLowerCase();
-
-
-  if (
-    value === "live" ||
-    value === "in_progress" ||
-    value === "in progress" ||
-    value === "started" ||
-    value === "playing" ||
-    value === "ongoing" ||
-    text === "live" ||
-    text === "in progress" ||
-    text === "in_progress" ||
-    text === "started" ||
-    text === "playing" ||
-    text === "ongoing"
-  ) {
-
-    return "Live";
-
-  }
-
-
-  if (
-    value === "finished" ||
-    value === "ended" ||
-    value === "completed" ||
-    value === "complete" ||
-    value === "ft" ||
-    text === "finished" ||
-    text === "ended" ||
-    text === "completed" ||
-    text === "complete"
-  ) {
-
-    return "Finished";
-
-  }
-
-
-  return "Upcoming";
-
-}
-
-
-/* =========================================================
-   URL NORMALIZATION
-========================================================= */
-
-function normalizeUrl(
-  value
-) {
-
-  if (!value) {
-
-    return "";
-
-  }
-
-
-  const url =
-    String(
-      value
-    ).trim();
-
-
-  if (
-    url.startsWith(
-      "http"
-    )
-  ) {
-
-    return url.replace(
-      /\/+$/,
-      ""
-    );
-
-  }
-
-
-  return (
-    "https://sportscore.com" +
-    (
-      url.startsWith("/")
-        ? url
-        : `/${url}`
-    )
-  ).replace(
-    /\/+$/,
-    ""
-  );
-
-}
-
-
-/* =========================================================
    SPORTScore RETRY
 ========================================================= */
 
@@ -1126,6 +806,11 @@ async function fetchWithRetry(
           options
         );
 
+
+      /*
+       * Retry temporary SportScore
+       * server/traffic errors.
+       */
 
       if (
         (
