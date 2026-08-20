@@ -900,9 +900,9 @@ async function syncMatches() {
                     "",
 
                 status:
-                    normalizeSportScoreStatus(
+                    getCurrentMatchStatus(
                         match.status,
-                        match.start_time,
+                        match.time,
                         match.status_text
                     ),
 
@@ -1133,111 +1133,113 @@ async function syncMatches() {
 
 
 /* =========================================================
-   MATCH STATUS
+   CURRENT MATCH STATUS
    ========================================================= */
 
 /*
- * Status is calculated from the current clock when the
- * stored/SportScore status is not explicit.
+ * IMPORTANT:
+ * The database status is NOT trusted for display.
+ *
+ * Every time the Admin page renders matches, the status is
+ * calculated from the stored start_time and the current clock.
  *
  * Rules:
- *   1. Explicit LIVE/FINISHED always wins.
- *   2. Future start time = Upcoming.
- *   3. Start time passed by <= 6 hours = Live.
- *   4. Start time passed by > 6 hours = Finished.
  *
- * This prevents an old match from remaining Live overnight.
+ *   Explicit finished status       -> Finished
+ *   Start time in the future       -> Upcoming
+ *   Start time passed <= 6 hours   -> Live
+ *   Start time passed > 6 hours    -> Finished
+ *
+ * This prevents yesterday's matches from remaining Live.
  */
 
-function normalizeSportScoreStatus(
-    status,
+function getCurrentMatchStatus(
+    storedStatus,
     startTime,
     statusText = ""
 ) {
 
-    const value =
-        String(status || "")
+    const stored =
+        String(
+            storedStatus || ""
+        )
             .trim()
             .toLowerCase();
 
     const text =
-        String(statusText || "")
+        String(
+            statusText || ""
+        )
             .trim()
             .toLowerCase();
 
 
     /* -----------------------------------------------------
-       Explicit LIVE
+       Parse start time
        ----------------------------------------------------- */
 
+    const start =
+        startTime
+            ? new Date(startTime)
+            : null;
+
+
+    const hasValidStart =
+        start &&
+        !Number.isNaN(
+            start.getTime()
+        );
+
+
+    /*
+     * If we have a valid timestamp, it is the source of
+     * truth for the Admin display.
+     */
+
     if (
-        value === "live" ||
-        value === "in_progress" ||
-        value === "in progress" ||
-        value === "started" ||
-        value === "playing" ||
-        value === "ongoing" ||
-        text === "live" ||
-        text === "in progress" ||
-        text === "started" ||
-        text === "playing" ||
-        text === "ongoing"
+        hasValidStart
     ) {
 
+        const elapsedHours =
+            (
+                Date.now() -
+                start.getTime()
+            ) /
+            (1000 * 60 * 60);
+
+
         /*
-         * Do not trust an explicit LIVE flag if the match
-         * start time is more than 6 hours in the past.
+         * Future match.
          */
 
-        if (startTime) {
+        if (
+            elapsedHours < 0
+        ) {
 
-            const start =
-                new Date(startTime);
-
-            if (
-                !Number.isNaN(
-                    start.getTime()
-                )
-            ) {
-
-                const elapsedHours =
-                    (
-                        Date.now() -
-                        start.getTime()
-                    ) /
-                    (1000 * 60 * 60);
-
-                if (
-                    elapsedHours > 6
-                ) {
-
-                    return "Finished";
-
-                }
-
-            }
+            return "Upcoming";
 
         }
 
-        return "Live";
-    }
+
+        /*
+         * Match started within the last 6 hours.
+         */
+
+        if (
+            elapsedHours <= 6
+        ) {
+
+            return "Live";
+
+        }
 
 
-    /* -----------------------------------------------------
-       Explicit FINISHED
-       ----------------------------------------------------- */
-
-    if (
-        value === "finished" ||
-        value === "ended" ||
-        value === "completed" ||
-        value === "complete" ||
-        value === "ft" ||
-        text === "finished" ||
-        text === "ended" ||
-        text === "completed" ||
-        text === "complete"
-    ) {
+        /*
+         * Older than 6 hours.
+         *
+         * Do not allow an old stored "Live" value to
+         * keep the match in the Live section.
+         */
 
         return "Finished";
 
@@ -1245,55 +1247,46 @@ function normalizeSportScoreStatus(
 
 
     /* -----------------------------------------------------
-       Time-based fallback
+       No valid start_time
        ----------------------------------------------------- */
 
-    if (startTime) {
+    /*
+     * If timestamp data is unavailable, fall back to the
+     * explicit SportScore/database status.
+     */
 
-        const start =
-            new Date(startTime);
+    if (
+        stored === "live" ||
+        stored === "in_progress" ||
+        stored === "in progress" ||
+        stored === "started" ||
+        stored === "playing" ||
+        stored === "ongoing" ||
+        text === "live" ||
+        text === "in progress" ||
+        text === "started" ||
+        text === "playing" ||
+        text === "ongoing"
+    ) {
 
-        if (
-            !Number.isNaN(
-                start.getTime()
-            )
-        ) {
+        return "Live";
 
-            const elapsedHours =
-                (
-                    Date.now() -
-                    start.getTime()
-                ) /
-                (1000 * 60 * 60);
-
-
-            /* Future start → Upcoming */
-
-            if (
-                elapsedHours < 0
-            ) {
-
-                return "Upcoming";
-
-            }
+    }
 
 
-            /* Started within the last 6 hours → Live */
+    if (
+        stored === "finished" ||
+        stored === "ended" ||
+        stored === "completed" ||
+        stored === "complete" ||
+        stored === "ft" ||
+        text === "finished" ||
+        text === "ended" ||
+        text === "completed" ||
+        text === "complete"
+    ) {
 
-            if (
-                elapsedHours <= 6
-            ) {
-
-                return "Live";
-
-            }
-
-
-            /* Older than 6 hours → Finished */
-
-            return "Finished";
-
-        }
+        return "Finished";
 
     }
 
@@ -1385,13 +1378,12 @@ function normalizeUrl(
    CLEAN STALE LIVE MATCHES
    ========================================================= */
 
-/*
- * Status is now recalculated from start_time when matches
- * are loaded. We no longer permanently rewrite database
- * statuses here.
- */
-
 async function cleanStaleMatches() {
+
+    /*
+     * No database status mutation is required anymore.
+     * Current display status is calculated from start_time.
+     */
 
     return;
 
@@ -1470,10 +1462,70 @@ async function loadMatches() {
     }
 
 
-    const validMatches =
+    /*
+     * Calculate CURRENT status for every match.
+     *
+     * Never use the stored status to decide which section
+     * the match belongs to.
+     */
+
+    const currentMatches =
         (data || [])
             .filter(
-                match => {
+                match =>
+                    match.team1 &&
+                    match.team2 &&
+                    !isPlaceholder(
+                        match.team1
+                    ) &&
+                    !isPlaceholder(
+                        match.team2
+                    )
+            )
+            .map(
+                match => ({
+
+                    ...match,
+
+                    currentStatus:
+                        getCurrentMatchStatus(
+                            match.status,
+                            match.start_time,
+                            match.status_text
+                        )
+
+                })
+            );
+
+
+    const liveMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus === "Live"
+        );
+
+
+    const upcomingMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus === "Upcoming"
+        );
+
+
+    const finishedMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus === "Finished"
+        );
+
+
+    /*
+     * Only Live and Upcoming are rendered in the active
+     * schedule. Finished matches remain available in the
+     * database and can be shown by other pages if needed.
+     */
+
+
 
                     return (
                         match.team1 &&
@@ -1490,46 +1542,17 @@ async function loadMatches() {
             );
 
 
-    /*
-     * Recalculate status from the current time every time
-     * the Admin page loads.
-     *
-     * This means a match automatically moves:
-     *
-     * Upcoming → Live → Finished
-     *
-     * without requiring another SportScore sync.
-     */
-
-    const nowUpdatedMatches =
-        validMatches.map(
-            match => ({
-
-                ...match,
-
-                status:
-                    normalizeSportScoreStatus(
-                        match.status,
-                        match.start_time,
-                        match.status_text
-                    )
-
-            })
-        );
-
-
-
     const live =
-        nowUpdatedMatches.filter(
+        validMatches.filter(
             match =>
-                match.status === "Live"
+                match.currentStatus === "Live"
         );
 
 
     const upcoming =
-        nowUpdatedMatches.filter(
+        validMatches.filter(
             match =>
-                match.status === "Upcoming"
+                match.currentStatus === "Upcoming"
         );
 
 
