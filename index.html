@@ -16,7 +16,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-
 <style>
 
 * {
@@ -40,7 +39,6 @@ body {
 ========================================================= */
 
 .header {
-
     height: 70px;
 
     padding:
@@ -60,17 +58,13 @@ body {
 
 
 .brand {
-
     display: flex;
-
     align-items: center;
 }
 
 
 .brand img {
-
     height: 48px;
-
     width: 48px;
 
     object-fit: cover;
@@ -80,9 +74,7 @@ body {
 
 
 .brand span {
-
     font-weight: 800;
-
     font-size: 21px;
 
     margin-left: 9px;
@@ -90,7 +82,6 @@ body {
 
 
 .live {
-
     display: flex;
 
     align-items: center;
@@ -104,9 +95,7 @@ body {
 
 
 .live-dot {
-
     width: 9px;
-
     height: 9px;
 
     background: #ff3030;
@@ -115,12 +104,7 @@ body {
 
     box-shadow:
         0 0 10px
-        rgba(
-            255,
-            48,
-            48,
-            .8
-        );
+        rgba(255, 48, 48, .8);
 }
 
 
@@ -129,7 +113,6 @@ body {
 ========================================================= */
 
 .hero {
-
     text-align: center;
 
     padding:
@@ -140,7 +123,6 @@ body {
 
 
 .hero h1 {
-
     margin: 0;
 
     font-size: 30px;
@@ -148,7 +130,6 @@ body {
 
 
 .hero p {
-
     color: #999;
 
     font-size: 14px;
@@ -160,7 +141,6 @@ body {
 ========================================================= */
 
 .matches {
-
     width: 100%;
 
     max-width: 1050px;
@@ -168,13 +148,13 @@ body {
     margin: auto;
 
     padding:
-        0 15px
+        0
+        15px
         35px;
 }
 
 
 .section-title {
-
     font-size: 20px;
 
     margin:
@@ -185,7 +165,6 @@ body {
 
 
 .group-title {
-
     display: flex;
 
     align-items: center;
@@ -202,7 +181,6 @@ body {
 
 
 .group-count {
-
     color: #777;
 
     font-size: 12px;
@@ -210,7 +188,6 @@ body {
 
 
 .grid {
-
     display: grid;
 
     grid-template-columns:
@@ -231,7 +208,6 @@ body {
 ========================================================= */
 
 .match-card {
-
     background: #101010;
 
     border:
@@ -244,7 +220,6 @@ body {
 
 
 .match-card.has-stream {
-
     border-color: #355f42;
 
     box-shadow:
@@ -259,19 +234,19 @@ body {
 
 
 .match-header {
-
     display: flex;
 
-    justify-content: space-between;
+    justify-content:
+        space-between;
 
     gap: 12px;
 
-    align-items: flex-start;
+    align-items:
+        flex-start;
 }
 
 
 .match-name {
-
     font-size: 17px;
 
     font-weight: 700;
@@ -282,8 +257,11 @@ body {
 }
 
 
-.team-line {
+/* =========================================================
+   TEAM ROW
+========================================================= */
 
+.team-line {
     display: flex;
 
     align-items: center;
@@ -297,9 +275,7 @@ body {
 
 
 .team-logo {
-
     width: 30px;
-
     height: 30px;
 
     object-fit: contain;
@@ -313,17 +289,46 @@ body {
 
 
 .team-name {
-
     overflow: hidden;
 
     text-overflow: ellipsis;
 
     white-space: nowrap;
+
+    min-width: 0;
+}
+
+
+/*
+ * IMPORTANT:
+ * The score is now a separate element.
+ * This prevents:
+ *
+ * Nondescripts225/1
+ *
+ * and produces:
+ *
+ * Nondescripts     225/1
+ */
+
+.team-score {
+    margin-left: auto;
+
+    padding-left: 10px;
+
+    color: #fff;
+
+    font-size: 16px;
+
+    font-weight: 900;
+
+    white-space: nowrap;
+
+    flex-shrink: 0;
 }
 
 
 .vs {
-
     color: #777;
 
     margin:
@@ -338,8 +343,11 @@ body {
 }
 
 
-.match-info {
+/* =========================================================
+   MATCH INFORMATION
+========================================================= */
 
+.match-info {
     color: #999;
 
     font-size: 13px;
@@ -350,12 +358,41 @@ body {
 }
 
 
+/*
+ * Human-readable innings text.
+ */
+
+.innings-text {
+    display: inline-block;
+
+    margin-top: 9px;
+
+    padding:
+        6px
+        9px;
+
+    background: #18251b;
+
+    border:
+        1px solid #29442e;
+
+    border-radius: 7px;
+
+    color: #7ee28e;
+
+    font-size: 11px;
+
+    font-weight: 800;
+
+    line-height: 1.3;
+}
+
+
 /* =========================================================
    STATUS
 ========================================================= */
 
 .status {
-
     display: inline-block;
 
     margin-top: 11px;
@@ -375,7 +412,6 @@ body {
 
 
 .live-status {
-
     background: #3a1010;
 
     color: #ff6666;
@@ -383,56 +419,9 @@ body {
 
 
 .upcoming-status {
-
     background: #1e2b39;
 
     color: #8fc7ff;
-}
-
-
-/* =========================================================
-   SCORE
-========================================================= */
-
-.live-score {
-
-    margin-left: auto;
-
-    color: #fff;
-
-    font-size: 17px;
-
-    font-weight: 800;
-
-    white-space: nowrap;
-
-    min-width: 52px;
-
-    text-align: right;
-}
-
-
-.live-score.empty {
-
-    color: #555;
-
-    font-size: 13px;
-
-    font-weight: 600;
-}
-
-
-.innings-text {
-
-    display: inline-block;
-
-    margin-top: 3px;
-
-    color: #ffae42;
-
-    font-size: 12px;
-
-    font-weight: 700;
 }
 
 
@@ -441,7 +430,6 @@ body {
 ========================================================= */
 
 .stream-badge {
-
     display: inline-block;
 
     margin-top: 11px;
@@ -463,7 +451,6 @@ body {
 
 
 .no-stream {
-
     color: #999;
 
     font-size: 12px;
@@ -472,12 +459,7 @@ body {
 }
 
 
-/* =========================================================
-   WATCH BUTTON
-========================================================= */
-
 .watch-button {
-
     display: inline-block;
 
     margin-top: 14px;
@@ -501,17 +483,15 @@ body {
 
 
 .watch-button:hover {
-
     background: #4752c4;
 }
 
 
 /* =========================================================
-   EMPTY / UPDATED
+   EMPTY
 ========================================================= */
 
 .empty {
-
     color: #777;
 
     text-align: center;
@@ -528,7 +508,6 @@ body {
 
 
 .updated {
-
     color: #666;
 
     font-size: 11px;
@@ -544,7 +523,6 @@ body {
 ========================================================= */
 
 .community {
-
     text-align: center;
 
     padding:
@@ -557,13 +535,11 @@ body {
 
 
 .community h2 {
-
     margin: 0;
 }
 
 
 .community p {
-
     color: #999;
 
     font-size: 14px;
@@ -571,7 +547,6 @@ body {
 
 
 .community-button {
-
     display: inline-block;
 
     padding:
@@ -595,7 +570,6 @@ body {
 ========================================================= */
 
 footer {
-
     text-align: center;
 
     padding: 18px;
@@ -615,65 +589,56 @@ footer {
 @media(max-width:600px) {
 
     .header {
-
         height: 60px;
 
         padding:
-            0 14px;
+            0
+            14px;
     }
 
 
     .brand img {
-
         height: 40px;
-
         width: 40px;
     }
 
 
     .brand span {
-
         font-size: 18px;
     }
 
 
     .hero h1 {
-
         font-size: 23px;
     }
 
 
     .match-header {
-
         flex-direction: column;
     }
 
 
     .status {
-
-        align-self: flex-start;
+        align-self:
+            flex-start;
     }
 
 
     .team-logo {
-
         width: 27px;
-
         height: 27px;
     }
 
 
     .match-name {
-
         font-size: 16px;
     }
 
 
-    .live-score {
+    .team-score {
+        font-size: 15px;
 
-        font-size: 16px;
-
-        min-width: 48px;
+        padding-left: 6px;
     }
 
 }
@@ -742,18 +707,14 @@ footer {
 
 
     <h2 class="section-title">
-
         🔴 Live Now
-
     </h2>
 
 
     <div id="liveMatches">
 
         <div class="empty">
-
             Loading live matches...
-
         </div>
 
     </div>
@@ -766,22 +727,17 @@ footer {
 
 
     <h2 class="section-title">
-
         📅 Upcoming Matches
-
     </h2>
 
 
     <div id="upcomingMatches">
 
         <div class="empty">
-
             Loading upcoming matches...
-
         </div>
 
     </div>
-
 
 </main>
 
@@ -793,16 +749,13 @@ footer {
 <section class="community">
 
     <h2>
-
         💬 Join Cricketive
-
     </h2>
 
 
     <p>
-
-        Talk cricket, follow matches and connect with fans worldwide.
-
+        Talk cricket, follow matches
+        and connect with fans worldwide.
     </p>
 
 
@@ -812,9 +765,7 @@ footer {
         target="_blank"
         rel="noopener noreferrer"
     >
-
         JOIN OUR DISCORD
-
     </a>
 
 </section>
@@ -850,7 +801,7 @@ const db =
 
 
 /* =========================================================
-   WORKER
+   WORKER URL
 ========================================================= */
 
 const WORKER_URL =
@@ -858,7 +809,7 @@ const WORKER_URL =
 
 
 /* =========================================================
-   LOAD MATCHES
+   LOAD MATCHES & SCORES
 ========================================================= */
 
 async function loadMatches() {
@@ -885,13 +836,16 @@ async function loadMatches() {
 
 
         /* =================================================
-           LOAD STORED MATCHES
+           LOAD CRICKETIVE MATCHES
         ================================================= */
 
         const yesterday =
             new Date(
                 Date.now() -
-                24 * 60 * 60 * 1000
+                24 *
+                60 *
+                60 *
+                1000
             ).toISOString();
 
 
@@ -933,7 +887,7 @@ async function loadMatches() {
 
 
         /* =================================================
-           STREAM COUNTS
+           ACTIVE STREAMS
         ================================================= */
 
         const matchIds =
@@ -987,7 +941,8 @@ async function loadMatches() {
         }
 
 
-        const streamCounts = {};
+        const streamCounts =
+            {};
 
 
         streamRows.forEach(
@@ -995,23 +950,23 @@ async function loadMatches() {
 
                 streamCounts[
                     stream.match_id
-                ] =
-                    (
-                        streamCounts[
-                            stream.match_id
-                        ] || 0
-                    ) + 1;
+                ] = (
+                    streamCounts[
+                        stream.match_id
+                    ] || 0
+                ) + 1;
 
             }
         );
 
 
         /* =================================================
-           SPORTScore MATCHES
+           SPORTScore
         ================================================= */
 
         let sportScoreMatches =
             [];
+
 
         let sportScoreAvailable =
             false;
@@ -1046,6 +1001,7 @@ async function loadMatches() {
                     sportScoreMatches =
                         payload.matches;
 
+
                     sportScoreAvailable =
                         true;
 
@@ -1056,7 +1012,7 @@ async function loadMatches() {
         } catch (error) {
 
             console.warn(
-                "SportScore unavailable. Falling back to stored data.",
+                "SportScore unavailable. Falling back to stored status.",
                 error
             );
 
@@ -1116,7 +1072,8 @@ async function loadMatches() {
                                 streamCounts[
                                     match.id
                                 ] || 0
-                            ) >
+                            )
+                            >
                             (
                                 streamCounts[
                                     previous.id
@@ -1139,7 +1096,84 @@ async function loadMatches() {
 
 
         /* =================================================
-           NORMALIZE SPORTScore
+           INDEX SPORTScore MATCHES
+        ================================================= */
+
+        const bySportScoreUrl =
+            new Map();
+
+
+        const sportScoreByFixture =
+            new Map();
+
+
+        sportScoreMatches.forEach(
+            source => {
+
+                const team1 =
+                    String(
+                        source.home ||
+                        source.team1 ||
+                        ""
+                    ).trim();
+
+
+                const team2 =
+                    String(
+                        source.away ||
+                        source.team2 ||
+                        ""
+                    ).trim();
+
+
+                const sourceTime =
+                    source.time ||
+                    source.start_time ||
+                    source.match_time ||
+                    null;
+
+
+                const url =
+                    source.url
+                        ? normalizeUrl(
+                            source.url
+                        )
+                        : "";
+
+
+                if (url) {
+
+                    bySportScoreUrl.set(
+                        url,
+                        source
+                    );
+
+                }
+
+
+                const key =
+                    makeFixtureKey(
+                        team1,
+                        team2,
+                        sourceTime
+                    );
+
+
+                if (key) {
+
+                    sportScoreByFixture.set(
+                        key,
+                        source
+                    );
+
+                }
+
+            }
+        );
+
+
+        /* =================================================
+           NORMALIZE MATCHES
         ================================================= */
 
         let normalized = [];
@@ -1191,7 +1225,9 @@ async function loadMatches() {
                                         sportscoreUrl
                                     )
                                     : null
-                            ) ||
+                            )
+
+                            ||
 
                             byFixture.get(
                                 makeFixtureKey(
@@ -1199,7 +1235,9 @@ async function loadMatches() {
                                     team2,
                                     sourceTime
                                 )
-                            ) ||
+                            )
+
+                            ||
 
                             null;
 
@@ -1239,13 +1277,13 @@ async function loadMatches() {
                     }
                 );
 
+
         } else {
 
             /*
-             * FALLBACK
+             * SportScore unavailable.
              *
-             * If SportScore is temporarily unavailable,
-             * use the stored database data.
+             * Use stored matches.
              */
 
             normalized =
@@ -1290,7 +1328,7 @@ async function loadMatches() {
 
 
         /* =================================================
-           REMOVE DUPLICATES
+           DEDUPLICATE
         ================================================= */
 
         const unique =
@@ -1340,7 +1378,7 @@ async function loadMatches() {
 
 
                 /*
-                 * Prefer the version that has a stream.
+                 * Prefer the record that has a stream.
                  */
 
                 if (
@@ -1366,7 +1404,7 @@ async function loadMatches() {
 
 
         /* =================================================
-           LIVE / UPCOMING
+           CATEGORIZE
         ================================================= */
 
         const live =
@@ -1375,7 +1413,8 @@ async function loadMatches() {
                     String(
                         item.matchStatus ||
                         ""
-                    ).toLowerCase() ===
+                    ).toLowerCase()
+                    ===
                     "live"
             );
 
@@ -1386,7 +1425,8 @@ async function loadMatches() {
                     String(
                         item.matchStatus ||
                         ""
-                    ).toLowerCase() ===
+                    ).toLowerCase()
+                    ===
                     "upcoming"
             );
 
@@ -1397,10 +1437,6 @@ async function loadMatches() {
 
         live.sort(
             (a, b) => {
-
-                /*
-                 * Matches with streams first.
-                 */
 
                 if (
                     a.hasStream &&
@@ -1486,9 +1522,11 @@ async function loadMatches() {
 
 
         updatedEl.textContent =
-            `Live data updated: ${formatDate(
-                new Date()
-            )}`;
+            `Live data updated: ${
+                formatDate(
+                    new Date()
+                )
+            }`;
 
 
     } catch (error) {
@@ -1539,12 +1577,14 @@ function renderLive(
         element.className =
             "";
 
+
         element.innerHTML =
             `
                 <div class="empty">
                     No matches are live right now.
                 </div>
             `;
+
 
         return;
 
@@ -1568,10 +1608,6 @@ function renderLive(
     let html =
         "";
 
-
-    /* =====================================================
-       STREAM AVAILABLE
-    ===================================================== */
 
     if (
         available.length
@@ -1610,10 +1646,6 @@ function renderLive(
 
     }
 
-
-    /* =====================================================
-       NO STREAM
-    ===================================================== */
 
     if (
         unavailable.length
@@ -1655,6 +1687,7 @@ function renderLive(
 
     element.innerHTML =
         html ||
+
         `
             <div class="empty">
                 No live matches available.
@@ -1680,12 +1713,14 @@ function renderUpcoming(
         element.className =
             "";
 
+
         element.innerHTML =
             `
                 <div class="empty">
                     No upcoming matches listed.
                 </div>
             `;
+
 
         return;
 
@@ -1698,6 +1733,7 @@ function renderUpcoming(
 
     element.innerHTML =
         matches
+
             .map(
                 item =>
                     createCard(
@@ -1705,6 +1741,7 @@ function renderUpcoming(
                         false
                     )
             )
+
             .join("");
 
 }
@@ -1735,27 +1772,23 @@ function createCard(
         "Unknown team";
 
 
-    /* =====================================================
-       TIME
-    ===================================================== */
-
-    const rawTime =
+    const timeValue =
         source.time ||
         source.start_time ||
         source.match_time ||
-        null;
+        "";
 
 
     const time =
-        rawTime
+        timeValue
             ? formatDate(
-                rawTime
+                timeValue
             )
             : "";
 
 
     /* =====================================================
-       ACTION
+       MATCH URL
     ===================================================== */
 
     let actionUrl =
@@ -1772,16 +1805,16 @@ function createCard(
     ) {
 
         actionUrl =
-            `/stream.html?match=${encodeURIComponent(
-                item.storedMatch.id
-            )}`;
+            `/stream.html?match=${
+                encodeURIComponent(
+                    item.storedMatch.id
+                )
+            }`;
 
 
         actionText =
             item.streamCount > 0
-
                 ? "▶ WATCH MATCH"
-
                 : "VIEW MATCH";
 
     } else if (
@@ -1801,7 +1834,7 @@ function createCard(
 
 
     /* =====================================================
-       STREAM INFO
+       STREAM INFORMATION
     ===================================================== */
 
     const streamInfo =
@@ -1811,7 +1844,9 @@ function createCard(
 
                 <div class="stream-badge">
 
-                    🎥 ${item.streamCount}
+                    🎥
+
+                    ${item.streamCount}
 
                     STREAM${
                         item.streamCount === 1
@@ -1837,7 +1872,7 @@ function createCard(
 
 
     /* =====================================================
-       LOGOS
+       TEAM LOGOS
     ===================================================== */
 
     const homeLogo =
@@ -1858,21 +1893,13 @@ function createCard(
             ? `
 
                 <img
-
                     class="team-logo"
-
-                    src="${esc(
-                        homeLogo
-                    )}"
-
+                    src="${esc(homeLogo)}"
                     alt=""
-
                     loading="lazy"
-
                     onerror="
                         this.style.display='none'
                     "
-
                 >
 
               `
@@ -1886,21 +1913,13 @@ function createCard(
             ? `
 
                 <img
-
                     class="team-logo"
-
-                    src="${esc(
-                        awayLogo
-                    )}"
-
+                    src="${esc(awayLogo)}"
                     alt=""
-
                     loading="lazy"
-
                     onerror="
                         this.style.display='none'
                     "
-
                 >
 
               `
@@ -1909,163 +1928,48 @@ function createCard(
 
 
     /* =====================================================
-       LIVE SCORES
+       SCORES
     ===================================================== */
 
-    const rawHomeScore =
-        source.home_score;
-
-
-    const rawAwayScore =
-        source.away_score;
-
-
-    const hasHomeScore =
-        isLive &&
-        rawHomeScore !== null &&
-        rawHomeScore !== undefined &&
-        String(
-            rawHomeScore
-        ).trim() !== "" &&
-        String(
-            rawHomeScore
-        ).trim() !== "-";
-
-
-    const hasAwayScore =
-        isLive &&
-        rawAwayScore !== null &&
-        rawAwayScore !== undefined &&
-        String(
-            rawAwayScore
-        ).trim() !== "" &&
-        String(
-            rawAwayScore
-        ).trim() !== "-";
-
-
     const homeScore =
-        hasHomeScore
-            ? String(
-                rawHomeScore
-            )
-            : "";
+        formatScore(
+            source.home_score
+        );
 
 
     const awayScore =
-        hasAwayScore
-            ? String(
-                rawAwayScore
-            )
-            : "";
+        formatScore(
+            source.away_score
+        );
 
 
     /* =====================================================
-       SCORE HTML
+       READABLE INNINGS
     ===================================================== */
 
-    const homeScoreHtml =
-        isLive
-
-            ? `
-
-                <strong
-                    class="live-score ${
-                        hasHomeScore
-                            ? ""
-                            : "empty"
-                    }"
-                >
-
-                    ${
-                        hasHomeScore
-                            ? esc(
-                                homeScore
-                            )
-                            : "—"
-                    }
-
-                </strong>
-
-              `
-
-            : "";
-
-
-    const awayScoreHtml =
-        isLive
-
-            ? `
-
-                <strong
-                    class="live-score ${
-                        hasAwayScore
-                            ? ""
-                            : "empty"
-                    }"
-                >
-
-                    ${
-                        hasAwayScore
-                            ? esc(
-                                awayScore
-                            )
-                            : "—"
-                    }
-
-                </strong>
-
-              `
-
-            : "";
+    const inningsText =
+        getReadableInningsText(
+            source.status_text,
+            team1,
+            team2
+        );
 
 
     /* =====================================================
-       INNINGS
-    ===================================================== */
-
-    const statusText =
-        String(
-            source.status_text ||
-            ""
-        ).trim();
-
-
-    const inningsHtml =
-        isLive &&
-        statusText
-
-            ? `
-
-                <br>
-
-                <span
-                    class="innings-text"
-                >
-
-                    ${esc(
-                        statusText
-                    )}
-
-                </span>
-
-              `
-
-            : "";
-
-
-    /* =====================================================
-       CARD
+       RETURN CARD
     ===================================================== */
 
     return `
 
         <article
-            class="match-card ${
-                item.hasStream
-                    ? "has-stream"
-                    : ""
-            }"
+            class="
+                match-card
+                ${
+                    item.hasStream
+                        ? "has-stream"
+                        : ""
+                }
+            "
         >
 
 
@@ -2081,17 +1985,19 @@ function createCard(
 
                         ${homeLogoHtml}
 
-                        <span
-                            class="team-name"
-                        >
 
-                            ${esc(
-                                team1
-                            )}
+                        <span class="team-name">
+
+                            ${esc(team1)}
 
                         </span>
 
-                        ${homeScoreHtml}
+
+                        <span class="team-score">
+
+                            ${esc(homeScore)}
+
+                        </span>
 
                     </div>
 
@@ -2099,9 +2005,7 @@ function createCard(
                     <!-- VS -->
 
                     <div class="vs">
-
                         VS
-
                     </div>
 
 
@@ -2111,22 +2015,24 @@ function createCard(
 
                         ${awayLogoHtml}
 
-                        <span
-                            class="team-name"
-                        >
 
-                            ${esc(
-                                team2
-                            )}
+                        <span class="team-name">
+
+                            ${esc(team2)}
 
                         </span>
 
-                        ${awayScoreHtml}
+
+                        <span class="team-score">
+
+                            ${esc(awayScore)}
+
+                        </span>
 
                     </div>
 
 
-                    <!-- MATCH INFO -->
+                    <!-- MATCH INFORMATION -->
 
                     <div class="match-info">
 
@@ -2137,11 +2043,32 @@ function createCard(
 
                         <br>
 
-                        ${esc(
-                            time
-                        )}
+                        ${esc(time)}
 
-                        ${inningsHtml}
+
+                        ${
+                            inningsText
+
+                                ? `
+
+                                    <br>
+
+                                    <span
+                                        class="innings-text"
+                                    >
+
+                                        🏏
+
+                                        ${esc(
+                                            inningsText
+                                        )}
+
+                                    </span>
+
+                                  `
+
+                                : ""
+                        }
 
                     </div>
 
@@ -2152,11 +2079,14 @@ function createCard(
                 <!-- STATUS -->
 
                 <span
-                    class="status ${
-                        isLive
-                            ? "live-status"
-                            : "upcoming-status"
-                    }"
+                    class="
+                        status
+                        ${
+                            isLive
+                                ? "live-status"
+                                : "upcoming-status"
+                        }
+                    "
                 >
 
                     ${
@@ -2171,18 +2101,12 @@ function createCard(
             </div>
 
 
-            <!-- STREAM -->
-
             ${streamInfo}
 
 
-            <!-- BUTTON -->
-
             <a
                 class="watch-button"
-                href="${esc(
-                    actionUrl
-                )}"
+                href="${esc(actionUrl)}"
             >
 
                 ${actionText}
@@ -2198,7 +2122,202 @@ function createCard(
 
 
 /* =========================================================
-   HELPERS
+   HUMAN-READABLE INNINGS
+========================================================= */
+
+function getReadableInningsText(
+    statusText,
+    homeTeam,
+    awayTeam
+) {
+
+    const text =
+        String(
+            statusText ||
+            ""
+        )
+            .trim()
+            .toLowerCase();
+
+
+    if (!text) {
+
+        return "";
+
+    }
+
+
+    /*
+     * SportScore examples:
+     *
+     * 1st innings (home)
+     * 1st innings (away)
+     * 2nd innings (home)
+     * 2nd innings (away)
+     */
+
+
+    const isFirstInnings =
+        text.includes(
+            "1st innings"
+        );
+
+
+    const isSecondInnings =
+        text.includes(
+            "2nd innings"
+        );
+
+
+    const isHomeBatting =
+        text.includes(
+            "(home)"
+        );
+
+
+    const isAwayBatting =
+        text.includes(
+            "(away)"
+        );
+
+
+    let battingTeam =
+        "";
+
+
+    if (
+        isHomeBatting
+    ) {
+
+        battingTeam =
+            homeTeam;
+
+    } else if (
+        isAwayBatting
+    ) {
+
+        battingTeam =
+            awayTeam;
+
+    }
+
+
+    if (!battingTeam) {
+
+        return "";
+
+    }
+
+
+    if (
+        isSecondInnings
+    ) {
+
+        return (
+            `${battingTeam} are batting — 2nd innings`
+        );
+
+    }
+
+
+    if (
+        isFirstInnings
+    ) {
+
+        return (
+            `${battingTeam} are batting`
+        );
+
+    }
+
+
+    return (
+        `${battingTeam} are batting`
+    );
+
+}
+
+
+/* =========================================================
+   SCORE FORMATTER
+========================================================= */
+
+function formatScore(
+    value
+) {
+
+    /*
+     * No score.
+     */
+
+    if (
+        value === null ||
+        value === undefined ||
+        value === "" ||
+        value === "-"
+    ) {
+
+        return "—";
+
+    }
+
+
+    /*
+     * SportScore may return a score object.
+     */
+
+    if (
+        typeof value ===
+        "object"
+    ) {
+
+        const runs =
+            value.runs ??
+            value.total ??
+            value.score ??
+            null;
+
+
+        const wickets =
+            value.wickets ??
+            value.outs ??
+            null;
+
+
+        if (
+            runs !== null &&
+            wickets !== null
+        ) {
+
+            return (
+                `${runs}/${wickets}`
+            );
+
+        }
+
+
+        if (
+            runs !== null
+        ) {
+
+            return String(
+                runs
+            );
+
+        }
+
+    }
+
+
+    return String(
+        value
+    );
+
+}
+
+
+/* =========================================================
+   NORMALIZE STATUS
 ========================================================= */
 
 function normalizeStatus(
@@ -2207,7 +2326,8 @@ function normalizeStatus(
 
     const value =
         String(
-            status || ""
+            status ||
+            ""
         )
             .trim()
             .toLowerCase();
@@ -2245,6 +2365,10 @@ function normalizeStatus(
 }
 
 
+/* =========================================================
+   FIXTURE KEY
+========================================================= */
+
 function makeFixtureKey(
     team1,
     team2,
@@ -2264,34 +2388,48 @@ function makeFixtureKey(
 
     const teams =
         [
-            normalizeName(team1),
-            normalizeName(team2)
+            normalizeName(
+                team1
+            ),
+
+            normalizeName(
+                team2
+            )
         ]
+
             .sort()
+
             .join("|");
 
 
     return (
-        `${teams}|${String(
-            startTime
-        )}`
+        `${teams}|${String(startTime)}`
     );
 
 }
 
+
+/* =========================================================
+   NORMALIZE NAME
+========================================================= */
 
 function normalizeName(
     value
 ) {
 
     return String(
-        value || ""
+        value ||
+        ""
     )
         .trim()
         .toLowerCase();
 
 }
 
+
+/* =========================================================
+   NORMALIZE URL
+========================================================= */
 
 function normalizeUrl(
     value
@@ -2326,11 +2464,13 @@ function normalizeUrl(
 
     return (
         "https://sportscore.com" +
+
         (
             url.startsWith("/")
                 ? url
                 : `/${url}`
         )
+
     ).replace(
         /\/+$/,
         ""
@@ -2338,6 +2478,10 @@ function normalizeUrl(
 
 }
 
+
+/* =========================================================
+   GET TIME
+========================================================= */
 
 function getTime(
     value
@@ -2359,6 +2503,10 @@ function getTime(
 
 }
 
+
+/* =========================================================
+   FORMAT DATE
+========================================================= */
 
 function formatDate(
     value
@@ -2395,6 +2543,10 @@ function formatDate(
 }
 
 
+/* =========================================================
+   ESCAPE HTML
+========================================================= */
+
 function esc(
     value
 ) {
@@ -2402,22 +2554,27 @@ function esc(
     return String(
         value ?? ""
     )
+
         .replace(
             /&/g,
             "&amp;"
         )
+
         .replace(
             /</g,
             "&lt;"
         )
+
         .replace(
             />/g,
             "&gt;"
         )
+
         .replace(
             /"/g,
             "&quot;"
         )
+
         .replace(
             /'/g,
             "&#039;"
@@ -2434,10 +2591,9 @@ loadMatches();
 
 
 /*
- * Refresh every 30 seconds.
+ * Refresh homepage every 30 seconds.
  *
- * This updates live scores on the homepage without
- * requiring the visitor to manually refresh.
+ * This keeps live scores and innings information current.
  */
 
 setInterval(
