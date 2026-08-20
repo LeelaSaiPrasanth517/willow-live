@@ -118,6 +118,20 @@ body {
 }
 
 
+
+/* LIVE SCORECARD */
+.live-scorecard{margin-top:22px;background:#101010;border:1px solid #252525;border-radius:12px;overflow:hidden}
+.live-score-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#0b0b0b;border-bottom:1px solid #222}
+.live-score-title{font-size:14px;font-weight:800}
+.live-score-badge{font-size:11px;font-weight:800;color:#fff;background:#b51f2a;padding:5px 8px;border-radius:999px}
+.score-row{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:15px;border-bottom:1px solid #222}
+.score-team{font-size:15px;font-weight:700}
+.score-value{font-size:22px;font-weight:900;text-align:right}
+.score-extra{color:#999;font-size:12px;margin-top:3px}
+.score-footer{padding:10px 14px;color:#888;font-size:11px}
+.score-loading{padding:18px;color:#888}
+@media(max-width:600px){.score-value{font-size:19px}}
+
 /* PLAYER */
 
 .player {
@@ -242,6 +256,18 @@ body {
         </div>
     </section>
 
+
+
+    <section class="live-scorecard" id="liveScore" style="display:none;">
+        <div class="live-score-header">
+            <div class="live-score-title">🏏 LIVE SCORE</div>
+            <div class="live-score-badge" id="liveScoreBadge">LIVE</div>
+        </div>
+        <div id="scoreContent">
+            <div class="score-loading">Loading live score...</div>
+        </div>
+        <div class="score-footer" id="scoreUpdated"></div>
+    </section>
 
     <section class="streams">
 
@@ -368,6 +394,8 @@ const matchId =
 ========================================= */
 
 let currentHls = null;
+let scoreTimer = null;
+let currentMatch = null;
 
 
 /* =========================================
@@ -464,6 +492,155 @@ async function load() {
 
     await loadStreams();
 
+    currentMatch = m;
+    await loadLiveScore();
+
+}
+
+
+
+/* =========================================
+   LIVE SCORE
+========================================= */
+
+async function loadLiveScore() {
+
+    const card = document.getElementById("liveScore");
+    const content = document.getElementById("scoreContent");
+    const updated = document.getElementById("scoreUpdated");
+
+    if (!card || !content || !currentMatch) return;
+
+    try {
+
+        const sourceUrl =
+            currentMatch.sportscore_url ||
+            currentMatch.api_match_id ||
+            "";
+
+        if (!sourceUrl) {
+            card.style.display = "none";
+            return;
+        }
+
+        const response = await fetch(
+            "/api/live-scores?url=" +
+            encodeURIComponent(sourceUrl),
+            { cache: "no-store" }
+        );
+
+        const payload = await response.json();
+
+        if (!response.ok || payload.error || !payload.score) {
+            card.style.display = "none";
+            return;
+        }
+
+        const score = payload.score;
+
+        const homeScore = formatScore(score.home_score);
+        const awayScore = formatScore(score.away_score);
+        const overs = score.overs
+            ? `Overs: ${esc(score.overs)}`
+            : "";
+        const batting = score.batting_team
+            ? `Batting: ${esc(score.batting_team)}`
+            : "";
+
+        if (!homeScore && !awayScore && !overs) {
+            card.style.display = "none";
+            return;
+        }
+
+        card.style.display = "block";
+
+        content.innerHTML = `
+            <div class="score-row">
+                <div>
+                    <div class="score-team">
+                        ${esc(currentMatch.team1)}
+                    </div>
+                    ${overs ? `<div class="score-extra">${overs}</div>` : ""}
+                </div>
+                <div class="score-value">
+                    ${homeScore || "—"}
+                </div>
+            </div>
+
+            <div class="score-row">
+                <div class="score-team">
+                    ${esc(currentMatch.team2)}
+                </div>
+                <div class="score-value">
+                    ${awayScore || "—"}
+                </div>
+            </div>
+
+            ${batting ? `<div class="score-footer">${batting}</div>` : ""}
+        `;
+
+        updated.textContent =
+            `Updated ${new Date().toLocaleTimeString()}`;
+
+    } catch (error) {
+
+        console.error("Live score error:", error);
+        card.style.display = "none";
+
+    }
+}
+
+
+function formatScore(value) {
+
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
+        return "";
+    }
+
+    if (typeof value === "object") {
+
+        const runs =
+            value.runs ??
+            value.total ??
+            value.score ??
+            null;
+
+        const wickets =
+            value.wickets ??
+            value.outs ??
+            null;
+
+        if (
+            runs !== null &&
+            wickets !== null
+        ) {
+            return `${runs}/${wickets}`;
+        }
+
+        if (runs !== null) {
+            return String(runs);
+        }
+    }
+
+    return String(value);
+}
+
+
+function startScorePolling() {
+
+    if (scoreTimer) {
+        clearInterval(scoreTimer);
+    }
+
+    scoreTimer =
+        setInterval(
+            loadLiveScore,
+            60000
+        );
 }
 
 
@@ -1026,6 +1203,7 @@ function stopPlayer() {
     );
 
     video.load();
+startScorePolling();
 
 
     iframe.src = "";
