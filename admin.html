@@ -1372,12 +1372,10 @@ async function loadMatches() {
             "liveMatches"
         );
 
-
     const upcomingContainer =
         document.getElementById(
             "upcomingMatches"
         );
-
 
     liveContainer.innerHTML =
         "Loading...";
@@ -1386,7 +1384,31 @@ async function loadMatches() {
         "Loading...";
 
 
-    await cleanStaleMatches();
+    /*
+     * IMPORTANT:
+     * Do NOT use the stored `status` column to decide whether
+     * a match is Live or Upcoming.
+     *
+     * SportScore's status can be stale or incorrect.
+     *
+     * The Admin page now calculates the display status from
+     * the scheduled start_time and the current browser time.
+     *
+     * Rules:
+     *
+     *   start_time > now
+     *       -> Upcoming
+     *
+     *   now >= start_time AND elapsed <= 6 hours
+     *       -> Live
+     *
+     *   elapsed > 6 hours
+     *       -> Finished
+     *
+     * The 6-hour window is deliberately used because it covers
+     * long cricket matches while preventing matches that started
+     * the previous day from remaining Live.
+     */
 
 
     const {
@@ -1395,13 +1417,6 @@ async function loadMatches() {
     } = await client
         .from("Matches")
         .select("*")
-        .in(
-            "status",
-            [
-                "Live",
-                "Upcoming"
-            ]
-        )
         .order(
             "start_time",
             {
@@ -1433,55 +1448,337 @@ async function loadMatches() {
     }
 
 
-    const validMatches =
-        (data || [])
-            .filter(
-                match => {
+    /*
+     * Remove duplicate fixtures from the display.
+     *
+     * If two database rows represent the same teams at the
+     * same scheduled start time, keep the one that has a saved
+     * stream URL. This protects manually added streams.
+     */
 
-                    return (
-                        match.team1 &&
-                        match.team2 &&
-                        !isPlaceholder(
-                            match.team1
-                        ) &&
-                        !isPlaceholder(
-                            match.team2
-                        )
-                    );
+    const uniqueMatches =
+        new Map();
 
-                }
+
+    for (
+        const match of (data || [])
+    ) {
+
+        if (
+            !match.team1 ||
+            !match.team2 ||
+            isPlaceholder(match.team1) ||
+            isPlaceholder(match.team2)
+        ) {
+            continue;
+        }
+
+
+        const startTime =
+            match.start_time ||
+            match.match_time;
+
+
+        if (!startTime) {
+            continue;
+        }
+
+
+        const fixtureKey =
+            makeFixtureKey(
+                match.team1,
+                match.team2,
+                startTime
             );
 
 
-    const live =
-        validMatches.filter(
-            match =>
-                match.status === "Live"
+        if (!fixtureKey) {
+            continue;
+        }
+
+
+        const existing =
+            uniqueMatches.get(
+                fixtureKey
+            );
+
+
+        if (!existing) {
+
+            uniqueMatches.set(
+                fixtureKey,
+                match
+            );
+
+            continue;
+
+        }
+
+
+        /*
+         * Prefer the duplicate containing the saved stream.
+         */
+
+        const existingHasStream =
+            Boolean(
+                existing.embed_url
+            );
+
+        const currentHasStream =
+            Boolean(
+                match.embed_url
+            );
+
+
+        if (
+            currentHasStream &&
+            !existingHasStream
+        ) {
+
+            uniqueMatches.set(
+                fixtureKey,
+                match
+            );
+
+        }
+
+    }
+
+
+    const now =
+        Date.now();
+
+
+    const live = [];
+    const upcoming = [];
+
+
+    for (
+        const match of uniqueMatches.values()
+    ) {
+
+        const startValue =
+            match.start_time ||
+            match.match_time;
+
+
+        const start =
+            new Date(
+                startValue
+            );
+
+
+        if (
+            Number.isNaN(
+                start.getTime()
+            )
+        ) {
+            continue;
+        }
+
+
+        const elapsedMs =
+            now -
+            start.getTime();
+
+
+        /*
+         * Future match.
+         */
+
+        if (
+            elapsedMs < 0
+        ) {
+
+            live.push({
+                ...match,
+                displayStatus:
+                    "Upcoming"
+            });
+
+            continue;
+
+        }
+
+
+        /*
+         * Match started within the last 6 hours.
+         */
+
+        if (
+            elapsedMs <=
+            6 * 60 * 60 * 1000
+        ) {
+
+            live.push({
+                ...match,
+                displayStatus:
+                    "Live"
+            });
+
+            continue;
+
+        }
+
+
+        /*
+         * Older matches are Finished and are intentionally not
+         * shown in the main Live/Upcoming sections.
+         */
+
+    }
+
+
+    /*
+     * Sort Live and Upcoming by scheduled start time.
+     */
+
+    live.sort(
+        (
+            a,
+            b
+        ) =>
+            new Date(
+                a.start_time ||
+                a.match_time
+            ).getTime()
+            -
+            new Date(
+                b.start_time ||
+                b.match_time
+            ).getTime()
+    );
+
+
+    /*
+     * The code above intentionally adds future matches to
+     * `live` only as a temporary marker. Move them into the
+     * actual Upcoming list here.
+     */
+
+    const actualLive = [];
+    const actualUpcoming = [];
+
+
+    for (
+        const match of live
+    ) {
+
+        if (
+            match.displayStatus ===
+            "Live"
+        ) {
+
+            actualLive.push(
+                match
+            );
+
+        } else {
+
+            actualUpcoming.push(
+                match
+            );
+
+        }
+
+    }
+
+
+    actualUpcoming.sort(
+        (
+            a,
+            b
+        ) =>
+            new Date(
+                a.start_time ||
+                a.match_time
+            ).getTime()
+            -
+            new Date(
+                b.start_time ||
+                b.match_time
+            ).getTime()
+    );
+
+
+    /*
+     * Update the schedule counter.
+     *
+     * The total includes every valid database fixture.
+     * Finished matches remain in the total but are not rendered
+     * in the Live/Upcoming sections.
+     */
+
+    const allValidMatches =
+        Array.from(
+            uniqueMatches.values()
         );
 
 
-    const upcoming =
-        validMatches.filter(
-            match =>
-                match.status === "Upcoming"
+    const liveCount =
+        actualLive.length;
+
+    const upcomingCount =
+        actualUpcoming.length;
+
+    const finishedCount =
+        Math.max(
+            0,
+            allValidMatches.length -
+            liveCount -
+            upcomingCount
         );
 
+
+    const syncMessage =
+        document.getElementById(
+            "syncMessage"
+        );
+
+
+    if (syncMessage) {
+
+        syncMessage.innerHTML =
+            `Current schedule: ` +
+            `<strong>${allValidMatches.length}</strong> matches.` +
+            `<br>🔴 Live: ${liveCount}` +
+            ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingCount}` +
+            ` &nbsp;·&nbsp; ✅ Finished: ${finishedCount}`;
+
+    }
+
+
+    /*
+     * IMPORTANT:
+     * Render copies with the calculated display status so the
+     * visible badge says Live/Upcoming even if the database
+     * status column is stale.
+     */
 
     renderMatchList(
         liveContainer,
-        live,
+        actualLive.map(
+            match => ({
+                ...match,
+                status: "Live"
+            })
+        ),
         "live"
     );
 
 
     renderMatchList(
         upcomingContainer,
-        upcoming,
+        actualUpcoming.map(
+            match => ({
+                ...match,
+                status: "Upcoming"
+            })
+        ),
         "upcoming"
     );
 
 }
-
 
 /* =========================================================
    RENDER MATCH LIST
