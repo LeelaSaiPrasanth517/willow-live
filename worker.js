@@ -3,13 +3,25 @@ export default {
 
     const url = new URL(request.url);
 
+    /*
+     * Cricket match API
+     */
     if (
       url.pathname === "/api/cricket-matches"
     ) {
+
       return handleCricketAPI();
+
     }
 
+
+    /*
+     * Everything else goes to
+     * Cloudflare Assets.
+     */
+
     return env.ASSETS.fetch(request);
+
   }
 };
 
@@ -34,6 +46,10 @@ async function handleCricketAPI() {
       );
 
 
+    /* -----------------------------------------------------
+       Check SportScore response
+       ----------------------------------------------------- */
+
     if (!response.ok) {
 
       const body =
@@ -46,9 +62,17 @@ async function handleCricketAPI() {
     }
 
 
+    /* -----------------------------------------------------
+       Parse JSON
+       ----------------------------------------------------- */
+
     const payload =
       await response.json();
 
+
+    /* -----------------------------------------------------
+       Get matches
+       ----------------------------------------------------- */
 
     const matches =
       Array.isArray(
@@ -58,16 +82,21 @@ async function handleCricketAPI() {
         : [];
 
 
-    /*
-     * Return only the fields Cricketive needs.
-     *
-     * NO SCORE.
-     * NO MATCH-DETAIL API.
-     */
+    /* -----------------------------------------------------
+       Normalize matches
+       
+       IMPORTANT:
+       We are intentionally exposing the raw SportScore
+       status values for debugging.
+       ----------------------------------------------------- */
 
     const normalized =
       matches.map(
         match => ({
+
+          /* ---------------------------------------------
+             Teams
+             --------------------------------------------- */
 
           home:
             match.home || "",
@@ -75,11 +104,21 @@ async function handleCricketAPI() {
           away:
             match.away || "",
 
+
+          /* ---------------------------------------------
+             Team logos
+             --------------------------------------------- */
+
           home_logo:
             match.home_logo || "",
 
           away_logo:
             match.away_logo || "",
+
+
+          /* ---------------------------------------------
+             Original status
+             --------------------------------------------- */
 
           status:
             match.status || "",
@@ -87,8 +126,32 @@ async function handleCricketAPI() {
           status_text:
             match.status_text || "",
 
+
+          /* ---------------------------------------------
+             RAW STATUS DEBUG FIELDS
+             
+             These are temporary and will let us see
+             exactly what SportScore is returning.
+             --------------------------------------------- */
+
+          raw_status:
+            match.status ?? null,
+
+          raw_status_text:
+            match.status_text ?? null,
+
+
+          /* ---------------------------------------------
+             Match time
+             --------------------------------------------- */
+
           time:
             match.time || null,
+
+
+          /* ---------------------------------------------
+             Competition
+             --------------------------------------------- */
 
           competition:
             match.competition ||
@@ -98,12 +161,21 @@ async function handleCricketAPI() {
             match.competition_logo ||
             "",
 
+
+          /* ---------------------------------------------
+             SportScore match URL
+             --------------------------------------------- */
+
           url:
             match.url || ""
 
         })
       );
 
+
+    /* -----------------------------------------------------
+       Return Cricketive API response
+       ----------------------------------------------------- */
 
     return json({
 
@@ -132,9 +204,11 @@ async function handleCricketAPI() {
 
     return json(
       {
+
         error:
           error.message ||
           "Unable to load cricket matches."
+
       },
       500
     );
@@ -154,10 +228,13 @@ function json(
 ) {
 
   return new Response(
+
     JSON.stringify(
       data
     ),
+
     {
+
       status,
 
       headers: {
@@ -174,6 +251,7 @@ function json(
       }
 
     }
+
   );
 
 }
