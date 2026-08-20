@@ -1365,6 +1365,37 @@ async function cleanStaleMatches() {
    LOAD MATCHES
    ========================================================= */
 
+function safeFallbackStatus(
+    storedStatus
+) {
+
+    const status =
+        normalizeSportScoreStatus(
+            storedStatus
+        );
+
+
+    /*
+     * Never display an old cached "Live" state when we do not
+     * have a fresh SportScore confirmation.
+     *
+     * We deliberately do NOT invent Live from start_time.
+     */
+
+    if (
+        status === "Live"
+    ) {
+
+        return "Finished";
+
+    }
+
+
+    return status;
+
+}
+
+
 async function loadMatches() {
 
     const liveContainer =
@@ -1637,7 +1668,7 @@ async function loadMatches() {
                         ? normalizeSportScoreStatus(
                             source.status
                         )
-                        : normalizeSportScoreStatus(
+                        : safeFallbackStatus(
                             match.status
                         );
 
@@ -1775,7 +1806,7 @@ async function loadMatches() {
         const sourceLabel =
             sportScoreAvailable
                 ? "Live status from SportScore."
-                : "SportScore unavailable — using last known status.";
+                : "SportScore unavailable — stale Live statuses suppressed.";
 
         syncMessage.innerHTML =
             `Current schedule: ` +
