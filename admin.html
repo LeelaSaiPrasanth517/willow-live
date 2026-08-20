@@ -963,18 +963,59 @@ async function syncMatches() {
 
 
         /* -----------------------------------------------
+           DEDUPLICATE ROWS BEFORE DATABASE WRITES
+
+           PostgreSQL rejects a bulk upsert when the same
+           conflict key appears more than once in the input.
+
+           Use the database UUID when present, otherwise
+           use the SportScore/API match identity.
+        ----------------------------------------------- */
+
+        const uniqueRows = [];
+        const seenKeys = new Set();
+
+        for (
+            const row of rows
+        ) {
+
+            const key =
+                row.id
+                    ? `id:${row.id}`
+                    : row.api_match_id
+                        ? `api:${row.api_match_id}`
+                        : row.sportscore_url
+                            ? `url:${row.sportscore_url}`
+                            : `row:${uniqueRows.length}`;
+
+            if (
+                seenKeys.has(key)
+            ) {
+
+                continue;
+
+            }
+
+            seenKeys.add(key);
+
+            uniqueRows.push(row);
+
+        }
+
+
+        /* -----------------------------------------------
            Separate existing vs new
         ----------------------------------------------- */
 
         const existingRows =
-            rows.filter(
+            uniqueRows.filter(
                 row =>
                     Boolean(row.id)
             );
 
 
         const newRows =
-            rows.filter(
+            uniqueRows.filter(
                 row =>
                     !row.id
             );
@@ -982,26 +1023,42 @@ async function syncMatches() {
 
         /* -----------------------------------------------
            UPDATE EXISTING MATCHES
+
+           Do NOT bulk-upsert existing rows.
+           Update each UUID individually so duplicate
+           conflict keys can never cause PostgreSQL's:
+
+           ON CONFLICT DO UPDATE command cannot affect
+           row a second time
         ----------------------------------------------- */
 
-        if (
-            existingRows.length
+        for (
+            const row of existingRows
         ) {
+
+            const {
+                id,
+                ...updateData
+            } = row;
+
 
             const {
                 error: updateError
             } = await client
                 .from("Matches")
-                .upsert(
-                    existingRows,
-                    {
-                        onConflict: "id"
-                    }
+                .update(updateData)
+                .eq(
+                    "id",
+                    id
                 );
 
 
-            if (updateError) {
+            if (
+                updateError
+            ) {
+
                 throw updateError;
+
             }
 
         }
@@ -1090,7 +1147,7 @@ async function syncMatches() {
 
 
         message.innerHTML =
-            `Synced <strong>${rows.length}</strong> matches.` +
+            `Synced <strong>${uniqueRows.length}</strong> matches.` +
             `<br>🔴 Live: ${liveCount}` +
             ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingCount}` +
             ` &nbsp;·&nbsp; ✅ Finished: ${finishedCount}`;
