@@ -973,10 +973,26 @@ async function syncMatches() {
 
         for (const row of rows) {
 
+            /*
+             * Use the SportScore URL as the primary identity.
+             * Do not use team names as the primary deduplication
+             * key because the same teams can legitimately play
+             * more than once.
+             */
+
             const rowKey =
-                row.id
-                    ? `id:${row.id}`
-                    : `api:${row.api_match_id}`;
+                row.sportscore_url
+                    ? `url:${row.sportscore_url}`
+                    : row.api_match_id
+                        ? `api:${row.api_match_id}`
+                        : row.id
+                            ? `id:${row.id}`
+                            : null;
+
+            if (!rowKey) {
+                uniqueRows.push(row);
+                continue;
+            }
 
             if (seenRowKeys.has(rowKey)) {
                 continue;
@@ -1104,21 +1120,21 @@ async function syncMatches() {
         ----------------------------------------------- */
 
         const liveCount =
-            rows.filter(
+            uniqueRows.filter(
                 match =>
                     match.status === "Live"
             ).length;
 
 
         const upcomingCount =
-            rows.filter(
+            uniqueRows.filter(
                 match =>
                     match.status === "Upcoming"
             ).length;
 
 
         const finishedCount =
-            rows.filter(
+            uniqueRows.filter(
                 match =>
                     match.status === "Finished"
             ).length;
