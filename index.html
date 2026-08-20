@@ -736,6 +736,21 @@ async function loadMatches() {
 
                         storedMatch,
 
+                        /*
+                         * IMPORTANT:
+                         * The Admin page uses the normalized status
+                         * stored in Supabase (Live / Upcoming /
+                         * Finished). Use that as Cricketive's source
+                         * of truth instead of relying only on the
+                         * raw SportScore status value.
+                         */
+
+                        matchStatus:
+                            storedMatch?.status ||
+                            normalizeStatus(
+                                source.status
+                            ),
+
                         streamCount,
 
                         hasStream:
@@ -755,7 +770,7 @@ async function loadMatches() {
             normalized.filter(
                 item =>
                     String(
-                        item.source.status ||
+                        item.matchStatus ||
                         ""
                     ).toLowerCase()
                     ===
@@ -771,7 +786,7 @@ async function loadMatches() {
             normalized.filter(
                 item =>
                     String(
-                        item.source.status ||
+                        item.matchStatus ||
                         ""
                     ).toLowerCase()
                     ===
@@ -1387,6 +1402,38 @@ function createCard(
 /* =========================================================
    HELPERS
    ========================================================= */
+
+function normalizeStatus(
+    status
+) {
+
+    const value =
+        String(
+            status || ""
+        )
+            .trim()
+            .toLowerCase();
+
+    if (
+        value === "live" ||
+        value === "in_progress" ||
+        value === "in progress"
+    ) {
+        return "Live";
+    }
+
+    if (
+        value === "finished" ||
+        value === "ended" ||
+        value === "completed"
+    ) {
+        return "Finished";
+    }
+
+    return "Upcoming";
+
+}
+
 
 function makeTeamKey(
     team1,
