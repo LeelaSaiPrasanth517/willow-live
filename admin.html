@@ -457,6 +457,75 @@ const client =
     );
 
 
+let adminRefreshTimer = null;
+let lastSportScoreMatches = [];
+let lastSportScoreSuccessAt = 0;
+
+const SPORT_SCORE_CACHE_MS =
+    5 * 60 * 1000;
+
+async function fetchJsonWithRetry(
+    url,
+    options = {},
+    attempts = 3,
+    delayMs = 700
+) {
+    let lastError = null;
+
+    for (
+        let attempt = 1;
+        attempt <= attempts;
+        attempt++
+    ) {
+        try {
+            const response =
+                await fetch(
+                    url,
+                    options
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    `HTTP ${response.status}`
+                );
+            }
+
+            const payload =
+                await response.json();
+
+            if (payload.error) {
+                throw new Error(
+                    payload.error
+                );
+            }
+
+            return payload;
+
+        } catch (error) {
+            lastError = error;
+
+            if (
+                attempt < attempts
+            ) {
+                await new Promise(
+                    resolve =>
+                        setTimeout(
+                            resolve,
+                            delayMs *
+                            attempt
+                        )
+                );
+            }
+        }
+    }
+
+    throw lastError ||
+        new Error(
+            "Request failed."
+        );
+}
+
+
 /* =========================================================
    LOGIN
    ========================================================= */
@@ -521,6 +590,13 @@ async function login() {
 
 async function logout() {
 
+    if (adminRefreshTimer) {
+        clearInterval(
+            adminRefreshTimer
+        );
+        adminRefreshTimer = null;
+    }
+
     await client.auth.signOut();
 
 
@@ -574,6 +650,18 @@ function showAdmin() {
 
 
     loadMatches();
+
+    if (adminRefreshTimer) {
+        clearInterval(
+            adminRefreshTimer
+        );
+    }
+
+    adminRefreshTimer =
+        setInterval(
+            loadMatches,
+            30000
+        );
 
 }
 
@@ -701,31 +789,15 @@ async function syncMatches() {
            Fetch SportScore matches
            ----------------------------------------------- */
 
-        const response =
-            await fetch(
+        const payload =
+            await fetchJsonWithRetry(
                 "/api/cricket-matches?mode=matches",
                 {
                     cache: "no-store"
-                }
+                },
+                3,
+                700
             );
-
-
-        if (!response.ok) {
-
-            const errorText =
-                await response.text();
-
-
-            throw new Error(
-                `API HTTP ${response.status}: ${errorText}`
-            );
-
-        }
-
-
-        const payload =
-            await response.json();
-
 
         const matches =
             Array.isArray(
@@ -1273,6 +1345,12 @@ async function syncMatches() {
                 "Unknown error"
             }`;
 
+        /*
+         * Keep the existing schedule visible even when
+         * the upstream sync is temporarily unavailable.
+         */
+        await loadMatches();
+
 
     } finally {
 
@@ -1696,12 +1774,19 @@ async function loadMatches() {
         );
 
 
-    liveContainer.innerHTML =
-        "Loading...";
+    if (
+        !liveContainer.dataset.loaded
+    ) {
+        liveContainer.innerHTML =
+            "Loading...";
+    }
 
-
-    upcomingContainer.innerHTML =
-        "Loading...";
+    if (
+        !upcomingContainer.dataset.loaded
+    ) {
+        upcomingContainer.innerHTML =
+            "Loading...";
+    }
 
 
     /*
@@ -1785,48 +1870,76 @@ async function loadMatches() {
         false;
 
 
+    let sportScoreStale =
+        false;
+
     try {
 
-        const response =
-            await fetch(
+        const payload =
+            await fetchJsonWithRetry(
                 "/api/cricket-matches?mode=matches",
                 {
                     cache: "no-store"
-                }
+                },
+                3,
+                700
             );
 
-
         if (
-            response.ok
+            Array.isArray(
+                payload.matches
+            ) &&
+            payload.matches.length
         ) {
 
-            const payload =
-                await response.json();
+            sportScoreMatches =
+                payload.matches;
 
+            lastSportScoreMatches =
+                payload.matches;
 
-            if (
-                Array.isArray(
-                    payload.matches
-                )
-            ) {
+            lastSportScoreSuccessAt =
+                Date.now();
 
-                sportScoreMatches =
-                    payload.matches;
+            sportScoreAvailable =
+                true;
 
+            sportScoreStale =
+                Boolean(
+                    payload.stale
+                );
 
-                sportScoreAvailable =
-                    true;
-
-            }
-
+        } else {
+            throw new Error(
+                "SportScore returned an empty match feed."
+            );
         }
 
     } catch (error) {
 
         console.warn(
-            "SportScore status refresh failed. Using fallback status.",
+            "SportScore refresh failed:",
             error
         );
+
+        if (
+            lastSportScoreMatches.length &&
+            (
+                Date.now() -
+                lastSportScoreSuccessAt
+            ) <= SPORT_SCORE_CACHE_MS
+        ) {
+
+            sportScoreMatches =
+                lastSportScoreMatches;
+
+            sportScoreAvailable =
+                true;
+
+            sportScoreStale =
+                true;
+
+        }
 
     }
 
@@ -2115,9 +2228,11 @@ async function loadMatches() {
 
         const sourceLabel =
             sportScoreAvailable
-
-                ? "Live status from SportScore + time-based fallback."
-
+                ? (
+                    sportScoreStale
+                        ? "SportScore temporarily unavailable — showing the last successful live feed."
+                        : "Live status from SportScore + time-based fallback."
+                )
                 : "SportScore unavailable — status calculated from schedule time.";
 
 
@@ -2156,6 +2271,12 @@ async function loadMatches() {
         upcomingMatches,
         "upcoming"
     );
+
+    liveContainer.dataset.loaded =
+        "true";
+
+    upcomingContainer.dataset.loaded =
+        "true";
 
 }
 
