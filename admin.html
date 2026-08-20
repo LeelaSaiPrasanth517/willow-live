@@ -660,7 +660,7 @@ function showAdmin() {
     adminRefreshTimer =
         setInterval(
             loadMatches,
-            30000
+            60000
         );
 
 }
@@ -1416,6 +1416,25 @@ function normalizeSportScoreStatus(
    NEW DISPLAY STATUS LOGIC
    ========================================================= */
 
+function canonicalStatus(status) {
+    return status === "Live"
+        ? "Live"
+        : status === "Finished"
+            ? "Finished"
+            : "Upcoming";
+}
+
+function canonicalStoredStatus(status) {
+    const value = String(status || "").trim().toLowerCase();
+    if (value === "live" || value === "in_progress" || value === "started" || value === "playing" || value === "ongoing") {
+        return "Live";
+    }
+    if (value === "finished" || value === "ended" || value === "completed" || value === "complete" || value === "ft") {
+        return "Finished";
+    }
+    return "Upcoming";
+}
+
 function getDisplayStatus(
     storedStatus,
     startTime,
@@ -2076,18 +2095,9 @@ async function loadMatches() {
                  */
 
                 const currentStatus =
-                    getDisplayStatus(
-                        match.status,
-
-                        match.start_time ||
-                            match.match_time,
-
-                        source
-                            ? source.status
-                            : null,
-
-                        sportScoreAvailable
-                    );
+                    sportScoreAvailable
+                        ? canonicalStatus(source?.status)
+                        : canonicalStoredStatus(match.status);
 
 
                 return {
