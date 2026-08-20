@@ -505,6 +505,13 @@ const db =
 
 
 /* =========================================================
+   YOUR WORKER URL (CHANGE THIS TO YOUR ACTUAL URL)
+   ========================================================= */
+
+const WORKER_URL = "https://willow-live.yourusername.workers.dev"; // ⚠️ CHANGE THIS AFTER DEPLOYMENT
+
+
+/* =========================================================
    LOAD MATCHES
    ========================================================= */
 
@@ -642,7 +649,7 @@ async function loadMatches() {
 
             const response =
                 await fetch(
-                    "/api/cricket-matches?mode=matches",
+                    `${WORKER_URL}/api/cricket-matches?mode=matches`, // ✅ USES ABSOLUTE URL
                     {
                         cache: "no-store"
                     }
@@ -973,7 +980,6 @@ async function loadMatches() {
                                 ),
 
                             streamCount,
-
                             hasStream:
                                 streamCount > 0
 
@@ -1224,7 +1230,7 @@ async function fetchLiveScores() {
     if (matchUrls.length === 0) return;
 
     try {
-        const response = await fetch("/api/live-scores", {
+        const response = await fetch(`${WORKER_URL}/api/live-scores`, { // ✅ USES ABSOLUTE URL
             cache: "no-store"
         });
 
@@ -1803,4 +1809,260 @@ function normalizeStatus(
         value === "in progress"
     ) {
         return "Live";
-   
+    }
+
+    if (
+        value === "finished" ||
+        value === "ended" ||
+        value === "completed"
+    ) {
+        return "Finished";
+    }
+
+    return "Upcoming";
+
+}
+
+
+function makeFixtureKey(
+    team1,
+    team2,
+    startTime
+) {
+
+    if (
+        !team1 ||
+        !team2 ||
+        !startTime
+    ) {
+        return "";
+    }
+
+
+    const teams =
+        [
+            normalizeName(team1),
+            normalizeName(team2)
+        ]
+            .sort()
+            .join("|");
+
+
+    return (
+        `${teams}|${String(startTime)}`
+    );
+
+}
+
+
+function makeTeamKey(
+    team1,
+    team2
+) {
+
+    if (
+        !team1 ||
+        !team2
+    ) {
+
+        return "";
+
+    }
+
+
+    return (
+
+        normalizeName(
+            team1
+        )
+
+        +
+
+        "|"
+
+        +
+
+        normalizeName(
+            team2
+        )
+
+    );
+
+}
+
+
+function normalizeName(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+        .trim()
+        .toLowerCase();
+
+}
+
+
+function normalizeUrl(
+    value
+) {
+
+    if (
+        !value
+    ) {
+
+        return "";
+
+    }
+
+
+    const url =
+        String(
+            value
+        ).trim();
+
+
+    if (
+        url.startsWith(
+            "http"
+        )
+    ) {
+
+        return url.replace(
+            /\/+$/,
+            ""
+        );
+
+    }
+
+
+    return (
+
+        "https://sportscore.com"
+
+        +
+
+        (
+            url.startsWith("/")
+                ? url
+                : `/${url}`
+        )
+
+    ).replace(
+        /\/+$/,
+        ""
+    );
+
+}
+
+
+function getTime(
+    value
+) {
+
+    const time =
+        new Date(
+            value
+        ).getTime();
+
+
+    return Number.isFinite(
+        time
+    )
+
+        ? time
+
+        : Number.MAX_SAFE_INTEGER;
+
+}
+
+
+function formatDate(
+    value
+) {
+
+    const date =
+        new Date(
+            value
+        );
+
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return "";
+
+    }
+
+
+    return date.toLocaleString(
+        [],
+        {
+            dateStyle:
+                "medium",
+
+            timeStyle:
+                "short"
+        }
+    );
+
+}
+
+
+function esc(
+    value
+) {
+
+    return String(
+        value ?? ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
+}
+
+
+/* =========================================================
+   START
+   ========================================================= */
+
+loadMatches();
+
+
+setInterval(
+    loadMatches,
+    60000
+);
+
+</script>
+
+</body>
+
+</html>
