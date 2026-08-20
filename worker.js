@@ -960,7 +960,7 @@ async function handleLiveScores() {
 
     const response =
       await fetch(
-        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
+        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=150",
         {
           cf: {
             cacheTtl: 5,
