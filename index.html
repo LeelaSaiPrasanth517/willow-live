@@ -1312,7 +1312,7 @@ async function loadMatches() {
                             streamCount > 0,
 
                         matchStatus:
-                            normalizeStatus(
+                            canonicalStatus(
                                 source.status
                             )
 
@@ -2407,6 +2407,15 @@ function formatScore(
    NORMALIZE STATUS
 ========================================================= */
 
+function canonicalStatus(status) {
+    return status === "Live"
+        ? "Live"
+        : status === "Finished"
+            ? "Finished"
+            : "Upcoming";
+}
+
+
 function normalizeStatus(
     status
 ) {
@@ -2654,7 +2663,7 @@ loadMatches();
 
 setInterval(
     loadMatches,
-    30000
+    60000
 );
 
 </script>
