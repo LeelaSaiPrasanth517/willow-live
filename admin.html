@@ -1458,21 +1458,16 @@ async function loadMatches() {
             "liveMatches"
         );
 
-
     const upcomingContainer =
         document.getElementById(
             "upcomingMatches"
         );
-
 
     liveContainer.innerHTML =
         "Loading...";
 
     upcomingContainer.innerHTML =
         "Loading...";
-
-
-    await cleanStaleMatches();
 
 
     const {
@@ -1500,30 +1495,16 @@ async function loadMatches() {
                 </p>
             `;
 
-
-        liveContainer.innerHTML =
-            msg;
-
-        upcomingContainer.innerHTML =
-            msg;
+        liveContainer.innerHTML = msg;
+        upcomingContainer.innerHTML = msg;
 
         return;
-
     }
 
 
     /*
-     * Calculate CURRENT status for every match.
-     *
-     * Never use the stored status to decide which section
-     * the match belongs to.
-     */
-
-    /*
-     * Calculate the CURRENT status from start_time.
-     *
-     * We deliberately do not trust the stored status because
-     * it can be stale between SportScore syncs.
+     * Calculate CURRENT status from start_time.
+     * Stored status is not used for section selection.
      */
 
     const rawMatches =
@@ -1532,28 +1513,19 @@ async function loadMatches() {
                 match =>
                     match.team1 &&
                     match.team2 &&
-                    !isPlaceholder(
-                        match.team1
-                    ) &&
-                    !isPlaceholder(
-                        match.team2
-                    )
+                    !isPlaceholder(match.team1) &&
+                    !isPlaceholder(match.team2)
             );
 
 
     /*
-     * Remove duplicate database records representing the
-     * same fixture. The key uses both teams, competition,
-     * and scheduled start time so genuine repeat fixtures
-     * are not accidentally merged.
+     * Deduplicate identical fixtures for display/counting.
      */
 
     const uniqueMatches = [];
-    const seenMatchKeys = new Set();
+    const seenKeys = new Set();
 
-    for (
-        const match of rawMatches
-    ) {
+    for (const match of rawMatches) {
 
         const teamA =
             String(match.team1)
@@ -1571,39 +1543,31 @@ async function loadMatches() {
                 .join("|");
 
         const competition =
-            String(
-                match.competition || ""
-            )
+            String(match.competition || "")
                 .trim()
                 .toLowerCase();
 
-        const start =
+        const startTime =
             match.start_time ||
             match.match_time ||
             "";
 
         const key =
-            `${teams}|${competition}|${start}`;
+            `${teams}|${competition}|${startTime}`;
 
-        if (
-            seenMatchKeys.has(key)
-        ) {
+        if (seenKeys.has(key)) {
             continue;
         }
 
-        seenMatchKeys.add(key);
-
+        seenKeys.add(key);
         uniqueMatches.push(match);
-
     }
 
 
     const currentMatches =
         uniqueMatches.map(
             match => ({
-
                 ...match,
-
                 currentStatus:
                     getCurrentMatchStatus(
                         match.status,
@@ -1611,7 +1575,6 @@ async function loadMatches() {
                             match.match_time,
                         match.status_text
                     )
-
             })
         );
 
@@ -1622,13 +1585,11 @@ async function loadMatches() {
                 match.currentStatus === "Live"
         );
 
-
     const upcomingMatches =
         currentMatches.filter(
             match =>
                 match.currentStatus === "Upcoming"
         );
-
 
     const finishedMatches =
         currentMatches.filter(
@@ -1638,10 +1599,8 @@ async function loadMatches() {
 
 
     /*
-     * IMPORTANT:
-     * The summary uses these EXACT same arrays as the
-     * rendered sections. This prevents "Live: 0" while
-     * a Live match is visibly displayed below.
+     * The counters and the rendered lists use these
+     * exact same arrays.
      */
 
     const syncMessage =
@@ -1649,9 +1608,7 @@ async function loadMatches() {
             "syncMessage"
         );
 
-    if (
-        syncMessage
-    ) {
+    if (syncMessage) {
 
         syncMessage.innerHTML =
             `Current schedule: ` +
@@ -1659,44 +1616,7 @@ async function loadMatches() {
             `<br>🔴 Live: ${liveMatches.length}` +
             ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingMatches.length}` +
             ` &nbsp;·&nbsp; ✅ Finished: ${finishedMatches.length}`;
-
     }
-
-
-    /*
-     * Only Live and Upcoming are rendered in the active
-     * schedule. Finished matches remain in the database.
-     */
-
-
-
-                    return (
-                        match.team1 &&
-                        match.team2 &&
-                        !isPlaceholder(
-                            match.team1
-                        ) &&
-                        !isPlaceholder(
-                            match.team2
-                        )
-                    );
-
-                }
-            );
-
-
-    const live =
-        validMatches.filter(
-            match =>
-                match.currentStatus === "Live"
-        );
-
-
-    const upcoming =
-        validMatches.filter(
-            match =>
-                match.currentStatus === "Upcoming"
-        );
 
 
     renderMatchList(
@@ -1704,7 +1624,6 @@ async function loadMatches() {
         liveMatches,
         "live"
     );
-
 
     renderMatchList(
         upcomingContainer,
@@ -1848,7 +1767,9 @@ function renderMatchList(
                         }"
                     >
                         ${escapeHtml(
-                            match.status
+                            match.currentStatus ||
+                            match.status ||
+                            "Upcoming"
                         )}
                     </span>
 
