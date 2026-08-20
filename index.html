@@ -934,6 +934,16 @@ footer {
 
     © 2026 Cricketive • Global Cricket Community
 
+<div style="margin-top:8px;">
+        <a
+            href="https://sportscore.com/"
+            rel="dofollow"
+            target="_blank"
+            style="color:#666;text-decoration:none;"
+        >
+            Powered by SportScore
+        </a>
+    </div>
 </footer>
 
 
@@ -971,7 +981,77 @@ const WORKER_URL =
    LOAD MATCHES
 ========================================================= */
 
+let indexHasLoadedData = false;
+let indexRefreshInFlight = false;
+
+async function fetchJsonWithRetry(
+    url,
+    options = {},
+    attempts = 3,
+    delayMs = 700
+) {
+    let lastError = null;
+
+    for (
+        let attempt = 1;
+        attempt <= attempts;
+        attempt++
+    ) {
+        try {
+            const response =
+                await fetch(
+                    url,
+                    options
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    `HTTP ${response.status}`
+                );
+            }
+
+            const payload =
+                await response.json();
+
+            if (payload.error) {
+                throw new Error(
+                    payload.error
+                );
+            }
+
+            return payload;
+
+        } catch (error) {
+            lastError = error;
+
+            if (
+                attempt < attempts
+            ) {
+                await new Promise(
+                    resolve =>
+                        setTimeout(
+                            resolve,
+                            delayMs *
+                            attempt
+                        )
+                );
+            }
+        }
+    }
+
+    throw lastError ||
+        new Error(
+            "Request failed."
+        );
+}
+
 async function loadMatches() {
+
+    if (indexRefreshInFlight) {
+        return;
+    }
+
+    indexRefreshInFlight = true;
 
     const liveEl =
         document.getElementById(
@@ -998,37 +1078,15 @@ async function loadMatches() {
            SPORTScore = SOURCE OF TRUTH
         ================================================= */
 
-        const response =
-            await fetch(
+        const payload =
+            await fetchJsonWithRetry(
                 `${WORKER_URL}/api/cricket-matches`,
                 {
                     cache: "no-store"
-                }
+                },
+                3,
+                700
             );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Worker returned HTTP ${response.status}`
-            );
-
-        }
-
-
-        const payload =
-            await response.json();
-
-
-        if (
-            payload.error
-        ) {
-
-            throw new Error(
-                payload.error
-            );
-
-        }
 
 
         const sportScoreMatches =
@@ -1440,46 +1498,56 @@ async function loadMatches() {
 
 
         updatedEl.textContent =
-            `Live data updated: ${
-                formatDate(
-                    new Date()
-                )
-            }`;
+            payload.stale
+                ? "Live data temporarily stale — showing the last successful update."
+                : `Live data updated: ${
+                    formatDate(
+                        new Date()
+                    )
+                }`;
+
+        indexHasLoadedData =
+            true;
 
 
     } catch (error) {
 
         console.error(
-            "Cricketive error:",
+            "Cricketive refresh error:",
             error
         );
 
+        if (!indexHasLoadedData) {
 
-        liveEl.innerHTML =
-            `
-                <div class="empty">
+            liveEl.innerHTML =
+                `
+                    <div class="empty">
+                        Unable to load live matches right now.
+                        Retrying automatically...
+                    </div>
+                `;
 
-                    Unable to load live matches.
+            upcomingEl.innerHTML =
+                `
+                    <div class="empty">
+                        Unable to load upcoming matches right now.
+                        Retrying automatically...
+                    </div>
+                `;
 
-                </div>
-            `;
+        } else {
 
+            updatedEl.textContent =
+                "Temporary data refresh issue — keeping the last successful matches.";
 
-        upcomingEl.innerHTML =
-            `
-                <div class="empty">
+        }
 
-                    Unable to load upcoming matches.
+    } finally {
 
-                </div>
-            `;
-
-
-        updatedEl.textContent =
-            "";
+        indexRefreshInFlight =
+            false;
 
     }
-
 }
 
 
