@@ -57,14 +57,7 @@ async function handleCricketAPI() {
 
 
     /*
-     * TEMPORARY DIAGNOSTIC VERSION
-     *
-     * We keep the normal Cricketive fields but also expose
-     * the complete original SportScore match object.
-     *
-     * This lets us discover whether SportScore provides
-     * another field that tells us the match has actually
-     * started.
+     * Normalize matches.
      */
 
     const normalized =
@@ -83,14 +76,30 @@ async function handleCricketAPI() {
           away_logo:
             match.away_logo || "",
 
+
+          /*
+           * Hybrid status:
+           *
+           * 1. SportScore status
+           * 2. SportScore status text
+           * 3. Start-time fallback
+           */
+
           status:
-            match.status || "",
+            normalizeSportScoreStatus(
+              match.status,
+              match.status_text,
+              match.time,
+              match.competition
+            ),
 
           status_text:
             match.status_text || "",
 
+
           time:
             match.time || null,
+
 
           competition:
             match.competition ||
@@ -100,17 +109,9 @@ async function handleCricketAPI() {
             match.competition_logo ||
             "",
 
+
           url:
-            match.url || "",
-
-
-          /*
-           * TEMPORARY:
-           * Return the original SportScore object.
-           */
-
-          sportscore_raw:
-            match
+            match.url || ""
 
         })
       );
@@ -151,6 +152,168 @@ async function handleCricketAPI() {
     );
 
   }
+
+}
+
+
+/* =========================================================
+   HYBRID MATCH STATUS
+   ========================================================= */
+
+function normalizeSportScoreStatus(
+  status,
+  statusText = "",
+  matchTime = null,
+  competition = ""
+) {
+
+  /*
+   * SportScore status is the primary signal.
+   */
+
+  const value =
+    String(status || "")
+      .trim()
+      .toLowerCase();
+
+
+  const text =
+    String(statusText || "")
+      .trim()
+      .toLowerCase();
+
+
+  /* =====================================================
+     1. EXPLICIT LIVE STATUS
+     ===================================================== */
+
+  if (
+    value === "live" ||
+    value === "in_progress" ||
+    value === "in progress" ||
+    value === "started" ||
+    value === "playing" ||
+    value === "ongoing" ||
+
+    text === "live" ||
+    text === "in progress" ||
+    text === "in_progress" ||
+    text === "started" ||
+    text === "playing" ||
+    text === "ongoing"
+  ) {
+
+    return "Live";
+
+  }
+
+
+  /* =====================================================
+     2. EXPLICIT FINISHED STATUS
+     ===================================================== */
+
+  if (
+    value === "finished" ||
+    value === "ended" ||
+    value === "completed" ||
+    value === "complete" ||
+    value === "ft" ||
+
+    text === "finished" ||
+    text === "ended" ||
+    text === "completed" ||
+    text === "complete"
+  ) {
+
+    return "Finished";
+
+  }
+
+
+  /* =====================================================
+     3. START-TIME FALLBACK
+     ===================================================== */
+
+  if (
+    matchTime
+  ) {
+
+    const start =
+      new Date(
+        matchTime
+      );
+
+
+    const now =
+      new Date();
+
+
+    if (
+      !Number.isNaN(
+        start.getTime()
+      )
+    ) {
+
+      const elapsedMs =
+        now.getTime() -
+        start.getTime();
+
+
+      const elapsedHours =
+        elapsedMs /
+        (1000 * 60 * 60);
+
+
+      /*
+       * If the scheduled start time has passed,
+       * consider it LIVE for up to 6 hours.
+       *
+       * This is only a fallback when SportScore
+       * has not explicitly said LIVE or FINISHED.
+       */
+
+      if (
+        elapsedHours >= 0 &&
+        elapsedHours <= 6
+      ) {
+
+        return "Live";
+
+      }
+
+
+      /*
+       * More than 6 hours after the scheduled start.
+       *
+       * Prevent an old "upcoming" match from staying
+       * LIVE forever.
+       */
+
+      if (
+        elapsedHours > 6 &&
+        (
+          value === "upcoming" ||
+          value === "scheduled" ||
+          value === "not_started" ||
+          value === "not started" ||
+          value === ""
+        )
+      ) {
+
+        return "Finished";
+
+      }
+
+    }
+
+  }
+
+
+  /* =====================================================
+     4. DEFAULT
+     ===================================================== */
+
+  return "Upcoming";
 
 }
 
