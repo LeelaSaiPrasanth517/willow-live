@@ -11,70 +11,115 @@ export default {
 };
 
 /* =========================================================
-   SPORTScore MATCH FEED
+   SPORTScore DUAL MATCH & LIVE-TICKER FEED
    ========================================================= */
 
 async function handleCricketAPI() {
   try {
-    const response = await fetch(
-      "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
-      {
-        cf: {
-          cacheTtl: 30,
-          cacheEverything: true
-        }
-      }
-    );
+    /*
+     * Fetch both the full schedule and the real-time live ticker concurrently.
+     */
+    const [matchesRes, tickerRes] = await Promise.allSettled([
+      fetch("https://sportscore.com/api/widget/matches/?sport=cricket&limit=50", {
+        cf: { cacheTtl: 30, cacheEverything: true }
+      }),
+      fetch("https://sportscore.com/api/widget/live-ticker/?sport=cricket", {
+        cf: { cacheTtl: 10, cacheEverything: true }
+      })
+    ]);
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`SportScore returned HTTP ${response.status}: ${body}`);
+    let matches = [];
+    let updated = null;
+
+    if (matchesRes.status === "fulfilled" && matchesRes.value.ok) {
+      const payload = await matchesRes.value.json();
+      matches = Array.isArray(payload.matches) ? payload.matches : [];
+      updated = payload.updated || null;
+    } else {
+      throw new Error("Unable to fetch schedule from SportScore.");
     }
 
-    const payload = await response.json();
-    const matches = Array.isArray(payload.matches) ? payload.matches : [];
+    /*
+     * Parse Live Ticker payload into lookup maps
+     */
+    const tickerByUrl = new Map();
+    const tickerByTeams = new Map();
+
+    if (tickerRes.status === "fulfilled" && tickerRes.value.ok) {
+      try {
+        const tickerPayload = await tickerRes.value.json();
+        const tickerMatches = Array.isArray(tickerPayload.matches) ? tickerPayload.matches : [];
+
+        for (const t of tickerMatches) {
+          const home = String(t.h || "").trim();
+          const away = String(t.a || "").trim();
+          const url = String(t.u || "").trim();
+
+          if (url) {
+            tickerByUrl.set(normalizeUrl(url), t);
+          }
+          if (home && away) {
+            tickerByTeams.set(makeTeamKey(home, away), t);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not parse live ticker payload:", err);
+      }
+    }
 
     /*
-     * Normalize matches.
+     * Merge schedule with live ticker scores
      */
-    const normalized = matches.map(match => ({
-      home: match.home || match.h || "",
-      away: match.away || match.a || "",
-      home_logo: match.home_logo || match.hl || "",
-      away_logo: match.away_logo || match.al || "",
+    const normalized = matches.map(match => {
+      const home = match.home || match.h || "";
+      const away = match.away || match.a || "";
+      const matchUrl = normalizeUrl(match.url || match.u || "");
+      const teamKey = makeTeamKey(home, away);
 
-      /* Grab the scores! */
-      home_score: match.home_score || match.hs || "",
-      away_score: match.away_score || match.as || "",
+      // Find real-time score overlay from the ticker
+      const ticker = tickerByUrl.get(matchUrl) || tickerByTeams.get(teamKey) || null;
 
-      /* Hybrid status */
-      status: normalizeSportScoreStatus(
-        match.status,
-        match.status_text || match.m,
-        match.time,
-        match.competition
-      ),
+      const rawHomeScore = ticker ? ticker.hs : (match.home_score || match.hs || "");
+      const rawAwayScore = ticker ? ticker.as : (match.away_score || match.as || "");
+      const rawStatusText = ticker ? ticker.m : (match.status_text || match.m || "");
 
-      status_text: match.status_text || match.m || "",
-      time: match.time || null,
-      competition: match.competition || "Cricket",
-      competition_logo: match.competition_logo || "",
-      url: match.url || match.u || ""
-    }));
+      return {
+        home,
+        away,
+        home_logo: match.home_logo || match.hl || (ticker ? ticker.hl : ""),
+        away_logo: match.away_logo || match.al || (ticker ? ticker.al : ""),
+
+        /* Real-time score data */
+        home_score: rawHomeScore,
+        away_score: rawAwayScore,
+
+        /* Hybrid status */
+        status: normalizeSportScoreStatus(
+          match.status,
+          rawStatusText,
+          match.time,
+          match.competition
+        ),
+
+        status_text: rawStatusText,
+        time: match.time || null,
+        competition: match.competition || "Cricket",
+        competition_logo: match.competition_logo || "",
+        url: match.url || match.u || ""
+      };
+    });
 
     return json({
       sport: "cricket",
       count: normalized.length,
-      updated: payload.updated || null,
+      updated: updated || new Date().toISOString(),
       matches: normalized
     });
 
   } catch (error) {
     console.error("Cricketive Worker error:", error);
     return json(
-      {
-        error: error.message || "Unable to load cricket matches."
-      },
+      { error: error.message || "Unable to load cricket matches." },
       500
     );
   }
@@ -90,15 +135,10 @@ function normalizeSportScoreStatus(
   matchTime = null,
   competition = ""
 ) {
-  /*
-   * SportScore status is the primary signal.
-   */
   const value = String(status || "").trim().toLowerCase();
   const text = String(statusText || "").trim().toLowerCase();
 
-  /* =====================================================
-     1. EXPLICIT LIVE STATUS
-     ===================================================== */
+  /* 1. EXPLICIT LIVE STATUS */
   if (
     value === "live" ||
     value === "in_progress" ||
@@ -111,14 +151,15 @@ function normalizeSportScoreStatus(
     text === "in_progress" ||
     text === "started" ||
     text === "playing" ||
-    text === "ongoing"
+    text === "ongoing" ||
+    text.includes("inn") ||
+    text.includes("innings") ||
+    text.includes("over")
   ) {
     return "Live";
   }
 
-  /* =====================================================
-     2. EXPLICIT FINISHED STATUS
-     ===================================================== */
+  /* 2. EXPLICIT FINISHED STATUS */
   if (
     value === "finished" ||
     value === "ended" ||
@@ -128,14 +169,13 @@ function normalizeSportScoreStatus(
     text === "finished" ||
     text === "ended" ||
     text === "completed" ||
-    text === "complete"
+    text === "complete" ||
+    text.includes("won by")
   ) {
     return "Finished";
   }
 
-  /* =====================================================
-     3. START-TIME FALLBACK (Finished Cleanup Only)
-     ===================================================== */
+  /* 3. START-TIME FALLBACK (Finished Cleanup Only) */
   if (matchTime) {
     const start = new Date(matchTime);
     const now = new Date();
@@ -144,11 +184,6 @@ function normalizeSportScoreStatus(
       const elapsedMs = now.getTime() - start.getTime();
       const elapsedHours = elapsedMs / (1000 * 60 * 60);
 
-      /*
-       * More than 6 hours after the scheduled start.
-       * Prevent an old "upcoming" match from staying
-       * UPCOMING forever if SportScore hasn't updated it.
-       */
       if (
         elapsedHours > 6 &&
         (
@@ -164,10 +199,26 @@ function normalizeSportScoreStatus(
     }
   }
 
-  /* =====================================================
-     4. DEFAULT
-     ===================================================== */
+  /* 4. DEFAULT */
   return "Upcoming";
+}
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+function makeTeamKey(team1, team2) {
+  if (!team1 || !team2) return "";
+  return [String(team1).trim().toLowerCase(), String(team2).trim().toLowerCase()]
+    .sort()
+    .join("|");
+}
+
+function normalizeUrl(value) {
+  if (!value) return "";
+  const url = String(value).trim();
+  if (url.startsWith("http")) return url.replace(/\/+$/, "");
+  return ("https://sportscore.com" + (url.startsWith("/") ? url : `/${url}`)).replace(/\/+$/, "");
 }
 
 /* =========================================================
@@ -175,15 +226,12 @@ function normalizeSportScoreStatus(
    ========================================================= */
 
 function json(data, status = 200) {
-  return new Response(
-    JSON.stringify(data),
-    {
-      status,
-      headers: {
-        "content-type": "application/json",
-        "cache-control": "public, max-age=10",
-        "access-control-allow-origin": "*"
-      }
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "public, max-age=10",
+      "access-control-allow-origin": "*"
     }
-  );
+  });
 }
