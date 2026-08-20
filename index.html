@@ -1,3 +1,4 @@
+!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -486,12 +487,8 @@ async function loadMatches() {
     try {
 
         /*
-         * IMPORTANT:
-         * The homepage now uses the same source of truth as
-         * the Admin page: Supabase Matches + start_time.
-         *
-         * We do NOT use SportScore status to decide whether
-         * a match is Live or Upcoming.
+         * Load Cricketive's persistent match records.
+         * These contain the database IDs needed for stream links.
          */
 
         const {
@@ -522,9 +519,7 @@ async function loadMatches() {
 
 
         /*
-         * Load active streams directly from the streams table.
-         * This is important because the saved stream belongs to
-         * the Supabase match record, not the SportScore response.
+         * Active streams.
          */
 
         const matchIds =
@@ -591,192 +586,457 @@ async function loadMatches() {
 
 
         /*
-         * Remove duplicate fixture rows from the public page.
+         * Fetch the CURRENT SportScore feed.
          *
-         * If duplicates exist, prefer the record that has an
-         * active stream so the user's saved stream is retained.
+         * SportScore is authoritative for Live/Upcoming/
+         * Finished whenever this request succeeds.
          */
 
-        const uniqueMatches = [];
-        const byFixture = new Map();
+        let sportScoreMatches = [];
+        let sportScoreAvailable = false;
 
 
-        for (
-            const match of stored
-        ) {
+        try {
 
-            if (
-                !match.team1 ||
-                !match.team2
-            ) {
-                continue;
-            }
-
-
-            const key =
-                makeFixtureKey(
-                    match.team1,
-                    match.team2,
-                    match.start_time ||
-                        match.match_time
-                );
-
-
-            if (!key) {
-                continue;
-            }
-
-
-            const previous =
-                byFixture.get(
-                    key
+            const response =
+                await fetch(
+                    "/api/cricket-matches?mode=matches",
+                    {
+                        cache: "no-store"
+                    }
                 );
 
 
             if (
-                !previous
+                response.ok
             ) {
 
-                byFixture.set(
-                    key,
-                    match
-                );
+                const payload =
+                    await response.json();
 
-                uniqueMatches.push(
-                    match
-                );
-
-                continue;
-
-            }
-
-
-            const previousStreams =
-                streamCounts[
-                    previous.id
-                ] || 0;
-
-            const currentStreams =
-                streamCounts[
-                    match.id
-                ] || 0;
-
-
-            /*
-             * Prefer the duplicate with the stream.
-             */
-
-            if (
-                currentStreams >
-                previousStreams
-            ) {
-
-                const index =
-                    uniqueMatches.indexOf(
-                        previous
-                    );
 
                 if (
-                    index !== -1
+                    Array.isArray(
+                        payload.matches
+                    )
                 ) {
 
-                    uniqueMatches[
-                        index
-                    ] = match;
+                    sportScoreMatches =
+                        payload.matches;
+
+                    sportScoreAvailable =
+                        true;
 
                 }
 
-                byFixture.set(
-                    key,
-                    match
-                );
-
             }
+
+        } catch (error) {
+
+            console.warn(
+                "SportScore unavailable. Falling back to stored status.",
+                error
+            );
 
         }
 
 
         /*
-         * Calculate current status from the clock.
-         *
-         * Rules:
-         *   Future              -> Upcoming
-         *   Started <= 6 hours  -> Live
-         *   Older than 6 hours  -> Finished
+         * Index stored Cricketive matches.
          */
 
-        const normalized =
-            uniqueMatches.map(
-                match => {
+        const byUrl = new Map();
+        const byFixture = new Map();
 
-                    const startTime =
+
+        stored.forEach(
+            match => {
+
+                if (
+                    match.sportscore_url
+                ) {
+
+                    byUrl.set(
+                        normalizeUrl(
+                            match.sportscore_url
+                        ),
+                        match
+                    );
+
+                }
+
+
+                const key =
+                    makeFixtureKey(
+                        match.team1,
+                        match.team2,
                         match.start_time ||
-                        match.match_time ||
-                        null;
+                            match.match_time
+                    );
 
 
-                    const currentStatus =
-                        getCurrentMatchStatus(
-                            match.status,
-                            startTime,
-                            match.status_text
+                if (
+                    key
+                ) {
+
+                    const previous =
+                        byFixture.get(
+                            key
                         );
 
 
-                    const streamCount =
-                        streamCounts[
-                            match.id
-                        ] || 0;
+                    /*
+                     * Prefer the row with the active stream.
+                     */
 
+                    if (
+                        !previous ||
+                        (
+                            (
+                                streamCounts[
+                                    match.id
+                                ] || 0
+                            ) >
+                            (
+                                streamCounts[
+                                    previous.id
+                                ] || 0
+                            )
+                        )
+                    ) {
 
-                    return {
+                        byFixture.set(
+                            key,
+                            match
+                        );
 
-                        match,
-
-                        team1:
-                            match.team1,
-
-                        team2:
-                            match.team2,
-
-                        source: match,
-
-                        storedMatch:
-                            match,
-
-                        matchStatus:
-                            currentStatus,
-
-                        streamCount,
-
-                        hasStream:
-                            streamCount > 0
-
-                    };
+                    }
 
                 }
+
+            }
+        );
+
+
+        /*
+         * Index fresh SportScore fixtures.
+         */
+
+        const bySportScoreUrl =
+            new Map();
+
+        const sportScoreByFixture =
+            new Map();
+
+
+        sportScoreMatches.forEach(
+            source => {
+
+                const team1 =
+                    String(
+                        source.home ||
+                        source.team1 ||
+                        ""
+                    ).trim();
+
+                const team2 =
+                    String(
+                        source.away ||
+                        source.team2 ||
+                        ""
+                    ).trim();
+
+                const sourceTime =
+                    source.time ||
+                    source.start_time ||
+                    source.match_time ||
+                    null;
+
+
+                const url =
+                    source.url
+                        ? normalizeUrl(
+                            source.url
+                        )
+                        : "";
+
+
+                if (
+                    url
+                ) {
+
+                    bySportScoreUrl.set(
+                        url,
+                        source
+                    );
+
+                }
+
+
+                const key =
+                    makeFixtureKey(
+                        team1,
+                        team2,
+                        sourceTime
+                    );
+
+
+                if (
+                    key
+                ) {
+
+                    sportScoreByFixture.set(
+                        key,
+                        source
+                    );
+
+                }
+
+            }
+        );
+
+
+        /*
+         * If SportScore is available, use its current fixtures.
+         * Otherwise fall back to the stored Cricketive records.
+         */
+
+        let normalized = [];
+
+
+        if (
+            sportScoreAvailable
+        ) {
+
+            normalized =
+                sportScoreMatches.map(
+                    source => {
+
+                        const team1 =
+                            String(
+                                source.home ||
+                                source.team1 ||
+                                ""
+                            ).trim();
+
+                        const team2 =
+                            String(
+                                source.away ||
+                                source.team2 ||
+                                ""
+                            ).trim();
+
+                        const sourceTime =
+                            source.time ||
+                            source.start_time ||
+                            source.match_time ||
+                            null;
+
+
+                        const sportscoreUrl =
+                            source.url
+                                ? normalizeUrl(
+                                    source.url
+                                )
+                                : "";
+
+
+                        const storedMatch =
+                            (
+                                sportscoreUrl
+                                    ? byUrl.get(
+                                        sportscoreUrl
+                                    )
+                                    : null
+                            ) ||
+                            byFixture.get(
+                                makeFixtureKey(
+                                    team1,
+                                    team2,
+                                    sourceTime
+                                )
+                            ) ||
+                            null;
+
+
+                        const streamCount =
+                            storedMatch
+                                ? (
+                                    streamCounts[
+                                        storedMatch.id
+                                    ] || 0
+                                )
+                                : 0;
+
+
+                        return {
+
+                            source,
+
+                            team1,
+
+                            team2,
+
+                            storedMatch,
+
+                            matchStatus:
+                                normalizeStatus(
+                                    source.status
+                                ),
+
+                            streamCount,
+
+                            hasStream:
+                                streamCount > 0
+
+                        };
+
+                    }
+                );
+
+        } else {
+
+            /*
+             * SportScore is temporarily unavailable.
+             * Keep the public page alive using the last known
+             * Cricketive status.
+             */
+
+            normalized =
+                stored.map(
+                    storedMatch => {
+
+                        const streamCount =
+                            streamCounts[
+                                storedMatch.id
+                            ] || 0;
+
+
+                        return {
+
+                            source:
+                                storedMatch,
+
+                            team1:
+                                storedMatch.team1,
+
+                            team2:
+                                storedMatch.team2,
+
+                            storedMatch,
+
+                            matchStatus:
+                                normalizeStatus(
+                                    storedMatch.status
+                                ),
+
+                            streamCount,
+
+                            hasStream:
+                                streamCount > 0
+
+                        };
+
+                    }
+                );
+
+        }
+
+
+        /*
+         * Deduplicate the public feed.
+         * Prefer the record that has the stream.
+         */
+
+        const unique =
+            new Map();
+
+
+        normalized.forEach(
+            item => {
+
+                const source =
+                    item.source;
+
+
+                const key =
+                    makeFixtureKey(
+                        item.team1,
+                        item.team2,
+                        source.time ||
+                        source.start_time ||
+                        source.match_time
+                    );
+
+
+                if (!key) {
+                    return;
+                }
+
+
+                const previous =
+                    unique.get(
+                        key
+                    );
+
+
+                if (!previous) {
+
+                    unique.set(
+                        key,
+                        item
+                    );
+
+                    return;
+
+                }
+
+
+                if (
+                    item.hasStream &&
+                    !previous.hasStream
+                ) {
+
+                    unique.set(
+                        key,
+                        item
+                    );
+
+                }
+
+            }
+        );
+
+
+        const finalMatches =
+            Array.from(
+                unique.values()
             );
 
 
         const live =
-            normalized.filter(
+            finalMatches.filter(
                 item =>
-                    item.matchStatus ===
-                    "Live"
+                    String(
+                        item.matchStatus ||
+                        ""
+                    ).toLowerCase()
+                    ===
+                    "live"
             );
 
 
         const upcoming =
-            normalized.filter(
+            finalMatches.filter(
                 item =>
-                    item.matchStatus ===
-                    "Upcoming"
+                    String(
+                        item.matchStatus ||
+                        ""
+                    ).toLowerCase()
+                    ===
+                    "upcoming"
             );
 
-
-        /*
-         * Put matches with an available stream first.
-         */
 
         live.sort(
             (a, b) => {
@@ -799,11 +1059,13 @@ async function loadMatches() {
 
                 return (
                     getTime(
+                        a.source.time ||
                         a.source.start_time ||
                         a.source.match_time
                     )
                     -
                     getTime(
+                        b.source.time ||
                         b.source.start_time ||
                         b.source.match_time
                     )
@@ -818,11 +1080,13 @@ async function loadMatches() {
 
                 return (
                     getTime(
+                        a.source.time ||
                         a.source.start_time ||
                         a.source.match_time
                     )
                     -
                     getTime(
+                        b.source.time ||
                         b.source.start_time ||
                         b.source.match_time
                     )
@@ -1105,14 +1369,14 @@ function createCard(
 
     const time =
         (
+            source.time ||
             source.start_time ||
-            source.match_time ||
-            source.time
+            source.match_time
         )
             ? formatDate(
+                source.time ||
                 source.start_time ||
-                source.match_time ||
-                source.time
+                source.match_time
             )
             : "";
 
@@ -1309,18 +1573,13 @@ function createCard(
 
                         ${esc(
                             source.competition ||
-                            source.title ||
                             "Cricket"
                         )}
 
                         <br>
 
                         ${esc(
-                            time ||
-                            formatDate(
-                                source.start_time ||
-                                source.match_time
-                            )
+                            time
                         )}
 
                     </div>
@@ -1376,95 +1635,6 @@ function createCard(
    HELPERS
    ========================================================= */
 
-function makeFixtureKey(
-    team1,
-    team2,
-    startTime
-) {
-
-    if (
-        !team1 ||
-        !team2 ||
-        !startTime
-    ) {
-        return "";
-    }
-
-
-    const teams =
-        [
-            normalizeName(team1),
-            normalizeName(team2)
-        ]
-            .sort()
-            .join("|");
-
-
-    return (
-        `${teams}|${String(startTime)}`
-    );
-
-}
-
-
-function getCurrentMatchStatus(
-    storedStatus,
-    startTime,
-    statusText = ""
-) {
-
-    const start =
-        startTime
-            ? new Date(startTime)
-            : null;
-
-
-    if (
-        start &&
-        !Number.isNaN(
-            start.getTime()
-        )
-    ) {
-
-        const elapsedHours =
-            (
-                Date.now() -
-                start.getTime()
-            ) /
-            (1000 * 60 * 60);
-
-
-        if (
-            elapsedHours < 0
-        ) {
-            return "Upcoming";
-        }
-
-
-        if (
-            elapsedHours <= 6
-        ) {
-            return "Live";
-        }
-
-
-        return "Finished";
-
-    }
-
-
-    /*
-     * Fallback only when no usable timestamp exists.
-     */
-
-    return normalizeStatus(
-        storedStatus ||
-        statusText
-    );
-
-}
-
-
 function normalizeStatus(
     status
 ) {
@@ -1493,6 +1663,37 @@ function normalizeStatus(
     }
 
     return "Upcoming";
+
+}
+
+
+function makeFixtureKey(
+    team1,
+    team2,
+    startTime
+) {
+
+    if (
+        !team1 ||
+        !team2 ||
+        !startTime
+    ) {
+        return "";
+    }
+
+
+    const teams =
+        [
+            normalizeName(team1),
+            normalizeName(team2)
+        ]
+            .sort()
+            .join("|");
+
+
+    return (
+        `${teams}|${String(startTime)}`
+    );
 
 }
 
