@@ -901,7 +901,9 @@ async function syncMatches() {
 
                 status:
                     normalizeSportScoreStatus(
-                        match.status
+                        match.status,
+                        match.start_time,
+                        match.status_text
                     ),
 
                 /*
@@ -964,54 +966,15 @@ async function syncMatches() {
            Separate existing vs new
         ----------------------------------------------- */
 
-        /* -----------------------------------------------
-           Deduplicate rows before database writes
-           ----------------------------------------------- */
-
-        const uniqueRows = [];
-        const seenRowKeys = new Set();
-
-        for (const row of rows) {
-
-            /*
-             * Use the SportScore URL as the primary identity.
-             * Do not use team names as the primary deduplication
-             * key because the same teams can legitimately play
-             * more than once.
-             */
-
-            const rowKey =
-                row.sportscore_url
-                    ? `url:${row.sportscore_url}`
-                    : row.api_match_id
-                        ? `api:${row.api_match_id}`
-                        : row.id
-                            ? `id:${row.id}`
-                            : null;
-
-            if (!rowKey) {
-                uniqueRows.push(row);
-                continue;
-            }
-
-            if (seenRowKeys.has(rowKey)) {
-                continue;
-            }
-
-            seenRowKeys.add(rowKey);
-            uniqueRows.push(row);
-        }
-
-
         const existingRows =
-            uniqueRows.filter(
+            rows.filter(
                 row =>
                     Boolean(row.id)
             );
 
 
         const newRows =
-            uniqueRows.filter(
+            rows.filter(
                 row =>
                     !row.id
             );
@@ -1025,34 +988,20 @@ async function syncMatches() {
             existingRows.length
         ) {
 
-            /*
-             * Update existing rows one at a time.
-             * This avoids PostgreSQL's:
-             * ON CONFLICT DO UPDATE command cannot affect row
-             * a second time
-             * error when SportScore returns duplicate matches.
-             */
+            const {
+                error: updateError
+            } = await client
+                .from("Matches")
+                .upsert(
+                    existingRows,
+                    {
+                        onConflict: "id"
+                    }
+                );
 
-            const updatedIds = new Set();
 
-            for (const row of existingRows) {
-
-                if (!row.id || updatedIds.has(row.id)) {
-                    continue;
-                }
-
-                updatedIds.add(row.id);
-
-                const { id, ...updateData } = row;
-
-                const { error: updateError } = await client
-                    .from("Matches")
-                    .update(updateData)
-                    .eq("id", id);
-
-                if (updateError) {
-                    throw updateError;
-                }
+            if (updateError) {
+                throw updateError;
             }
 
         }
@@ -1120,28 +1069,28 @@ async function syncMatches() {
         ----------------------------------------------- */
 
         const liveCount =
-            uniqueRows.filter(
+            rows.filter(
                 match =>
                     match.status === "Live"
             ).length;
 
 
         const upcomingCount =
-            uniqueRows.filter(
+            rows.filter(
                 match =>
                     match.status === "Upcoming"
             ).length;
 
 
         const finishedCount =
-            uniqueRows.filter(
+            rows.filter(
                 match =>
                     match.status === "Finished"
             ).length;
 
 
         message.innerHTML =
-            `Synced <strong>${uniqueRows.length}</strong> matches.` +
+            `Synced <strong>${rows.length}</strong> matches.` +
             `<br>🔴 Live: ${liveCount}` +
             ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingCount}` +
             ` &nbsp;·&nbsp; ✅ Finished: ${finishedCount}`;
@@ -1184,39 +1133,167 @@ async function syncMatches() {
 
 
 /* =========================================================
-   SPORTScore STATUS
+   MATCH STATUS
    ========================================================= */
 
+/*
+ * Status is calculated from the current clock when the
+ * stored/SportScore status is not explicit.
+ *
+ * Rules:
+ *   1. Explicit LIVE/FINISHED always wins.
+ *   2. Future start time = Upcoming.
+ *   3. Start time passed by <= 6 hours = Live.
+ *   4. Start time passed by > 6 hours = Finished.
+ *
+ * This prevents an old match from remaining Live overnight.
+ */
+
 function normalizeSportScoreStatus(
-    status
+    status,
+    startTime,
+    statusText = ""
 ) {
 
     const value =
-        String(
-            status || ""
-        )
+        String(status || "")
+            .trim()
+            .toLowerCase();
+
+    const text =
+        String(statusText || "")
             .trim()
             .toLowerCase();
 
 
+    /* -----------------------------------------------------
+       Explicit LIVE
+       ----------------------------------------------------- */
+
     if (
         value === "live" ||
         value === "in_progress" ||
-        value === "in progress"
+        value === "in progress" ||
+        value === "started" ||
+        value === "playing" ||
+        value === "ongoing" ||
+        text === "live" ||
+        text === "in progress" ||
+        text === "started" ||
+        text === "playing" ||
+        text === "ongoing"
     ) {
 
-        return "Live";
+        /*
+         * Do not trust an explicit LIVE flag if the match
+         * start time is more than 6 hours in the past.
+         */
 
+        if (startTime) {
+
+            const start =
+                new Date(startTime);
+
+            if (
+                !Number.isNaN(
+                    start.getTime()
+                )
+            ) {
+
+                const elapsedHours =
+                    (
+                        Date.now() -
+                        start.getTime()
+                    ) /
+                    (1000 * 60 * 60);
+
+                if (
+                    elapsedHours > 6
+                ) {
+
+                    return "Finished";
+
+                }
+
+            }
+
+        }
+
+        return "Live";
     }
 
+
+    /* -----------------------------------------------------
+       Explicit FINISHED
+       ----------------------------------------------------- */
 
     if (
         value === "finished" ||
         value === "ended" ||
-        value === "completed"
+        value === "completed" ||
+        value === "complete" ||
+        value === "ft" ||
+        text === "finished" ||
+        text === "ended" ||
+        text === "completed" ||
+        text === "complete"
     ) {
 
         return "Finished";
+
+    }
+
+
+    /* -----------------------------------------------------
+       Time-based fallback
+       ----------------------------------------------------- */
+
+    if (startTime) {
+
+        const start =
+            new Date(startTime);
+
+        if (
+            !Number.isNaN(
+                start.getTime()
+            )
+        ) {
+
+            const elapsedHours =
+                (
+                    Date.now() -
+                    start.getTime()
+                ) /
+                (1000 * 60 * 60);
+
+
+            /* Future start → Upcoming */
+
+            if (
+                elapsedHours < 0
+            ) {
+
+                return "Upcoming";
+
+            }
+
+
+            /* Started within the last 6 hours → Live */
+
+            if (
+                elapsedHours <= 6
+            ) {
+
+                return "Live";
+
+            }
+
+
+            /* Older than 6 hours → Finished */
+
+            return "Finished";
+
+        }
 
     }
 
@@ -1308,39 +1385,15 @@ function normalizeUrl(
    CLEAN STALE LIVE MATCHES
    ========================================================= */
 
+/*
+ * Status is now recalculated from start_time when matches
+ * are loaded. We no longer permanently rewrite database
+ * statuses here.
+ */
+
 async function cleanStaleMatches() {
 
-    const cutoff =
-        new Date(
-            Date.now() -
-            24 * 60 * 60 * 1000
-        ).toISOString();
-
-
-    const { error } =
-        await client
-            .from("Matches")
-            .update({
-                status: "Finished"
-            })
-            .eq(
-                "status",
-                "Live"
-            )
-            .lt(
-                "start_time",
-                cutoff
-            );
-
-
-    if (error) {
-
-        console.error(
-            "Could not clean stale live matches:",
-            error
-        );
-
-    }
+    return;
 
 }
 
@@ -1437,15 +1490,44 @@ async function loadMatches() {
             );
 
 
+    /*
+     * Recalculate status from the current time every time
+     * the Admin page loads.
+     *
+     * This means a match automatically moves:
+     *
+     * Upcoming → Live → Finished
+     *
+     * without requiring another SportScore sync.
+     */
+
+    const nowUpdatedMatches =
+        validMatches.map(
+            match => ({
+
+                ...match,
+
+                status:
+                    normalizeSportScoreStatus(
+                        match.status,
+                        match.start_time,
+                        match.status_text
+                    )
+
+            })
+        );
+
+
+
     const live =
-        validMatches.filter(
+        nowUpdatedMatches.filter(
             match =>
                 match.status === "Live"
         );
 
 
     const upcoming =
-        validMatches.filter(
+        nowUpdatedMatches.filter(
             match =>
                 match.status === "Upcoming"
         );
