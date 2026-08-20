@@ -2,12 +2,10 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Existing match list endpoint
     if (url.pathname === "/api/cricket-matches") {
       return handleCricketAPI();
     }
 
-    // NEW: Live scores endpoint
     if (url.pathname === "/api/live-scores") {
       return handleLiveScores(url);
     }
@@ -61,11 +59,10 @@ async function handleCricketAPI() {
 }
 
 /* =========================================================
-   LIVE SCORES ENDPOINT (FIXED)
+   LIVE SCORES ENDPOINT (ULTIMATE FIX - NO CRASHES)
    ========================================================= */
 async function handleLiveScores(url) {
   try {
-    // Fetch fresh data from SportScore
     const response = await fetch(
       "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
       { cf: { cacheTtl: 10, cacheEverything: true } }
@@ -78,71 +75,48 @@ async function handleLiveScores(url) {
     const payload = await response.json();
     const matches = Array.isArray(payload.matches) ? payload.matches : [];
 
-    // Build a map of match scores
     const scoreMap = {};
     for (const match of matches) {
-      // Use match URL as the unique key
       const key = match.url ? normalizeUrl(match.url) : null;
-      if (key) {
-        // Safely extract scores with deep null checks
-        let homeScore = null;
-        let awayScore = null;
-        let overs = null;
+      if (!key) continue;
 
-        // Extract home score safely
-        if (match.score && typeof match.score === 'object') {
-          homeScore = match.score.home ?? null;
-        } else if (match.home_score !== undefined && match.home_score !== null) {
-          homeScore = match.home_score;
-        } else {
-          homeScore = match.home_score ?? null;
-        }
+      // --- SAFE EXTRACTION LOGIC ---
+      let homeScore = null;
+      let awayScore = null;
+      let overs = null;
 
-        // Extract away score safely
-        if (match.score && typeof match.score === 'object') {
-          awayScore = match.score.away ?? null;
-        } else if (match.away_score !== undefined && match.away_score !== null) {
-          awayScore = match.away_score;
-        } else {
-          awayScore = match.away_score ?? null;
-        }
+      // 1. Try to get scores safely
+      const rawHome = match.home_score ?? match.score?.home ?? null;
+      const rawAway = match.away_score ?? match.score?.away ?? null;
+      const rawOvers = match.overs ?? match.score?.overs ?? null;
 
-        // Extract overs safely
-        if (match.score && typeof match.score === 'object') {
-          overs = match.score.overs ?? null;
-        } else if (match.overs !== undefined && match.overs !== null) {
-          overs = match.overs;
-        } else {
-          overs = match.overs ?? null;
-        }
-
-        // If scores are objects (like {runs: 45, wickets: 2}), extract runs
-        if (homeScore && typeof homeScore === 'object') {
-          homeScore = homeScore.runs ?? homeScore.total ?? null;
-        }
-        if (awayScore && typeof awayScore === 'object') {
-          awayScore = awayScore.runs ?? awayScore.total ?? null;
-        }
-        if (overs && typeof overs === 'object') {
-          overs = overs.current ?? overs.total ?? null;
-        }
-
-        scoreMap[key] = {
-          home_score: homeScore,
-          away_score: awayScore,
-          status: match.status,
-          status_text: match.status_text,
-          overs: overs,
-          batting_team: match.batting_team || null
-        };
+      // 2. If it's an object, extract runs/total. If it's a number/string, use it directly.
+      if (rawHome !== null && rawHome !== undefined) {
+        homeScore = (typeof rawHome === 'object') ? (rawHome.runs ?? rawHome.total ?? null) : rawHome;
       }
+      if (rawAway !== null && rawAway !== undefined) {
+        awayScore = (typeof rawAway === 'object') ? (rawAway.runs ?? rawAway.total ?? null) : rawAway;
+      }
+      if (rawOvers !== null && rawOvers !== undefined) {
+        overs = (typeof rawOvers === 'object') ? (rawOvers.current ?? rawOvers.total ?? null) : rawOvers;
+      }
+
+      // 3. Store it
+      scoreMap[key] = {
+        home_score: homeScore,
+        away_score: awayScore,
+        status: match.status || null,
+        status_text: match.status_text || null,
+        overs: overs,
+        batting_team: match.batting_team || null
+      };
     }
 
-    // Return all live scores
     return json({ scores: scoreMap, updated: new Date().toISOString() });
   } catch (error) {
     console.error("Live scores error:", error);
-    return json({ error: error.message || "Unable to load live scores." }, 500);
+    // Return empty scores instead of crashing so the page still loads
+    return json({ scores: {}, error: error.message, updated: new Date().toISOString() }, 200);
   }
 }
 
