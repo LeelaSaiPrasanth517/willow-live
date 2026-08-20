@@ -1,39 +1,41 @@
 <section class="player" id="player">
 
     <div class="player-header">
+
         <div class="player-title" id="playerTitle">
             Cricketive Player
         </div>
 
         <button
             class="close-player"
-            type="button"
             onclick="closePlayer()"
         >
             CLOSE
         </button>
+
     </div>
 
-    <div class="video-crop" id="videoCrop">
+    <div id="videoContainer">
+
+        <video
+            id="videoPlayer"
+            controls
+            playsinline
+        ></video>
+
+    </div>
+
+    <div id="iframeContainer">
 
         <iframe
             id="videoFrame"
-            title="Cricketive Stream"
-            allowfullscreen
-            allow="
-                autoplay;
-                encrypted-media;
-                picture-in-picture;
-                fullscreen
-            "
-        ></iframe>
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowfullscreen>
+        </iframe>
 
     </div>
 
-    <div
-        class="player-message"
-        id="playerMessage"
-    >
+    <div id="playerMessage">
         Loading stream...
     </div>
 
