@@ -476,6 +476,11 @@ async function login() {
         document
             .getElementById("loginMessage");
 
+    const button =
+        document.querySelector(
+            '#loginPanel button[onclick="login()"]'
+        );
+
     if (!email || !password) {
 
         message.textContent =
@@ -487,21 +492,59 @@ async function login() {
     message.textContent =
         "Signing in...";
 
-    const { error } =
-        await client.auth.signInWithPassword({
-            email,
-            password
-        });
-
-    if (error) {
-
-        message.textContent =
-            error.message;
-
-        return;
+    if (button) {
+        button.disabled = true;
+        button.textContent = "SIGNING IN...";
     }
 
-    showAdmin();
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await client.auth.signInWithPassword({
+                email,
+                password
+            });
+
+        if (error) {
+            throw error;
+        }
+
+        if (
+            !data ||
+            !data.session
+        ) {
+            throw new Error(
+                "Login succeeded, but no session was created."
+            );
+        }
+
+        message.textContent =
+            "Login successful. Loading admin...";
+
+        showAdmin();
+
+    } catch (error) {
+
+        console.error(
+            "Cricketive login error:",
+            error
+        );
+
+        message.textContent =
+            error?.message ||
+            "Login failed. Please try again.";
+
+    } finally {
+
+        if (button) {
+            button.disabled = false;
+            button.textContent = "LOGIN";
+        }
+
+    }
 
 }
 
@@ -1458,12 +1501,10 @@ async function loadMatches() {
             "liveMatches"
         );
 
-
     const upcomingContainer =
         document.getElementById(
             "upcomingMatches"
         );
-
 
     liveContainer.innerHTML =
         "Loading...";
@@ -1472,8 +1513,13 @@ async function loadMatches() {
         "Loading...";
 
 
-    await cleanStaleMatches();
-
+    /*
+     * IMPORTANT:
+     * Do NOT filter by the stored status here.
+     *
+     * The stored status can be stale. We calculate the
+     * current status from start_time below.
+     */
 
     const {
         data,
@@ -1481,13 +1527,6 @@ async function loadMatches() {
     } = await client
         .from("Matches")
         .select("*")
-        .in(
-            "status",
-            [
-                "Live",
-                "Upcoming"
-            ]
-        )
         .order(
             "start_time",
             {
@@ -1507,7 +1546,6 @@ async function loadMatches() {
                 </p>
             `;
 
-
         liveContainer.innerHTML =
             msg;
 
@@ -1519,25 +1557,23 @@ async function loadMatches() {
     }
 
 
-    /*
-     * Calculate CURRENT status for every match.
-     *
-     * Never use the stored status to decide which section
-     * the match belongs to.
-     */
-
     const currentMatches =
         (data || [])
             .filter(
-                match =>
-                    match.team1 &&
-                    match.team2 &&
-                    !isPlaceholder(
-                        match.team1
-                    ) &&
-                    !isPlaceholder(
-                        match.team2
-                    )
+                match => {
+
+                    return (
+                        match.team1 &&
+                        match.team2 &&
+                        !isPlaceholder(
+                            match.team1
+                        ) &&
+                        !isPlaceholder(
+                            match.team2
+                        )
+                    );
+
+                }
             )
             .map(
                 match => ({
@@ -1547,7 +1583,8 @@ async function loadMatches() {
                     currentStatus:
                         getCurrentMatchStatus(
                             match.status,
-                            match.start_time,
+                            match.start_time ||
+                                match.match_time,
                             match.status_text
                         )
 
@@ -1569,65 +1606,20 @@ async function loadMatches() {
         );
 
 
-    const finishedMatches =
-        currentMatches.filter(
-            match =>
-                match.currentStatus === "Finished"
-        );
-
-
-    /*
-     * Only Live and Upcoming are rendered in the active
-     * schedule. Finished matches remain available in the
-     * database and can be shown by other pages if needed.
-     */
-
-
-
-                    return (
-                        match.team1 &&
-                        match.team2 &&
-                        !isPlaceholder(
-                            match.team1
-                        ) &&
-                        !isPlaceholder(
-                            match.team2
-                        )
-                    );
-
-                }
-            );
-
-
-    const live =
-        validMatches.filter(
-            match =>
-                match.currentStatus === "Live"
-        );
-
-
-    const upcoming =
-        validMatches.filter(
-            match =>
-                match.currentStatus === "Upcoming"
-        );
-
-
     renderMatchList(
         liveContainer,
-        live,
+        liveMatches,
         "live"
     );
 
 
     renderMatchList(
         upcomingContainer,
-        upcoming,
+        upcomingMatches,
         "upcoming"
     );
 
 }
-
 
 /* =========================================================
    RENDER MATCH LIST
@@ -1762,7 +1754,9 @@ function renderMatchList(
                         }"
                     >
                         ${escapeHtml(
-                            match.status
+                            match.currentStatus ||
+                            match.status ||
+                            "Upcoming"
                         )}
                     </span>
 
@@ -2530,6 +2524,39 @@ function escapeHtml(
         );
 
 }
+
+
+/* =========================================================
+   AUTH STATE
+   ========================================================= */
+
+/*
+ * Supabase can restore the session asynchronously.
+ * Listen for auth changes so the UI cannot get stuck on
+ * the login screen after a successful sign-in.
+ */
+
+client.auth.onAuthStateChange(
+    (
+        event,
+        session
+    ) => {
+
+        if (
+            session &&
+            (
+                event === "SIGNED_IN" ||
+                event === "INITIAL_SESSION" ||
+                event === "TOKEN_REFRESHED"
+            )
+        ) {
+
+            showAdmin();
+
+        }
+
+    }
+);
 
 
 /* =========================================================
