@@ -1,42 +1,1138 @@
-<section class="player" id="player">
+<!DOCTYPE html>
+<html lang="en">
+<head>
 
-    <div class="player-header">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 
-        <div class="player-title" id="playerTitle">
-            Cricketive Player
+<title>Cricketive | Match</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #050505;
+    color: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.header {
+    height: 70px;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    background: #090909;
+    border-bottom: 1px solid #222;
+}
+
+.brand img {
+    height: 48px;
+    width: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    vertical-align: middle;
+}
+
+.brand span {
+    font-weight: 800;
+    font-size: 21px;
+    margin-left: 9px;
+    vertical-align: middle;
+}
+
+.back {
+    margin-left: auto;
+    color: #fff;
+    text-decoration: none;
+    background: #222;
+    padding: 9px 13px;
+    border-radius: 7px;
+    font-size: 13px;
+}
+
+.wrap {
+    max-width: 1050px;
+    margin: auto;
+    padding: 28px 15px;
+}
+
+.match-head {
+    background: #101010;
+    border: 1px solid #252525;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.title {
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.meta {
+    color: #999;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-top: 8px;
+}
+
+.streams {
+    margin-top: 22px;
+}
+
+.stream {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: #101010;
+    border: 1px solid #252525;
+    border-radius: 9px;
+    padding: 14px;
+    margin-top: 9px;
+}
+
+.watch {
+    border: 0;
+    background: #5865f2;
+    color: #fff;
+    padding: 9px 13px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.empty {
+    color: #888;
+    background: #0b0b0b;
+    border: 1px solid #1d1d1d;
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 12px;
+}
+
+
+/* PLAYER */
+
+.player {
+    display: none;
+    margin-top: 20px;
+    background: #000;
+    border: 1px solid #252525;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.player-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: #0b0b0b;
+    border-bottom: 1px solid #222;
+}
+
+.player-title {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.close-player {
+    border: 0;
+    background: #222;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.video-container {
+    display: none;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+}
+
+.video-container iframe,
+.video-container video {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border: 0;
+    background: #000;
+}
+
+.player-message {
+    padding: 10px 14px;
+    color: #999;
+    font-size: 12px;
+    background: #080808;
+    border-top: 1px solid #222;
+}
+
+@media(max-width:600px) {
+
+    .header {
+        height: 60px;
+        padding: 0 14px;
+    }
+
+    .brand img {
+        height: 40px;
+        width: 40px;
+    }
+
+    .brand span {
+        font-size: 18px;
+    }
+
+    .title {
+        font-size: 20px;
+    }
+
+    .stream {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header class="header">
+
+    <div class="brand">
+        <img
+            src="cricketive-logo.webp"
+            alt="Cricketive logo"
+        >
+        <span>CRICKETIVE</span>
+    </div>
+
+    <a
+        class="back"
+        href="index.html"
+    >
+        ← HOME
+    </a>
+
+</header>
+
+
+<main class="wrap">
+
+    <section
+        class="match-head"
+        id="match"
+    >
+        <div class="empty">
+            Loading match...
+        </div>
+    </section>
+
+
+    <section class="streams">
+
+        <h2>🎥 Available Streams</h2>
+
+        <div id="streamList">
+            <div class="empty">
+                Loading streams...
+            </div>
         </div>
 
-        <button
-            class="close-player"
-            onclick="closePlayer()"
+
+        <!-- PLAYER -->
+
+        <section
+            class="player"
+            id="player"
         >
-            CLOSE
-        </button>
 
-    </div>
+            <div class="player-header">
 
-    <div id="videoContainer">
+                <div
+                    class="player-title"
+                    id="playerTitle"
+                >
+                    Cricketive Player
+                </div>
 
-        <video
-            id="videoPlayer"
-            controls
-            playsinline
-        ></video>
+                <button
+                    class="close-player"
+                    type="button"
+                    onclick="closePlayer()"
+                >
+                    CLOSE
+                </button>
 
-    </div>
+            </div>
 
-    <div id="iframeContainer">
 
-        <iframe
-            id="videoFrame"
-            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-            allowfullscreen>
-        </iframe>
+            <!-- VIDEO PLAYER -->
 
-    </div>
+            <div
+                class="video-container"
+                id="videoContainer"
+            >
 
-    <div id="playerMessage">
-        Loading stream...
-    </div>
+                <video
+                    id="videoPlayer"
+                    controls
+                    playsinline
+                    preload="metadata"
+                ></video>
 
-</section>
+            </div>
+
+
+            <!-- IFRAME PLAYER -->
+
+            <div
+                class="video-container"
+                id="iframeContainer"
+            >
+
+                <iframe
+                    id="videoFrame"
+                    title="Cricketive Stream"
+                    allow="
+                        autoplay;
+                        encrypted-media;
+                        picture-in-picture;
+                        fullscreen
+                    "
+                    allowfullscreen
+                ></iframe>
+
+            </div>
+
+
+            <div
+                class="player-message"
+                id="playerMessage"
+            >
+                Loading stream...
+            </div>
+
+        </section>
+
+    </section>
+
+</main>
+
+
+<script>
+
+/* =========================================
+   SUPABASE
+========================================= */
+
+const SUPABASE_URL =
+    "https://qkzwzdyahwzcwtqgcbud.supabase.co";
+
+const SUPABASE_ANON_KEY =
+    "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
+
+const db =
+    supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+    );
+
+
+/* =========================================
+   MATCH ID
+========================================= */
+
+const matchId =
+    new URLSearchParams(
+        location.search
+    ).get("match");
+
+
+/* =========================================
+   PLAYER VARIABLES
+========================================= */
+
+let currentHls = null;
+
+
+/* =========================================
+   LOAD MATCH
+========================================= */
+
+async function load() {
+
+    if (!matchId) {
+
+        document.getElementById(
+            "match"
+        ).innerHTML =
+            '<div class="empty">No match selected.</div>';
+
+        return;
+    }
+
+
+    const mr =
+        await db
+            .from("Matches")
+            .select("*")
+            .eq("id", matchId)
+            .maybeSingle();
+
+
+    if (mr.error || !mr.data) {
+
+        console.error(mr.error);
+
+        document.getElementById(
+            "match"
+        ).innerHTML =
+            '<div class="empty">Match not found.</div>';
+
+        return;
+    }
+
+
+    const m = mr.data;
+
+
+    document.title =
+        `${m.team1} vs ${m.team2} | Cricketive`;
+
+
+    document.getElementById(
+        "match"
+    ).innerHTML = `
+
+        <div class="title">
+            ${esc(m.team1)} vs ${esc(m.team2)}
+        </div>
+
+        <div class="meta">
+
+            ${esc(m.competition || "Cricket")}
+
+            <br>
+
+            ${
+                m.start_time
+                    ? new Date(
+                        m.start_time
+                    ).toLocaleString(
+                        [],
+                        {
+                            dateStyle: "medium",
+                            timeStyle: "short"
+                        }
+                    )
+                    : esc(
+                        m.match_time || ""
+                    )
+            }
+
+            ${
+                m.venue
+                    ? "<br>" + esc(m.venue)
+                    : ""
+            }
+
+            <br>
+
+            <b>
+                ${esc(m.status || "")}
+            </b>
+
+        </div>
+
+    `;
+
+
+    await loadStreams();
+
+}
+
+
+/* =========================================
+   LOAD STREAMS
+========================================= */
+
+async function loadStreams() {
+
+    const el =
+        document.getElementById(
+            "streamList"
+        );
+
+
+    const sr =
+        await db
+            .from("streams")
+            .select("*")
+            .eq("match_id", matchId)
+            .eq("active", true)
+            .order(
+                "created_at",
+                {
+                    ascending: true
+                }
+            );
+
+
+    if (sr.error) {
+
+        console.error(sr.error);
+
+        el.innerHTML =
+            '<div class="empty">Unable to load streams.</div>';
+
+        return;
+    }
+
+
+    if (!sr.data.length) {
+
+        el.innerHTML =
+            '<div class="empty">⏳ No stream is available for this match yet.</div>';
+
+        return;
+    }
+
+
+    el.innerHTML =
+        sr.data
+            .map(
+                s => `
+
+                <div class="stream">
+
+                    <div>
+
+                        <b>
+                            ${esc(
+                                s.language ||
+                                "Unknown"
+                            )}
+                        </b>
+
+                        <br>
+
+                        <span
+                            style="
+                                color:#999;
+                                font-size:12px
+                            "
+                        >
+                            ${esc(
+                                s.stream_name ||
+                                "Stream"
+                            )}
+                        </span>
+
+                    </div>
+
+
+                    <button
+                        class="watch"
+                        onclick='playStream(
+                            ${JSON.stringify(
+                                s.embed_url
+                            )},
+                            ${JSON.stringify(
+                                s.stream_name ||
+                                "Cricketive Stream"
+                            )}
+                        )'
+                    >
+                        ▶ WATCH
+                    </button>
+
+                </div>
+
+            `
+            )
+            .join("");
+
+}
+
+
+/* =========================================
+   STREAM DETECTION
+========================================= */
+
+function detectStreamType(url) {
+
+    const lower =
+        url.toLowerCase();
+
+
+    if (
+        lower.includes(
+            "youtube.com/watch"
+        ) ||
+        lower.includes(
+            "youtube.com/live/"
+        ) ||
+        lower.includes(
+            "youtu.be/"
+        )
+    ) {
+
+        return "youtube";
+
+    }
+
+
+    if (
+        lower.includes(".m3u8")
+    ) {
+
+        return "hls";
+
+    }
+
+
+    if (
+        /\.(mp4|webm|ogg)(\?|#|$)/i
+            .test(url)
+    ) {
+
+        return "video";
+
+    }
+
+
+    if (
+        lower.includes("/embed/") ||
+        lower.includes("player.php") ||
+        lower.includes("embed.php")
+    ) {
+
+        return "embed";
+
+    }
+
+
+    return "webpage";
+
+}
+
+
+/* =========================================
+   PLAY STREAM
+========================================= */
+
+function playStream(
+    url,
+    streamName
+) {
+
+    if (!url) {
+
+        showMessage(
+            "No stream URL provided.",
+            true
+        );
+
+        return;
+    }
+
+
+    stopPlayer();
+
+
+    const player =
+        document.getElementById(
+            "player"
+        );
+
+    const iframeContainer =
+        document.getElementById(
+            "iframeContainer"
+        );
+
+    const videoContainer =
+        document.getElementById(
+            "videoContainer"
+        );
+
+    const iframe =
+        document.getElementById(
+            "videoFrame"
+        );
+
+    const video =
+        document.getElementById(
+            "videoPlayer"
+        );
+
+
+    document.getElementById(
+        "playerTitle"
+    ).textContent =
+        streamName ||
+        "Cricketive Player";
+
+
+    player.style.display =
+        "block";
+
+
+    iframeContainer.style.display =
+        "none";
+
+    videoContainer.style.display =
+        "none";
+
+
+    const type =
+        detectStreamType(url);
+
+
+    /* YOUTUBE */
+
+    if (
+        type === "youtube"
+    ) {
+
+        const embed =
+            youtubeEmbed(url);
+
+
+        if (!embed) {
+
+            showMessage(
+                "Invalid YouTube URL.",
+                true
+            );
+
+            return;
+        }
+
+
+        iframe.src =
+            embed;
+
+        iframeContainer.style.display =
+            "block";
+
+
+        showMessage(
+            "YouTube player loaded."
+        );
+
+
+        scrollPlayer();
+
+        return;
+    }
+
+
+    /* HLS */
+
+    if (
+        type === "hls"
+    ) {
+
+        videoContainer.style.display =
+            "block";
+
+
+        playHLS(
+            url,
+            video
+        );
+
+
+        scrollPlayer();
+
+        return;
+    }
+
+
+    /* MP4 / WEBM / OGG */
+
+    if (
+        type === "video"
+    ) {
+
+        video.src =
+            url;
+
+        videoContainer.style.display =
+            "block";
+
+
+        showMessage(
+            "Video loaded."
+        );
+
+
+        video.play()
+            .catch(() => {});
+
+
+        scrollPlayer();
+
+        return;
+    }
+
+
+    /* EMBED / WEBPAGE */
+
+    iframe.src =
+        url;
+
+    iframeContainer.style.display =
+        "block";
+
+
+    showMessage(
+        "Loading player..."
+    );
+
+
+    scrollPlayer();
+
+}
+
+
+/* =========================================
+   HLS
+========================================= */
+
+function playHLS(
+    url,
+    video
+) {
+
+    showMessage(
+        "Loading HLS stream..."
+    );
+
+
+    if (
+        video.canPlayType(
+            "application/vnd.apple.mpegurl"
+        )
+    ) {
+
+        video.src =
+            url;
+
+        video.play()
+            .catch(() => {});
+
+        return;
+    }
+
+
+    if (
+        typeof Hls !== "undefined" &&
+        Hls.isSupported()
+    ) {
+
+        currentHls =
+            new Hls();
+
+
+        currentHls.loadSource(
+            url
+        );
+
+        currentHls.attachMedia(
+            video
+        );
+
+
+        currentHls.on(
+            Hls.Events.MANIFEST_PARSED,
+            function () {
+
+                showMessage(
+                    "HLS stream loaded."
+                );
+
+                video.play()
+                    .catch(() => {});
+
+            }
+        );
+
+
+        currentHls.on(
+            Hls.Events.ERROR,
+            function (
+                event,
+                data
+            ) {
+
+                console.error(
+                    "HLS error:",
+                    data
+                );
+
+
+                if (
+                    data.fatal
+                ) {
+
+                    showMessage(
+                        "Unable to play this HLS stream.",
+                        true
+                    );
+
+                }
+
+            }
+        );
+
+
+        return;
+    }
+
+
+    showMessage(
+        "HLS is not supported in this browser.",
+        true
+    );
+
+}
+
+
+/* =========================================
+   YOUTUBE
+========================================= */
+
+function youtubeEmbed(
+    url
+) {
+
+    try {
+
+        const u =
+            new URL(url);
+
+
+        let id = "";
+
+
+        if (
+            u.hostname.includes(
+                "youtube.com"
+            )
+        ) {
+
+            if (
+                u.pathname.startsWith(
+                    "/live/"
+                )
+            ) {
+
+                id =
+                    u.pathname
+                        .split("/")[2];
+
+            } else {
+
+                id =
+                    u.searchParams.get(
+                        "v"
+                    );
+
+            }
+
+        }
+
+
+        if (
+            u.hostname ===
+            "youtu.be"
+        ) {
+
+            id =
+                u.pathname
+                    .replace(
+                        "/",
+                        ""
+                    );
+
+        }
+
+
+        if (!id) {
+            return null;
+        }
+
+
+        return (
+            "https://www.youtube.com/embed/" +
+            encodeURIComponent(id) +
+            "?autoplay=1"
+        );
+
+    } catch {
+
+        return null;
+    }
+
+}
+
+
+/* =========================================
+   STOP PLAYER
+========================================= */
+
+function stopPlayer() {
+
+    const video =
+        document.getElementById(
+            "videoPlayer"
+        );
+
+    const iframe =
+        document.getElementById(
+            "videoFrame"
+        );
+
+
+    if (currentHls) {
+
+        currentHls.destroy();
+
+        currentHls =
+            null;
+    }
+
+
+    video.pause();
+
+    video.removeAttribute(
+        "src"
+    );
+
+    video.load();
+
+
+    iframe.src = "";
+
+}
+
+
+/* =========================================
+   CLOSE
+========================================= */
+
+function closePlayer() {
+
+    stopPlayer();
+
+
+    document.getElementById(
+        "player"
+    ).style.display =
+        "none";
+
+}
+
+
+/* =========================================
+   MESSAGE
+========================================= */
+
+function showMessage(
+    message,
+    error = false
+) {
+
+    const el =
+        document.getElementById(
+            "playerMessage"
+        );
+
+
+    el.textContent =
+        message;
+
+
+    el.style.color =
+        error
+            ? "#ff6b6b"
+            : "#999";
+
+}
+
+
+/* =========================================
+   SCROLL
+========================================= */
+
+function scrollPlayer() {
+
+    document.getElementById(
+        "player"
+    ).scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+    });
+
+}
+
+
+/* =========================================
+   ESCAPE HTML
+========================================= */
+
+function esc(value) {
+
+    return String(
+        value ?? ""
+    )
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
+}
+
+
+/* =========================================
+   START
+========================================= */
+
+load();
+
+</script>
+
+</body>
+</html>
