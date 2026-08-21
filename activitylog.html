@@ -146,6 +146,29 @@ async function loadAudit() {
 
   auditData = data || [];
 
+  const {
+    data: adminUsers,
+    error: adminUsersError
+  } = await client
+    .from("admin_users")
+    .select("user_id, display_name, email, role");
+
+  if (adminUsersError) {
+    setMessage(
+      "Unable to load administrator identities: " +
+      adminUsersError.message,
+      true
+    );
+    return;
+  }
+
+  window.adminIdentityMap = new Map(
+    (adminUsers || []).map(admin => [
+      admin.user_id,
+      admin
+    ])
+  );
+
   const tableFilter = document.getElementById("tableFilter");
   const current = tableFilter.value;
   const tables = [...new Set(auditData.map(x => x.table_name).filter(Boolean))].sort();
@@ -181,6 +204,18 @@ function renderAudit() {
                   rawAction === "UPDATE" ? "UPDATED" :
                   rawAction === "DELETE" ? "DELETED" : rawAction;
 
+    const actor =
+      window.adminIdentityMap?.get(
+        entry.actor_user_id
+      );
+
+    const actorLabel =
+      actor
+        ? `${actor.display_name || "Administrator"} · ${actor.email || ""}`
+        : entry.actor_type === "system"
+            ? "System"
+            : entry.actor_user_id || "Unknown administrator";
+
     return `
       <div class="card audit-entry">
         <div class="audit-top">
@@ -192,7 +227,7 @@ function renderAudit() {
         </div>
 
         <div class="audit-meta" style="margin-top:7px">
-          Admin: ${escapeHtml(entry.actor_user_id || "System")}
+          Admin: ${escapeHtml(actorLabel)}
           · Record: ${escapeHtml(entry.record_id || "")}
           ${entry.actor_type ? ` · Type: ${escapeHtml(entry.actor_type)}` : ""}
         </div>

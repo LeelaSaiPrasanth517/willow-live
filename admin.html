@@ -530,30 +530,202 @@
             </p>
 
             <div class="admin-form-grid">
+
+                <div>
+                    <label>Name</label>
+                    <input
+                        id="newAdminName"
+                        type="text"
+                        maxlength="80"
+                        placeholder="Administrator name">
+                </div>
+
                 <div>
                     <label>Email</label>
-                    <input id="newAdminEmail" type="email"
-                           placeholder="admin@example.com">
+                    <input
+                        id="newAdminEmail"
+                        type="email"
+                        maxlength="254"
+                        placeholder="admin@example.com">
                 </div>
 
                 <div>
-                    <label>Role</label>
-                    <select id="newAdminRole">
-                        <option value="admin">Admin</option>
-                        <option value="owner">Owner</option>
-                    </select>
+                    <label>Initial Password</label>
+                    <input
+                        id="newAdminPassword"
+                        type="password"
+                        minlength="12"
+                        maxlength="128"
+                        autocomplete="new-password"
+                        placeholder="Minimum 12 characters">
                 </div>
 
-                <button class="primary" style="margin-top:0;"
-                        onclick="addAdminUser()">
-                    ADD ADMIN
+                <button
+                    class="primary"
+                    style="margin-top:0;"
+                    onclick="addAdminUser()">
+                    CREATE ADMIN
                 </button>
+
             </div>
 
             <div id="adminUsersList" class="stream-list">
                 Loading administrators...
             </div>
         </div>
+
+
+        <!-- =================================================
+             PASSWORD CHANGE
+             ================================================= -->
+
+        <div class="card" id="passwordChangeCard">
+
+            <h2>🔐 Change Password</h2>
+
+            <p class="sync-note">
+                Change your Cricketive administrator password.
+            </p>
+
+            <label>Current Password</label>
+
+            <input
+                id="currentPassword"
+                type="password"
+                autocomplete="current-password">
+
+            <label>New Password</label>
+
+            <input
+                id="newPassword"
+                type="password"
+                minlength="12"
+                maxlength="128"
+                autocomplete="new-password">
+
+            <label>Confirm New Password</label>
+
+            <input
+                id="confirmNewPassword"
+                type="password"
+                minlength="12"
+                maxlength="128"
+                autocomplete="new-password">
+
+            <button
+                class="primary"
+                onclick="changeOwnPassword()">
+                CHANGE PASSWORD
+            </button>
+
+            <div
+                id="passwordMessage"
+                class="message">
+            </div>
+
+        </div>
+
+
+async function changeOwnPassword() {
+    const message =
+        document.getElementById(
+            "passwordMessage"
+        );
+
+    const currentPassword =
+        document.getElementById(
+            "currentPassword"
+        ).value;
+
+    const newPassword =
+        document.getElementById(
+            "newPassword"
+        ).value;
+
+    const confirmPassword =
+        document.getElementById(
+            "confirmNewPassword"
+        ).value;
+
+    message.textContent = "";
+
+    if (!currentPassword) {
+        message.textContent =
+            "Enter your current password.";
+        return;
+    }
+
+    if (newPassword.length < 12) {
+        message.textContent =
+            "New password must be at least 12 characters.";
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        message.textContent =
+            "New passwords do not match.";
+        return;
+    }
+
+    try {
+        const {
+            data: { user }
+        } = await client.auth.getUser();
+
+        if (!user?.email) {
+            throw new Error(
+                "Unable to identify the current user."
+            );
+        }
+
+        const {
+            error: reauthError
+        } =
+            await client.auth.signInWithPassword({
+                email: user.email,
+                password: currentPassword
+            });
+
+        if (reauthError) {
+            throw new Error(
+                "Current password is incorrect."
+            );
+        }
+
+        const { error } =
+            await client.auth.updateUser({
+                password: newPassword
+            });
+
+        if (error) {
+            throw error;
+        }
+
+        try {
+            await adminApi(
+                "/api/admin/password-audit",
+                {
+                    method: "POST",
+                    body: "{}"
+                }
+            );
+        } catch (auditError) {
+            console.warn(
+                "Password changed, but audit logging failed:",
+                auditError
+            );
+        }
+
+        document.getElementById("currentPassword").value = "";
+        document.getElementById("newPassword").value = "";
+        document.getElementById("confirmNewPassword").value = "";
+
+        message.textContent =
+            "Password changed successfully.";
+    } catch (error) {
+        message.textContent = error.message;
+    }
+}
 
         <!-- =================================================
              AUDIT LOG (OWNER ONLY)
@@ -893,164 +1065,244 @@ function applyAdminRoleUI() {
 }
 
 
-async function addAdminUser() {
 
+async function getAccessToken() {
+    const {
+        data: { session },
+        error
+    } = await client.auth.getSession();
+
+    if (error || !session?.access_token) {
+        throw new Error(
+            "Your session has expired. Please log in again."
+        );
+    }
+
+    return session.access_token;
+}
+
+async function adminApi(path, options = {}) {
+    const token = await getAccessToken();
+
+    const response = await fetch(path, {
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            ...(options.headers || {})
+        }
+    });
+
+    const payload =
+        await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(
+            payload?.error ||
+            `Request failed (${response.status}).`
+        );
+    }
+
+    return payload;
+}
+
+async function addAdminUser() {
     if (currentAdminRole !== "owner") {
-        alert("Only the owner can manage administrators.");
+        alert(
+            "Only the owner can manage administrators."
+        );
         return;
     }
 
-    const email =
-        document
-            .getElementById("newAdminEmail")
+    const displayName =
+        document.getElementById("newAdminName")
             .value
             .trim();
 
-    const role =
-        document
-            .getElementById("newAdminRole")
+    const email =
+        document.getElementById("newAdminEmail")
+            .value
+            .trim();
+
+    const password =
+        document.getElementById("newAdminPassword")
             .value;
 
+    if (!displayName) {
+        alert("Enter the administrator's name.");
+        return;
+    }
+
     if (!email) {
-        alert("Enter the user's email address.");
+        alert("Enter the administrator's email.");
         return;
     }
 
-    /*
-     * Supabase Auth users cannot be created directly from the browser
-     * with the normal client without exposing the service-role key.
-     *
-     * Therefore this UI intentionally does NOT pretend that an email
-     * can be inserted into admin_users unless the Auth account already
-     * exists and we know its UUID.
-     *
-     * The owner should enter the authenticated user's UUID below.
-     */
-    const userId = prompt(
-        "Enter the Supabase Auth user UUID for this existing user:\n\n" +
-        email
-    );
-
-    if (!userId) return;
-
-    const uuidPattern =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-    if (!uuidPattern.test(userId.trim())) {
-        alert("That is not a valid Supabase user UUID.");
+    if (password.length < 12) {
+        alert(
+            "The initial password must be at least 12 characters."
+        );
         return;
     }
 
-    const { error } =
-        await client
-            .from("admin_users")
-            .insert({
-                user_id: userId.trim(),
-                role
-            });
+    if (!confirm(`Create administrator account for ${email}?`)) {
+        return;
+    }
 
-    if (error) {
+    try {
+        await adminApi(
+            "/api/admin/users",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    display_name: displayName,
+                    email,
+                    password
+                })
+            }
+        );
+
+        document.getElementById("newAdminName").value = "";
+        document.getElementById("newAdminEmail").value = "";
+        document.getElementById("newAdminPassword").value = "";
+
+        await loadAdminUsers();
+
+        alert(
+            `Administrator created.\n\n` +
+            `Email: ${email}\n\n` +
+            `Give the initial password to the user securely.`
+        );
+    } catch (error) {
         alert(error.message);
-        return;
     }
-
-    document.getElementById("newAdminEmail").value = "";
-
-    await loadAdminUsers();
 }
 
-
 async function loadAdminUsers() {
-
     const container =
         document.getElementById("adminUsersList");
 
     if (!container) return;
 
-    const { data, error } =
-        await client
-            .from("admin_users")
-            .select("user_id, role, created_at")
-            .order("created_at", { ascending: true });
+    try {
+        const admins =
+            await adminApi("/api/admin/users");
 
-    if (error) {
-        container.innerHTML =
-            `<span style="color:#ff6666;">${escapeHtml(error.message)}</span>`;
-        return;
-    }
+        if (!admins.length) {
+            container.innerHTML =
+                `<div class="empty">No administrators found.</div>`;
+            return;
+        }
 
-    if (!data || !data.length) {
-        container.innerHTML =
-            `<div class="empty">No administrators found.</div>`;
-        return;
-    }
-
-    container.innerHTML = `
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th>User ID</th>
-                    <th>Role</th>
-                    <th>Added</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                ${data.map(admin => `
+        container.innerHTML = `
+            <table class="admin-table">
+                <thead>
                     <tr>
-                        <td>${escapeHtml(admin.user_id)}</td>
-                        <td>${escapeHtml(admin.role)}</td>
-                        <td>${escapeHtml(formatDate(admin.created_at))}</td>
-                        <td>
-                            ${
-                                admin.user_id === currentUser?.id
-                                    ? `<span class="audit-meta">You</span>`
-                                    : `
-                                        <button
-                                            class="danger"
-                                            onclick="removeAdminUser('${escapeHtml(admin.user_id)}')"
-                                        >
-                                            REMOVE
-                                        </button>
-                                      `
-                            }
-                        </td>
+                        <th>Administrator</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Added</th>
+                        <th></th>
                     </tr>
-                `).join("")}
-            </tbody>
-        </table>
-    `;
+                </thead>
+
+                <tbody>
+                    ${admins.map(admin => `
+                        <tr>
+                            <td>
+                                <strong>
+                                    ${escapeHtml(
+                                        admin.display_name ||
+                                        "Unnamed administrator"
+                                    )}
+                                </strong>
+                            </td>
+
+                            <td>
+                                ${escapeHtml(
+                                    admin.email || ""
+                                )}
+                            </td>
+
+                            <td>
+                                ${escapeHtml(admin.role)}
+                            </td>
+
+                            <td>
+                                ${escapeHtml(
+                                    formatDate(admin.created_at)
+                                )}
+                            </td>
+
+                            <td>
+                                ${
+                                    admin.user_id === currentUser?.id
+                                        ? `<span class="audit-meta">You</span>`
+                                        : admin.role === "owner"
+                                            ? `<span class="audit-meta">Owner</span>`
+                                            : `
+                                                <button
+                                                    class="danger"
+                                                    onclick="removeAdminUser('${escapeHtml(
+                                                        admin.user_id
+                                                    )}')"
+                                                >
+                                                    REMOVE
+                                                </button>
+                                              `
+                                }
+                            </td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `;
+    } catch (error) {
+        container.innerHTML =
+            `<span style="color:#ff6666;">
+                ${escapeHtml(error.message)}
+             </span>`;
+    }
 }
 
-
 async function removeAdminUser(userId) {
-
     if (currentAdminRole !== "owner") {
-        alert("Only the owner can remove administrators.");
+        alert(
+            "Only the owner can remove administrators."
+        );
         return;
     }
 
     if (userId === currentUser?.id) {
-        alert("You cannot remove yourself from the owner panel.");
+        alert("You cannot remove yourself.");
         return;
     }
 
-    if (!confirm("Remove this administrator?")) {
+    if (
+        !confirm(
+            "Remove this administrator? This will also disable their Cricketive access."
+        )
+    ) {
         return;
     }
 
-    const { error } =
-        await client
-            .from("admin_users")
-            .delete()
-            .eq("user_id", userId);
+    try {
+        await adminApi(
+            "/api/admin/users",
+            {
+                method: "DELETE",
+                body: JSON.stringify({
+                    user_id: userId
+                })
+            }
+        );
 
-    if (error) {
+        await loadAdminUsers();
+
+        alert("Administrator removed.");
+    } catch (error) {
         alert(error.message);
-        return;
     }
-
-    await loadAdminUsers();
 }
 
 
