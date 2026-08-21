@@ -560,15 +560,19 @@
              ================================================= -->
 
         <div class="card owner-only" id="auditLogCard">
-            <h2>📋 Activity Log</h2>
+            <h2>📋 Admin Activity</h2>
 
             <p class="sync-note">
-                Shows changes made through Cricketive's admin system.
+                Review which administrator changed what in Cricketive.
             </p>
 
-            <div id="auditLogList">
-                Loading activity...
-            </div>
+            <button
+                class="primary"
+                style="margin-top:12px;"
+                onclick="openActivityLog()"
+            >
+                OPEN ACTIVITY LOG ↗
+            </button>
         </div>
 
     </div>
@@ -885,7 +889,6 @@ function applyAdminRoleUI() {
 
     if (currentAdminRole === "owner") {
         loadAdminUsers();
-        loadAuditLog();
     }
 }
 
@@ -954,7 +957,6 @@ async function addAdminUser() {
     document.getElementById("newAdminEmail").value = "";
 
     await loadAdminUsers();
-    await loadAuditLog();
 }
 
 
@@ -1052,103 +1054,17 @@ async function removeAdminUser(userId) {
 }
 
 
-async function loadAuditLog() {
+/* =========================================================
+   OWNER ACTIVITY LOG
+   ========================================================= */
 
-    const container =
-        document.getElementById("auditLogList");
-
-    if (!container) return;
-
-    const { data, error } =
-        await client
-            .from("admin_audit_log")
-            .select("*")
-            .order("created_at", { ascending: false })
-            .limit(100);
-
-    if (error) {
-        container.innerHTML =
-            `<span style="color:#ff6666;">${escapeHtml(error.message)}</span>`;
+function openActivityLog() {
+    if (currentAdminRole !== "owner") {
+        alert("Only the owner can view the admin activity log.");
         return;
     }
 
-    if (!data || !data.length) {
-        container.innerHTML =
-            `<div class="empty">No activity recorded yet.</div>`;
-        return;
-    }
-
-    container.innerHTML =
-        data.map(entry => {
-
-            const action = String(entry.action || "").toUpperCase();
-
-            let actionLabel = action;
-
-            if (action === "INSERT") actionLabel = "ADDED";
-            if (action === "UPDATE") actionLabel = "UPDATED";
-            if (action === "DELETE") actionLabel = "DELETED";
-
-            return `
-                <div class="audit-entry">
-                    <div class="audit-top">
-                        <div>
-                            <span class="audit-action">
-                                ${escapeHtml(actionLabel)}
-                            </span>
-                            <span class="audit-meta">
-                                ${escapeHtml(entry.table_name || "")}
-                            </span>
-                        </div>
-
-                        <div class="audit-time">
-                            ${escapeHtml(formatDate(entry.created_at))}
-                        </div>
-                    </div>
-
-                    <div class="audit-meta" style="margin-top:6px;">
-                        Admin:
-                        ${escapeHtml(entry.actor_user_id || "System")}
-                        · Record:
-                        ${escapeHtml(entry.record_id || "")}
-                    </div>
-
-                    ${
-                        entry.old_data
-                            ? `
-                                <details style="margin-top:8px;">
-                                    <summary class="audit-meta">
-                                        Previous data
-                                    </summary>
-                                    <div class="audit-json">${
-                                        escapeHtml(
-                                            JSON.stringify(entry.old_data, null, 2)
-                                        )
-                                    }</div>
-                                </details>
-                              `
-                            : ""
-                    }
-
-                    ${
-                        entry.new_data
-                            ? `
-                                <details style="margin-top:8px;">
-                                    <summary class="audit-meta">
-                                        New data
-                                    </summary>
-                                    <div class="audit-json">${
-                                        escapeHtml(
-                                            JSON.stringify(entry.new_data, null, 2)
-                                        )
-                                    }</div>
-                                </details>
-                              `
-                            : ""
-                    }
-                </div>
-            `;
-        }).join("");
+    window.open("admin-activity.html", "_blank", "noopener,noreferrer");
 }
 
 
@@ -2178,10 +2094,6 @@ async function deleteManualMatch(
 
     await loadMatches();
 
-    if (currentAdminRole === "owner") {
-        await loadAuditLog();
-    }
-
 }
 
 
@@ -2638,10 +2550,6 @@ async function updateStream(
         "Stream updated."
     );
 
-    if (currentAdminRole === "owner") {
-        await loadAuditLog();
-    }
-
 }
 
 
@@ -2693,10 +2601,6 @@ async function deleteStream(
     await loadStreams(
         matchId
     );
-
-    if (currentAdminRole === "owner") {
-        await loadAuditLog();
-    }
 
 }
 
