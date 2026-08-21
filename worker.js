@@ -197,20 +197,34 @@ function normalizeMatch(match, details) {
   // IMPORTANT: status comes ONLY from the SportScore LIST record.
   // The individual match endpoint is enrichment-only and must never
   // promote an Upcoming/unknown match to Live.
-  const status = getProviderStatus(base);
+  const providerStatus = getProviderStatus(base);
   const statusText = getProviderStatusText(base) ?? "";
+  const resolvedStatus = normalizeSportScoreStatus(
+    providerStatus,
+    statusText,
+    base.time ?? detail.time ?? null,
+    true
+  );
 
   const home = cleanTeamName(base.home ?? detail.home);
   const away = cleanTeamName(base.away ?? detail.away);
 
-  let homeScore = extractTeamScore(detail, { home, away }, "home");
-  let awayScore = extractTeamScore(detail, { home, away }, "away");
+  // FIX: prefer the LIST record first, not the detail record.
+  // Confirmed against SportScore's live widget response: the list
+  // endpoint already returns clean flat "home_score"/"away_score"
+  // strings like "145/5" directly on each match object. That's a
+  // known-good, verified shape. The individual /match/ detail
+  // endpoint's shape is not verified against live data, so it's kept
+  // only as a fallback for whatever the list doesn't have (e.g. if a
+  // future SportScore change adds richer batting/overs detail there).
+  let homeScore = extractTeamScore(base, { home, away }, "home");
+  let awayScore = extractTeamScore(base, { home, away }, "away");
 
   if (!isRealScore(homeScore)) {
-    homeScore = extractTeamScore(base, { home, away }, "home");
+    homeScore = extractTeamScore(detail, { home, away }, "home");
   }
   if (!isRealScore(awayScore)) {
-    awayScore = extractTeamScore(base, { home, away }, "away");
+    awayScore = extractTeamScore(detail, { home, away }, "away");
   }
 
   const battingTeam =
@@ -229,11 +243,8 @@ function normalizeMatch(match, details) {
     away_logo: base.away_logo || detail.away_logo || "",
     home_score: homeScore,
     away_score: awayScore,
-    status: normalizeSportScoreStatus(
-      status,
-      statusText,
-      base.time ?? detail.time ?? null
-    ),
+    status: resolvedStatus.status,
+    status_confidence: resolvedStatus.confidence,
     status_text: statusText,
     batting_team: battingTeam,
     overs,
@@ -465,32 +476,37 @@ function isExplicitNonLiveStatus(status, statusText = "") {
   ].includes(text);
 }
 
-function normalizeSportScoreStatus(status, statusText = "", matchTime = null) {
+function normalizeSportScoreStatus(status, statusText = "", matchTime = null, withConfidence = false) {
   const start = getMatchStartTime(matchTime);
+  const result = (value, confidence) => withConfidence ? { status: value, confidence } : value;
 
   /* A future fixture can never be live, even if a provider payload is
      contradictory. */
   if (Number.isFinite(start) && start > Date.now()) {
-    return "Upcoming";
+    return result("Upcoming", "confirmed");
   }
 
   /* Explicit terminal state wins. */
-  if (isExplicitFinishedStatus(status, statusText)) return "Finished";
+  if (isExplicitFinishedStatus(status, statusText)) return result("Finished", "confirmed");
 
   /* Live is accepted ONLY from the SportScore list record. */
-  if (isStrongLiveStatus(status, statusText)) return "Live";
+  if (isStrongLiveStatus(status, statusText)) return result("Live", "confirmed");
 
   /* A past match must NEVER be rendered as Upcoming. If SportScore still
-     reports Scheduled/Upcoming after the scheduled time, treat the record
-     as non-live/closed for the public feed rather than inventing LIVE. */
+     reports Scheduled/Upcoming after the scheduled time (this genuinely
+     happens — SportScore sometimes leaves status_text: "Abnormal" on a
+     record whose status never flips), treat the record as non-live/closed
+     for the public feed rather than inventing LIVE. This branch is a
+     best-effort guess, not a confirmed provider signal, hence "inferred" —
+     Admin can use that flag to flag these rows for a human to check. */
   if (Number.isFinite(start) && start <= Date.now()) {
-    return "Finished";
+    return result("Finished", "inferred");
   }
 
-  if (isExplicitNonLiveStatus(status, statusText)) return "Upcoming";
+  if (isExplicitNonLiveStatus(status, statusText)) return result("Upcoming", "confirmed");
 
   /* Conservative fallback: never manufacture LIVE. */
-  return "Upcoming";
+  return result("Upcoming", "unknown");
 }
 
 function isStrongLiveStatus(status, statusText = "") {
@@ -798,8 +814,10 @@ async function handleLiveScores(request) {
           score: {
             home: cleanTeamName(source.home || details?.home),
             away: cleanTeamName(source.away || details?.away),
-            home_score: extractTeamScore(details || source, source, "home") || extractTeamScore(source, source, "home"),
-            away_score: extractTeamScore(details || source, source, "away") || extractTeamScore(source, source, "away"),
+            // FIX: try the verified list-record shape (source) first,
+            // detail endpoint only as fallback — see normalizeMatch().
+            home_score: extractTeamScore(source, source, "home") || extractTeamScore(details, source, "home"),
+            away_score: extractTeamScore(source, source, "away") || extractTeamScore(details, source, "away"),
             status,
             status_text: listStatusText,
             batting_team: extractBattingTeam(details) || extractBattingTeam(source),
@@ -850,8 +868,9 @@ async function handleLiveScores(request) {
           score: {
             home: cleanTeamName(item.match.home || details?.home),
             away: cleanTeamName(item.match.away || details?.away),
-            home_score: extractTeamScore(details || item.match, item.match, "home") || extractTeamScore(item.match, item.match, "home"),
-            away_score: extractTeamScore(details || item.match, item.match, "away") || extractTeamScore(item.match, item.match, "away"),
+            // FIX: same ordering fix — verified list record first.
+            home_score: extractTeamScore(item.match, item.match, "home") || extractTeamScore(details, item.match, "home"),
+            away_score: extractTeamScore(item.match, item.match, "away") || extractTeamScore(details, item.match, "away"),
             status,
             status_text: getProviderStatusText(item.match) ?? "",
             batting_team: extractBattingTeam(details) || extractBattingTeam(item.match),
