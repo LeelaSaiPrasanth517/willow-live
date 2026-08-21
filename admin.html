@@ -245,6 +245,94 @@
             word-break: break-all;
         }
 
+
+        .role-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #222;
+            color: #bbb;
+            font-size: 11px;
+            font-weight: 700;
+            vertical-align: middle;
+        }
+
+        .owner-only {
+            display: none;
+        }
+
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 13px;
+        }
+
+        .admin-table th,
+        .admin-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #292929;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .admin-table th {
+            color: #999;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .audit-entry {
+            background: #0a0a0a;
+            border: 1px solid #292929;
+            border-radius: 9px;
+            padding: 12px;
+            margin-top: 9px;
+        }
+
+        .audit-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .audit-action {
+            font-weight: 800;
+        }
+
+        .audit-time,
+        .audit-meta {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .audit-json {
+            margin-top: 8px;
+            padding: 9px;
+            background: #050505;
+            border-radius: 6px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #aaa;
+            font-size: 11px;
+        }
+
+        .admin-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 180px auto;
+            gap: 10px;
+            align-items: end;
+        }
+
+        @media (max-width: 700px) {
+            .admin-form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @media (max-width: 700px) {
 
             .stream-row {
@@ -428,6 +516,61 @@
         </div>
 
 
+
+        <!-- =================================================
+             ADMIN MANAGEMENT (OWNER ONLY)
+             ================================================= -->
+
+        <div class="card owner-only" id="adminManagementCard">
+            <h2>👥 Administrators</h2>
+
+            <p class="sync-note">
+                Owner controls. Add or remove users who are allowed to manage
+                Cricketive.
+            </p>
+
+            <div class="admin-form-grid">
+                <div>
+                    <label>Email</label>
+                    <input id="newAdminEmail" type="email"
+                           placeholder="admin@example.com">
+                </div>
+
+                <div>
+                    <label>Role</label>
+                    <select id="newAdminRole">
+                        <option value="admin">Admin</option>
+                        <option value="owner">Owner</option>
+                    </select>
+                </div>
+
+                <button class="primary" style="margin-top:0;"
+                        onclick="addAdminUser()">
+                    ADD ADMIN
+                </button>
+            </div>
+
+            <div id="adminUsersList" class="stream-list">
+                Loading administrators...
+            </div>
+        </div>
+
+        <!-- =================================================
+             AUDIT LOG (OWNER ONLY)
+             ================================================= -->
+
+        <div class="card owner-only" id="auditLogCard">
+            <h2>📋 Activity Log</h2>
+
+            <p class="sync-note">
+                Shows changes made through Cricketive's admin system.
+            </p>
+
+            <div id="auditLogList">
+                Loading activity...
+            </div>
+        </div>
+
     </div>
 
 </div>
@@ -458,6 +601,10 @@ const client =
 let adminRefreshTimer = null;
 let lastSportScoreMatches = [];
 let lastSportScoreSuccessAt = 0;
+
+let currentUser = null;
+let currentAdminRecord = null;
+let currentAdminRole = null;
 
 const SPORT_SCORE_CACHE_MS =
     5 * 60 * 1000;
@@ -577,7 +724,7 @@ async function login() {
     }
 
 
-    showAdmin();
+    await initializeAdmin();
 
 }
 
@@ -622,9 +769,10 @@ async function checkSession() {
 
 
     if (data.session) {
-
-        showAdmin();
-
+        const ok = await initializeAdmin();
+        if (!ok) {
+            await client.auth.signOut();
+        }
     }
 
 }
@@ -634,6 +782,57 @@ async function checkSession() {
    SHOW ADMIN
    ========================================================= */
 
+async function initializeAdmin() {
+
+    const {
+        data: { user },
+        error: userError
+    } = await client.auth.getUser();
+
+    if (userError || !user) {
+        showLoginMessage("Unable to verify your session.");
+        return false;
+    }
+
+    currentUser = user;
+
+    const {
+        data: adminRecord,
+        error: adminError
+    } = await client
+        .from("admin_users")
+        .select("user_id, role, created_at")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+    if (adminError) {
+        console.error("Admin verification error:", adminError);
+        showLoginMessage("Unable to verify admin access.");
+        return false;
+    }
+
+    if (!adminRecord || !["admin", "owner"].includes(adminRecord.role)) {
+        showLoginMessage("This account is not authorized to access Cricketive Admin.");
+        return false;
+    }
+
+    currentAdminRecord = adminRecord;
+    currentAdminRole = adminRecord.role;
+
+    showAdmin();
+
+    return true;
+}
+
+
+function showLoginMessage(message) {
+    const element = document.getElementById("loginMessage");
+    if (element) {
+        element.textContent = message;
+    }
+}
+
+
 function showAdmin() {
 
     document
@@ -641,18 +840,15 @@ function showAdmin() {
         .classList
         .add("hidden");
 
-
     document
         .getElementById("adminPanel")
         .style.display = "block";
 
-
+    applyAdminRoleUI();
     loadMatches();
 
     if (adminRefreshTimer) {
-        clearInterval(
-            adminRefreshTimer
-        );
+        clearInterval(adminRefreshTimer);
     }
 
     adminRefreshTimer =
@@ -661,6 +857,298 @@ function showAdmin() {
             60000
         );
 
+}
+
+
+/* =========================================================
+   ROLE / OWNER UI
+   ========================================================= */
+
+function applyAdminRoleUI() {
+
+    const ownerElements =
+        document.querySelectorAll(".owner-only");
+
+    ownerElements.forEach(element => {
+        element.style.display =
+            currentAdminRole === "owner" ? "block" : "none";
+    });
+
+    const logo = document.querySelector(".logo");
+
+    if (logo) {
+        logo.innerHTML =
+            `CRICKETIVE 🏏 <span class="role-badge">${escapeHtml(
+                currentAdminRole === "owner" ? "OWNER" : "ADMIN"
+            )}</span>`;
+    }
+
+    if (currentAdminRole === "owner") {
+        loadAdminUsers();
+        loadAuditLog();
+    }
+}
+
+
+async function addAdminUser() {
+
+    if (currentAdminRole !== "owner") {
+        alert("Only the owner can manage administrators.");
+        return;
+    }
+
+    const email =
+        document
+            .getElementById("newAdminEmail")
+            .value
+            .trim();
+
+    const role =
+        document
+            .getElementById("newAdminRole")
+            .value;
+
+    if (!email) {
+        alert("Enter the user's email address.");
+        return;
+    }
+
+    /*
+     * Supabase Auth users cannot be created directly from the browser
+     * with the normal client without exposing the service-role key.
+     *
+     * Therefore this UI intentionally does NOT pretend that an email
+     * can be inserted into admin_users unless the Auth account already
+     * exists and we know its UUID.
+     *
+     * The owner should enter the authenticated user's UUID below.
+     */
+    const userId = prompt(
+        "Enter the Supabase Auth user UUID for this existing user:\n\n" +
+        email
+    );
+
+    if (!userId) return;
+
+    const uuidPattern =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidPattern.test(userId.trim())) {
+        alert("That is not a valid Supabase user UUID.");
+        return;
+    }
+
+    const { error } =
+        await client
+            .from("admin_users")
+            .insert({
+                user_id: userId.trim(),
+                role
+            });
+
+    if (error) {
+        alert(error.message);
+        return;
+    }
+
+    document.getElementById("newAdminEmail").value = "";
+
+    await loadAdminUsers();
+    await loadAuditLog();
+}
+
+
+async function loadAdminUsers() {
+
+    const container =
+        document.getElementById("adminUsersList");
+
+    if (!container) return;
+
+    const { data, error } =
+        await client
+            .from("admin_users")
+            .select("user_id, role, created_at")
+            .order("created_at", { ascending: true });
+
+    if (error) {
+        container.innerHTML =
+            `<span style="color:#ff6666;">${escapeHtml(error.message)}</span>`;
+        return;
+    }
+
+    if (!data || !data.length) {
+        container.innerHTML =
+            `<div class="empty">No administrators found.</div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>Role</th>
+                    <th>Added</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                ${data.map(admin => `
+                    <tr>
+                        <td>${escapeHtml(admin.user_id)}</td>
+                        <td>${escapeHtml(admin.role)}</td>
+                        <td>${escapeHtml(formatDate(admin.created_at))}</td>
+                        <td>
+                            ${
+                                admin.user_id === currentUser?.id
+                                    ? `<span class="audit-meta">You</span>`
+                                    : `
+                                        <button
+                                            class="danger"
+                                            onclick="removeAdminUser('${escapeHtml(admin.user_id)}')"
+                                        >
+                                            REMOVE
+                                        </button>
+                                      `
+                            }
+                        </td>
+                    </tr>
+                `).join("")}
+            </tbody>
+        </table>
+    `;
+}
+
+
+async function removeAdminUser(userId) {
+
+    if (currentAdminRole !== "owner") {
+        alert("Only the owner can remove administrators.");
+        return;
+    }
+
+    if (userId === currentUser?.id) {
+        alert("You cannot remove yourself from the owner panel.");
+        return;
+    }
+
+    if (!confirm("Remove this administrator?")) {
+        return;
+    }
+
+    const { error } =
+        await client
+            .from("admin_users")
+            .delete()
+            .eq("user_id", userId);
+
+    if (error) {
+        alert(error.message);
+        return;
+    }
+
+    await loadAdminUsers();
+}
+
+
+async function loadAuditLog() {
+
+    const container =
+        document.getElementById("auditLogList");
+
+    if (!container) return;
+
+    const { data, error } =
+        await client
+            .from("admin_audit_log")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(100);
+
+    if (error) {
+        container.innerHTML =
+            `<span style="color:#ff6666;">${escapeHtml(error.message)}</span>`;
+        return;
+    }
+
+    if (!data || !data.length) {
+        container.innerHTML =
+            `<div class="empty">No activity recorded yet.</div>`;
+        return;
+    }
+
+    container.innerHTML =
+        data.map(entry => {
+
+            const action = String(entry.action || "").toUpperCase();
+
+            let actionLabel = action;
+
+            if (action === "INSERT") actionLabel = "ADDED";
+            if (action === "UPDATE") actionLabel = "UPDATED";
+            if (action === "DELETE") actionLabel = "DELETED";
+
+            return `
+                <div class="audit-entry">
+                    <div class="audit-top">
+                        <div>
+                            <span class="audit-action">
+                                ${escapeHtml(actionLabel)}
+                            </span>
+                            <span class="audit-meta">
+                                ${escapeHtml(entry.table_name || "")}
+                            </span>
+                        </div>
+
+                        <div class="audit-time">
+                            ${escapeHtml(formatDate(entry.created_at))}
+                        </div>
+                    </div>
+
+                    <div class="audit-meta" style="margin-top:6px;">
+                        Admin:
+                        ${escapeHtml(entry.actor_user_id || "System")}
+                        · Record:
+                        ${escapeHtml(entry.record_id || "")}
+                    </div>
+
+                    ${
+                        entry.old_data
+                            ? `
+                                <details style="margin-top:8px;">
+                                    <summary class="audit-meta">
+                                        Previous data
+                                    </summary>
+                                    <div class="audit-json">${
+                                        escapeHtml(
+                                            JSON.stringify(entry.old_data, null, 2)
+                                        )
+                                    }</div>
+                                </details>
+                              `
+                            : ""
+                    }
+
+                    ${
+                        entry.new_data
+                            ? `
+                                <details style="margin-top:8px;">
+                                    <summary class="audit-meta">
+                                        New data
+                                    </summary>
+                                    <div class="audit-json">${
+                                        escapeHtml(
+                                            JSON.stringify(entry.new_data, null, 2)
+                                        )
+                                    }</div>
+                                </details>
+                              `
+                            : ""
+                    }
+                </div>
+            `;
+        }).join("");
 }
 
 
@@ -1690,6 +2178,10 @@ async function deleteManualMatch(
 
     await loadMatches();
 
+    if (currentAdminRole === "owner") {
+        await loadAuditLog();
+    }
+
 }
 
 
@@ -2146,6 +2638,10 @@ async function updateStream(
         "Stream updated."
     );
 
+    if (currentAdminRole === "owner") {
+        await loadAuditLog();
+    }
+
 }
 
 
@@ -2197,6 +2693,10 @@ async function deleteStream(
     await loadStreams(
         matchId
     );
+
+    if (currentAdminRole === "owner") {
+        await loadAuditLog();
+    }
 
 }
 
