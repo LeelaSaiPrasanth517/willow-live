@@ -372,10 +372,8 @@
 
             <p class="sync-note">
 
-                Matches are loaded automatically from
-                SportScore.
-
-                You only need to add stream
+                SportScore is the authoritative source for the current
+                schedule and match status. You only need to add stream
                 links.
 
             </p>
@@ -760,732 +758,595 @@ function hasStream(
 
 async function syncMatches() {
 
-    const message =
-        document.getElementById(
-            "syncMessage"
-        );
+    const message = document.getElementById("syncMessage");
+    const button = document.getElementById("syncButton");
 
-
-    const button =
-        document.getElementById(
-            "syncButton"
-        );
-
-
-    message.textContent =
-        "Syncing SportScore matches...";
-
-
+    message.textContent = "Syncing SportScore matches...";
     button.disabled = true;
-
-    button.textContent =
-        "SYNCING...";
-
+    button.textContent = "SYNCING...";
 
     try {
-
-
-        /* -----------------------------------------------
-           Fetch SportScore matches
-           ----------------------------------------------- */
-
-        const payload =
-            await fetchJsonWithRetry(
-                "/api/cricket-matches?mode=matches",
-                {
-                    cache: "no-store"
-                },
-                3,
-                700
-            );
-
-        const matches =
-            Array.isArray(
-                payload.matches
-            )
-                ? payload.matches
-                : [];
-
-
-        if (!matches.length) {
-
-            message.textContent =
-                "SportScore returned 0 matches.";
-
-
-            await loadMatches();
-
-            return;
-
-        }
-
-
-        /* -----------------------------------------------
-           Load existing Supabase matches
-           ----------------------------------------------- */
-
-        const {
-            data: existingMatches,
-            error: existingError
-        } = await client
-
-            .from("Matches")
-
-            .select("*");
-
-
-        if (existingError) {
-
-            throw existingError;
-
-        }
-
-
-        const existing =
-            existingMatches || [];
-
-
-        /*
-         * Build lookup maps.
-         *
-         * api_match_id is the strongest identity.
-         * SportScore URL is next.
-         * Team + scheduled start time is fallback.
-         */
-
-        const byApiMatchId =
-            new Map();
-
-
-        const bySportScoreUrl =
-            new Map();
-
-
-        const byFixture =
-            new Map();
-
-
-        for (
-            const match of existing
-        ) {
-
-            if (
-                match.api_match_id
-            ) {
-
-                byApiMatchId.set(
-                    String(
-                        match.api_match_id
-                    ),
-                    match
-                );
-
-            }
-
-
-            if (
-                match.sportscore_url
-            ) {
-
-                bySportScoreUrl.set(
-                    normalizeUrl(
-                        match.sportscore_url
-                    ),
-                    match
-                );
-
-            }
-
-
-            const fixtureKey =
-                makeFixtureKey(
-                    match.team1,
-                    match.team2,
-                    match.start_time ||
-                        match.match_time
-                );
-
-
-            if (fixtureKey) {
-
-                /*
-                 * If duplicate database rows already exist,
-                 * prefer the row that has a stream.
-                 */
-
-                const previous =
-                    byFixture.get(
-                        fixtureKey
-                    );
-
-
-                if (
-                    !previous ||
-                    (
-                        hasStream(match) &&
-                        !hasStream(previous)
-                    )
-                ) {
-
-                    byFixture.set(
-                        fixtureKey,
-                        match
-                    );
-
-                }
-
-            }
-
-        }
-
-
-        /* -----------------------------------------------
-           Deduplicate SportScore response
-           ----------------------------------------------- */
-
-        const uniqueSportScoreMatches =
-            [];
-
-
-        const seenIncoming =
-            new Set();
-
-
-        for (
-            const match of matches
-        ) {
-
-            const team1 =
-                String(
-                    match.home ??
-                    match.team1 ??
-                    ""
-                ).trim();
-
-
-            const team2 =
-                String(
-                    match.away ??
-                    match.team2 ??
-                    ""
-                ).trim();
-
-
-            const startTime =
-                match.time ??
-                match.start_time ??
-                match.match_time ??
-                null;
-
-
-            if (
-                !team1 ||
-                !team2 ||
-                !startTime ||
-                isPlaceholder(team1) ||
-                isPlaceholder(team2)
-            ) {
-
-                continue;
-
-            }
-
-
-            const rawUrl =
-                match.url ??
-                match.sportscore_url ??
-                null;
-
-
-            const sportscoreUrl =
-                rawUrl
-                    ? normalizeUrl(rawUrl)
-                    : null;
-
-
-            const fixtureKey =
-                makeFixtureKey(
-                    team1,
-                    team2,
-                    startTime
-                );
-
-
-            /*
-             * Prefer URL identity when available;
-             * otherwise use fixture key.
-             */
-
-            const incomingKey =
-                sportscoreUrl
-                    ? `url:${sportscoreUrl}`
-                    : `fixture:${fixtureKey}`;
-
-
-            if (
-                seenIncoming.has(
-                    incomingKey
-                )
-            ) {
-
-                continue;
-
-            }
-
-
-            seenIncoming.add(
-                incomingKey
-            );
-
-
-            uniqueSportScoreMatches.push({
-
-                match,
-
-                team1,
-
-                team2,
-
-                startTime,
-
-                sportscoreUrl,
-
-                fixtureKey
-
-            });
-
-        }
-
-
-        /* -----------------------------------------------
-           Process each fixture exactly once
-           ----------------------------------------------- */
-
-        let inserted = 0;
-
-        let updated = 0;
-
-        let merged = 0;
-
-
-        for (
-            const item of uniqueSportScoreMatches
-        ) {
-
-            const {
-                match,
-                team1,
-                team2,
-                startTime,
-                sportscoreUrl,
-                fixtureKey
-            } = item;
-
-
-            /*
-             * Stable ID used for future syncs.
-             */
-
-            const apiMatchId =
-                sportscoreUrl
-                    ? `sportscore:${sportscoreUrl}`
-                    : `sportscore:${fixtureKey}`;
-
-
-            /*
-             * Find the existing row.
-             *
-             * Order:
-             * 1. Exact API ID
-             * 2. Exact SportScore URL
-             * 3. Same fixture
-             */
-
-            let existingMatch =
-                byApiMatchId.get(
-                    apiMatchId
-                ) ||
-
-                (
-                    sportscoreUrl
-                        ? bySportScoreUrl.get(
-                            sportscoreUrl
-                        )
-                        : null
-                ) ||
-
-                byFixture.get(
-                    fixtureKey
-                ) ||
-
-                null;
-
-
-            /*
-             * If the exact API ID is different but a fixture
-             * match exists, update that existing row instead
-             * of creating a second record.
-             */
-
-            const currentStream =
-                existingMatch
-                    ? getExistingStream(
-                        existingMatch
-                    )
-                    : "";
-
-
-            const row = {
-
-                api_match_id:
-                    apiMatchId,
-
-                title:
-                    match.title ||
-                    `${team1} vs ${team2}`,
-
-                team1:
-                    team1,
-
-                team2:
-                    team2,
-
-                competition:
-                    match.competition ||
-                    "Cricket",
-
-                match_time:
-                    startTime,
-
-                start_time:
-                    startTime,
-
-                venue:
-                    match.venue ||
-                    "",
-
-                /*
-                 * Keep SportScore status for reference.
-                 * Admin display status is calculated separately.
-                 */
-
-                status:
-                    normalizeSportScoreStatus(
-                        match.status
-                    ),
-
-                /*
-                 * NEVER erase a stream during sync.
-                 */
-
-                embed_url:
-                    currentStream,
-
-                team1_logo:
-                    match.home_logo ||
-                    match.team1_logo ||
-                    "",
-
-                team2_logo:
-                    match.away_logo ||
-                    match.team2_logo ||
-                    ""
-
-            };
-
-
-            if (
-                existingMatch &&
-                existingMatch.id
-            ) {
-
-                const {
-                    error: updateError
-                } = await client
-
-                    .from("Matches")
-
-                    .update(row)
-
-                    .eq(
-                        "id",
-                        existingMatch.id
-                    );
-
-
-                if (updateError) {
-
-                    throw updateError;
-
-                }
-
-
-                updated++;
-
-
-                /*
-                 * Keep lookup maps pointed at
-                 * surviving record.
-                 */
-
-                const surviving = {
-
-                    ...existingMatch,
-
-                    ...row
-
-                };
-
-
-                byApiMatchId.set(
-                    apiMatchId,
-                    surviving
-                );
-
-
-                if (sportscoreUrl) {
-
-                    bySportScoreUrl.set(
-                        sportscoreUrl,
-                        surviving
-                    );
-
-                }
-
-
-                byFixture.set(
-                    fixtureKey,
-                    surviving
-                );
-
-
-            } else {
-
-                const {
-                    data: insertedRows,
-                    error: insertError
-                } = await client
-
-                    .from("Matches")
-
-                    .insert(row)
-
-                    .select();
-
-
-                if (insertError) {
-
-                    throw insertError;
-
-                }
-
-
-                inserted++;
-
-
-                const insertedMatch =
-                    insertedRows &&
-                    insertedRows[0];
-
-
-                if (insertedMatch) {
-
-                    byApiMatchId.set(
-                        apiMatchId,
-                        insertedMatch
-                    );
-
-
-                    if (sportscoreUrl) {
-
-                        bySportScoreUrl.set(
-                            sportscoreUrl,
-                            insertedMatch
-                        );
-
-                    }
-
-
-                    byFixture.set(
-                        fixtureKey,
-                        insertedMatch
-                    );
-
-                }
-
-            }
-
-        }
-
-
-        /*
-         * Reload actual database schedule.
-         */
+        const result = await refreshScheduleFromSportScore();
 
         message.innerHTML =
             `Sync complete. ` +
-            `Updated <strong>${updated}</strong>, ` +
-            `inserted <strong>${inserted}</strong>.`;
+            `Updated <strong>${result.updated}</strong>, ` +
+            `inserted <strong>${result.inserted}</strong>. ` +
+            `<br><small>SportScore is the authoritative schedule and status source.</small>`;
 
-
-        await loadMatches();
-
+        await renderCurrentSportScoreSchedule(result.matches, false);
 
     } catch (error) {
-
-        console.error(
-            "Cricketive sync error:",
-            error
-        );
-
-
-        message.textContent =
-            `Sync failed: ${
-                error?.message ||
-                "Unknown error"
-            }`;
-
-        /*
-         * Keep the existing schedule visible even when
-         * the upstream sync is temporarily unavailable.
-         */
+        console.error("Cricketive sync error:", error);
+        message.textContent = `Sync failed: ${error?.message || "Unknown error"}`;
         await loadMatches();
-
-
     } finally {
-
         button.disabled = false;
-
-        button.textContent =
-            "SYNC MATCHES";
-
+        button.textContent = "SYNC MATCHES";
     }
-
 }
 
 
 /* =========================================================
-   SPORTScore STATUS
+   CURRENT SPORTScore FEED -> SUPABASE
    ========================================================= */
 
-function normalizeSportScoreStatus(
-    status
-) {
+function extractSourceMatch(source) {
+    const team1 = String(
+        source.home ?? source.team1 ?? source.home_team ?? ""
+    ).trim();
 
-    const value =
-        String(
-            status || ""
-        )
-            .trim()
-            .toLowerCase();
+    const team2 = String(
+        source.away ?? source.team2 ?? source.away_team ?? ""
+    ).trim();
 
+    const startTime =
+        source.time ??
+        source.start_time ??
+        source.match_time ??
+        null;
+
+    const sportscoreUrl = source.url || source.sportscore_url
+        ? normalizeUrl(source.url || source.sportscore_url)
+        : "";
+
+    const fixtureKey = makeFixtureKey(team1, team2, startTime);
+
+    const apiMatchId = source.api_match_id || source.match_id || source.id
+        ? String(source.api_match_id || source.match_id || source.id)
+        : (sportscoreUrl
+            ? `sportscore:${sportscoreUrl}`
+            : `sportscore:${fixtureKey}`);
+
+    return {
+        source,
+        team1,
+        team2,
+        startTime,
+        sportscoreUrl,
+        fixtureKey,
+        apiMatchId
+    };
+}
+
+
+function validSourceMatch(item) {
+    return Boolean(
+        item.team1 &&
+        item.team2 &&
+        item.startTime &&
+        !isPlaceholder(item.team1) &&
+        !isPlaceholder(item.team2)
+    );
+}
+
+
+async function fetchSportScoreFeed() {
+    const payload = await fetchJsonWithRetry(
+        "/api/cricket-matches?mode=matches",
+        { cache: "no-store" },
+        3,
+        700
+    );
+
+    if (!payload || !Array.isArray(payload.matches)) {
+        throw new Error("Invalid SportScore response.");
+    }
+
+    return payload;
+}
+
+
+async function refreshScheduleFromSportScore() {
+    const payload = await fetchSportScoreFeed();
+    const rawMatches = payload.matches;
+
+    const unique = [];
+    const seen = new Set();
+
+    for (const raw of rawMatches) {
+        const item = extractSourceMatch(raw);
+        if (!validSourceMatch(item)) continue;
+
+        const key = item.sportscoreUrl
+            ? `url:${item.sportscoreUrl}`
+            : item.fixtureKey
+                ? `fixture:${item.fixtureKey}`
+                : `api:${item.apiMatchId}`;
+
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(item);
+    }
+
+    const { data: existingMatches, error: existingError } = await client
+        .from("Matches")
+        .select("*");
+
+    if (existingError) throw existingError;
+
+    const existing = existingMatches || [];
+
+    const byApiId = new Map();
+    const byUrl = new Map();
+    const byFixture = new Map();
+
+    for (const match of existing) {
+        if (match.api_match_id) {
+            byApiId.set(String(match.api_match_id), match);
+        }
+
+        if (match.sportscore_url) {
+            byUrl.set(normalizeUrl(match.sportscore_url), match);
+        }
+
+        const fixtureKey = makeFixtureKey(
+            match.team1,
+            match.team2,
+            match.start_time || match.match_time
+        );
+
+        if (fixtureKey && !byFixture.has(fixtureKey)) {
+            byFixture.set(fixtureKey, match);
+        }
+    }
+
+    let inserted = 0;
+    let updated = 0;
+
+    for (const item of unique) {
+        const source = item.source;
+
+        const existingMatch =
+            (item.sportscoreUrl && byUrl.get(item.sportscoreUrl)) ||
+            byApiId.get(item.apiMatchId) ||
+            (item.fixtureKey && byFixture.get(item.fixtureKey)) ||
+            null;
+
+        const row = {
+            api_match_id: item.apiMatchId,
+            title: source.title || `${item.team1} vs ${item.team2}`,
+            team1: item.team1,
+            team2: item.team2,
+            competition: source.competition || "Cricket",
+            match_time: item.startTime,
+            start_time: item.startTime,
+            venue: source.venue || "",
+            status: storedStatusForSource(source.status, item.startTime),
+            team1_logo: source.home_logo || source.team1_logo || "",
+            team2_logo: source.away_logo || source.team2_logo || "",
+            sportscore_url: item.sportscoreUrl || null,
+            team1_score: getSourceScore(source, 1),
+            team2_score: getSourceScore(source, 2)
+        };
+
+        if (existingMatch?.id) {
+            const { error } = await client
+                .from("Matches")
+                .update(row)
+                .eq("id", existingMatch.id);
+
+            if (error) throw error;
+            updated++;
+
+            const surviving = { ...existingMatch, ...row };
+            byApiId.set(item.apiMatchId, surviving);
+            if (item.sportscoreUrl) byUrl.set(item.sportscoreUrl, surviving);
+            if (item.fixtureKey) byFixture.set(item.fixtureKey, surviving);
+        } else {
+            const { data, error } = await client
+                .from("Matches")
+                .insert(row)
+                .select()
+                .single();
+
+            if (error) throw error;
+            inserted++;
+
+            if (data) {
+                byApiId.set(item.apiMatchId, data);
+                if (item.sportscoreUrl) byUrl.set(item.sportscoreUrl, data);
+                if (item.fixtureKey) byFixture.set(item.fixtureKey, data);
+            }
+        }
+    }
+
+    lastSportScoreMatches = unique.map(item => item.source);
+    lastSportScoreSuccessAt = Date.now();
+
+    return {
+        matches: unique.map(item => item.source),
+        updated,
+        inserted,
+        stale: Boolean(payload.stale),
+        total: unique.length
+    };
+}
+
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+function normalizeSportScoreStatus(status) {
+    const value = String(status || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[-_]+/g, " ");
 
     if (
         value === "live" ||
-        value === "in_progress" ||
         value === "in progress" ||
         value === "started" ||
         value === "playing" ||
-        value === "ongoing"
+        value === "ongoing" ||
+        value === "1st inn" ||
+        value === "2nd inn" ||
+        value === "3rd inn" ||
+        value === "4th inn"
     ) {
-
         return "Live";
-
     }
-
 
     if (
         value === "finished" ||
         value === "ended" ||
         value === "completed" ||
         value === "complete" ||
-        value === "ft"
+        value === "ft" ||
+        value === "final"
     ) {
-
         return "Finished";
-
     }
 
+    if (
+        value === "scheduled" ||
+        value === "upcoming" ||
+        value === "not started" ||
+        value === "pending" ||
+        value === "ns"
+    ) {
+        return "Upcoming";
+    }
 
-    return "Upcoming";
+    return "Unknown";
+}
 
+
+function canonicalStatus(status, startTime) {
+    const providerStatus = normalizeSportScoreStatus(status);
+
+    // Explicit provider states always win.
+    if (providerStatus === "Live" || providerStatus === "Finished") {
+        return providerStatus;
+    }
+
+    // A provider-scheduled match whose start time has already passed is
+    // not safe to call Upcoming. Keep it out of the normal buckets until
+    // SportScore gives us a definitive state.
+    if (providerStatus === "Upcoming" && startTime) {
+        const start = new Date(startTime).getTime();
+        if (Number.isFinite(start) && start <= Date.now()) {
+            return "Unknown";
+        }
+    }
+
+    return providerStatus;
+}
+
+
+function storedStatusForSource(status, startTime) {
+    return canonicalStatus(status, startTime);
+}
+
+
+function getSourceScore(source, side) {
+    const value = side === 1
+        ? (
+            source.home_score ??
+            source.team1_score ??
+            source.homeScore ??
+            source.score_home ??
+            ""
+        )
+        : (
+            source.away_score ??
+            source.team2_score ??
+            source.awayScore ??
+            source.score_away ??
+            ""
+        );
+
+    return value == null ? "" : String(value).trim();
+}
+
+
+function getMatchScore(match, side) {
+    const source = match.source || {};
+    const stored = side === 1 ? match.team1_score : match.team2_score;
+    const sourceScore = getSourceScore(source, side);
+    return sourceScore || stored || "";
 }
 
 
 /* =========================================================
-   NEW DISPLAY STATUS LOGIC
+   LOAD / RENDER CURRENT SPORTScore SCHEDULE
    ========================================================= */
 
-function canonicalStatus(status) {
-    return status === "Live"
-        ? "Live"
-        : status === "Finished"
-            ? "Finished"
-            : "Upcoming";
+async function loadMatches() {
+    const liveContainer = document.getElementById("liveMatches");
+    const upcomingContainer = document.getElementById("upcomingMatches");
+
+    if (!liveContainer.dataset.loaded) liveContainer.innerHTML = "Loading...";
+    if (!upcomingContainer.dataset.loaded) upcomingContainer.innerHTML = "Loading...";
+
+    try {
+        const payload = await fetchSportScoreFeed();
+
+        if (!Array.isArray(payload.matches)) {
+            throw new Error("Invalid SportScore match feed.");
+        }
+
+        lastSportScoreMatches = payload.matches;
+        lastSportScoreSuccessAt = Date.now();
+
+        await upsertFeedForAdmin(payload.matches);
+        await renderCurrentSportScoreSchedule(payload.matches, Boolean(payload.stale));
+
+    } catch (error) {
+        console.warn("SportScore refresh failed:", error);
+
+        if (lastSportScoreMatches.length) {
+            await renderCurrentSportScoreSchedule(lastSportScoreMatches, true);
+        } else {
+            const msg = `<p style="color:#ff6666;">${escapeHtml(error?.message || "SportScore is unavailable.")}</p>`;
+            liveContainer.innerHTML = msg;
+            upcomingContainer.innerHTML = msg;
+        }
+    }
 }
 
-function canonicalStoredStatus(status, startTime) {
-    const value = String(status || "").trim().toLowerCase();
-    if (value === "live" || value === "in_progress" || value === "started" || value === "playing" || value === "ongoing") {
-        return "Live";
-    }
-    if (value === "finished" || value === "ended" || value === "completed" || value === "complete" || value === "ft") {
-        return "Finished";
+
+async function upsertFeedForAdmin(rawMatches) {
+    const existingResponse = await client
+        .from("Matches")
+        .select("*");
+
+    if (existingResponse.error) throw existingResponse.error;
+
+    const existing = existingResponse.data || [];
+
+    const byUrl = new Map();
+    const byApiId = new Map();
+    const byFixture = new Map();
+
+    for (const match of existing) {
+        if (match.sportscore_url) {
+            byUrl.set(normalizeUrl(match.sportscore_url), match);
+        }
+        if (match.api_match_id) {
+            byApiId.set(String(match.api_match_id), match);
+        }
+        const key = makeFixtureKey(
+            match.team1,
+            match.team2,
+            match.start_time || match.match_time
+        );
+        if (key && !byFixture.has(key)) byFixture.set(key, match);
     }
 
-    /*
-     * FIX: when SportScore is unavailable we fall back to whatever
-     * status is sitting in the database. That value can be stale
-     * (e.g. still "Upcoming" from when the row was first synced).
-     * Never let a stored "Upcoming" survive past its own start_time —
-     * that reproduces the exact "shows Upcoming hours after it
-     * started" bug, just via the DB-fallback path instead of the
-     * live SportScore path.
-     */
-    if (startTime) {
-        const start = new Date(startTime).getTime();
-        if (Number.isFinite(start) && start <= Date.now()) {
-            return "Finished";
+    const seen = new Set();
+
+    for (const raw of rawMatches) {
+        const item = extractSourceMatch(raw);
+        if (!validSourceMatch(item)) continue;
+
+        const identity = item.sportscoreUrl
+            ? `url:${item.sportscoreUrl}`
+            : item.fixtureKey
+                ? `fixture:${item.fixtureKey}`
+                : `api:${item.apiMatchId}`;
+
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+
+        const existingMatch =
+            (item.sportscoreUrl && byUrl.get(item.sportscoreUrl)) ||
+            byApiId.get(item.apiMatchId) ||
+            (item.fixtureKey && byFixture.get(item.fixtureKey)) ||
+            null;
+
+        const row = {
+            api_match_id: item.apiMatchId,
+            title: raw.title || `${item.team1} vs ${item.team2}`,
+            team1: item.team1,
+            team2: item.team2,
+            competition: raw.competition || "Cricket",
+            match_time: item.startTime,
+            start_time: item.startTime,
+            venue: raw.venue || "",
+            status: storedStatusForSource(raw.status, item.startTime),
+            team1_logo: raw.home_logo || raw.team1_logo || "",
+            team2_logo: raw.away_logo || raw.team2_logo || "",
+            sportscore_url: item.sportscoreUrl || null,
+            team1_score: getSourceScore(raw, 1),
+            team2_score: getSourceScore(raw, 2)
+        };
+
+        if (existingMatch?.id) {
+            const { error } = await client
+                .from("Matches")
+                .update(row)
+                .eq("id", existingMatch.id);
+            if (error) throw error;
+
+            const saved = { ...existingMatch, ...row };
+            if (item.sportscoreUrl) byUrl.set(item.sportscoreUrl, saved);
+            byApiId.set(item.apiMatchId, saved);
+            if (item.fixtureKey) byFixture.set(item.fixtureKey, saved);
+        } else {
+            const { data, error } = await client
+                .from("Matches")
+                .insert(row)
+                .select()
+                .single();
+            if (error) throw error;
+
+            if (data) {
+                if (item.sportscoreUrl) byUrl.set(item.sportscoreUrl, data);
+                byApiId.set(item.apiMatchId, data);
+                if (item.fixtureKey) byFixture.set(item.fixtureKey, data);
+            }
+        }
+    }
+}
+
+
+async function renderCurrentSportScoreSchedule(rawMatches, stale = false) {
+    const liveContainer = document.getElementById("liveMatches");
+    const upcomingContainer = document.getElementById("upcomingMatches");
+
+    const { data: storedMatches, error } = await client
+        .from("Matches")
+        .select("*");
+
+    if (error) throw error;
+
+    const stored = storedMatches || [];
+
+    const byUrl = new Map();
+    const byApiId = new Map();
+    const byFixture = new Map();
+
+    for (const match of stored) {
+        if (match.sportscore_url) {
+            const url = normalizeUrl(match.sportscore_url);
+            const previous = byUrl.get(url);
+            if (!previous || Boolean(match.embed_url) || !Boolean(previous.embed_url)) {
+                byUrl.set(url, match);
+            }
+        }
+
+        if (match.api_match_id) {
+            byApiId.set(String(match.api_match_id), match);
+        }
+
+        const key = makeFixtureKey(
+            match.team1,
+            match.team2,
+            match.start_time || match.match_time
+        );
+
+        if (key) {
+            const previous = byFixture.get(key);
+            if (!previous || Boolean(match.embed_url) || !Boolean(previous.embed_url)) {
+                byFixture.set(key, match);
+            }
         }
     }
 
-    return "Upcoming";
+    const seen = new Set();
+    const currentMatches = [];
+
+    for (const raw of rawMatches) {
+        const item = extractSourceMatch(raw);
+        if (!validSourceMatch(item)) continue;
+
+        const identity = item.sportscoreUrl
+            ? `url:${item.sportscoreUrl}`
+            : item.fixtureKey
+                ? `fixture:${item.fixtureKey}`
+                : `api:${item.apiMatchId}`;
+
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+
+        const storedMatch =
+            (item.sportscoreUrl && byUrl.get(item.sportscoreUrl)) ||
+            byApiId.get(item.apiMatchId) ||
+            (item.fixtureKey && byFixture.get(item.fixtureKey)) ||
+            null;
+
+        currentMatches.push({
+            ...(storedMatch || {}),
+            ...raw,
+            source: raw,
+            id: storedMatch?.id || "",
+            team1: item.team1,
+            team2: item.team2,
+            start_time: item.startTime,
+            sportscore_url: item.sportscoreUrl || storedMatch?.sportscore_url || "",
+            api_match_id: storedMatch?.api_match_id || item.apiMatchId,
+            competition: raw.competition || storedMatch?.competition || "Cricket",
+            venue: raw.venue || storedMatch?.venue || "",
+            team1_logo: raw.home_logo || raw.team1_logo || storedMatch?.team1_logo || "",
+            team2_logo: raw.away_logo || raw.team2_logo || storedMatch?.team2_logo || "",
+            team1_score: getSourceScore(raw, 1) || storedMatch?.team1_score || "",
+            team2_score: getSourceScore(raw, 2) || storedMatch?.team2_score || "",
+            currentStatus: canonicalStatus(raw.status, item.startTime)
+        });
+    }
+
+    const liveMatches = currentMatches.filter(m => m.currentStatus === "Live");
+    const upcomingMatches = currentMatches.filter(m => m.currentStatus === "Upcoming");
+    const finishedMatches = currentMatches.filter(m => m.currentStatus === "Finished");
+
+    const unknownMatches = currentMatches.filter(m => m.currentStatus === "Unknown");
+
+    const syncMessage = document.getElementById("syncMessage");
+    if (syncMessage) {
+        syncMessage.innerHTML =
+            `Current SportScore schedule: <strong>${currentMatches.length}</strong> matches.` +
+            `<br>🔴 Live: ${liveMatches.length}` +
+            ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingMatches.length}` +
+            ` &nbsp;·&nbsp; ✅ Finished: ${finishedMatches.length}` +
+            (unknownMatches.length
+                ? ` &nbsp;·&nbsp; ⚠️ Unknown: ${unknownMatches.length}`
+                : "") +
+            `<br><small>${stale
+                ? "Showing the last successful SportScore feed."
+                : "Status is taken directly from SportScore. No time-based status fallback is used."}</small>`;
+    }
+
+    renderMatchList(liveContainer, liveMatches, "live");
+    renderMatchList(upcomingContainer, upcomingMatches, "upcoming");
+
+    liveContainer.dataset.loaded = "true";
+    upcomingContainer.dataset.loaded = "true";
 }
+
+
+
 
 
 /* =========================================================
    TEAM KEY
    ========================================================= */
 
-function makeTeamKey(
-    team1,
-    team2
-) {
-
-    if (
-        !team1 ||
-        !team2
-    ) {
-
-        return "";
-
-    }
-
-
-    return (
-        String(team1)
-            .trim()
-            .toLowerCase()
-
-        +
-
-        "|" +
-
-        String(team2)
-            .trim()
-            .toLowerCase()
-    );
-
+function makeTeamKey(team1, team2) {
+    if (!team1 || !team2) return "";
+    return String(team1).trim().toLowerCase() + "|" +
+        String(team2).trim().toLowerCase();
 }
 
 
@@ -1493,614 +1354,18 @@ function makeTeamKey(
    URL NORMALIZATION
    ========================================================= */
 
-function normalizeUrl(
-    value
-) {
+function normalizeUrl(value) {
+    if (!value) return "";
 
-    if (!value) {
-
-        return "";
-
+    const url = String(value).trim();
+    if (url.startsWith("http")) {
+        return url.replace(/\/+$/, "");
     }
 
-
-    const url =
-        String(value)
-            .trim();
-
-
-    if (
-        url.startsWith("http")
-    ) {
-
-        return url.replace(
-            /\/+$/,
-            ""
-        );
-
-    }
-
-
-    return (
-        "https://sportscore.com" +
-
-        (
-            url.startsWith("/")
-                ? url
-                : `/${url}`
-        )
-
-    ).replace(
-        /\/+$/,
-        ""
-    );
-
+    return ("https://sportscore.com" +
+        (url.startsWith("/") ? url : `/${url}`))
+        .replace(/\/+$/, "");
 }
-
-
-/* =========================================================
-   CLEAN STALE LIVE MATCHES
-   ========================================================= */
-
-async function cleanStaleMatches() {
-
-    const cutoff =
-        new Date(
-            Date.now() -
-            24 * 60 * 60 * 1000
-        ).toISOString();
-
-
-    const { error } =
-        await client
-
-            .from("Matches")
-
-            .update({
-                status: "Finished"
-            })
-
-            .eq(
-                "status",
-                "Live"
-            )
-
-            .lt(
-                "start_time",
-                cutoff
-            );
-
-
-    if (error) {
-
-        console.error(
-            "Could not clean stale live matches:",
-            error
-        );
-
-    }
-
-}
-
-
-/* =========================================================
-   LOAD MATCHES
-   ========================================================= */
-
-async function loadMatches() {
-
-    const liveContainer =
-        document.getElementById(
-            "liveMatches"
-        );
-
-
-    const upcomingContainer =
-        document.getElementById(
-            "upcomingMatches"
-        );
-
-
-    if (
-        !liveContainer.dataset.loaded
-    ) {
-        liveContainer.innerHTML =
-            "Loading...";
-    }
-
-    if (
-        !upcomingContainer.dataset.loaded
-    ) {
-        upcomingContainer.innerHTML =
-            "Loading...";
-    }
-
-
-    /*
-     * Supabase is persistent storage.
-     * SportScore is the current source of truth for status.
-     *
-     * We:
-     *
-     * 1. Load Cricketive matches.
-     * 2. Fetch latest SportScore feed.
-     * 3. Match SportScore fixtures to Cricketive rows.
-     * 4. Use SportScore status when explicitly available.
-     * 5. Use start_time to prevent stale Upcoming states.
-     */
-
-
-    const {
-        data,
-        error
-    } = await client
-
-        .from("Matches")
-
-        .select("*")
-
-        .order(
-            "start_time",
-            {
-                ascending: true
-            }
-        );
-
-
-    if (error) {
-
-        const msg =
-            `
-                <p style="color:#ff6666;">
-                    ${escapeHtml(
-                        error.message
-                    )}
-                </p>
-            `;
-
-
-        liveContainer.innerHTML =
-            msg;
-
-
-        upcomingContainer.innerHTML =
-            msg;
-
-
-        return;
-
-    }
-
-
-    const storedMatches =
-        (data || [])
-            .filter(
-                match =>
-                    match.team1 &&
-                    match.team2 &&
-                    !isPlaceholder(
-                        match.team1
-                    ) &&
-                    !isPlaceholder(
-                        match.team2
-                    )
-            );
-
-
-    /*
-     * Fetch fresh SportScore status.
-     */
-
-    let sportScoreMatches = [];
-
-    let sportScoreAvailable =
-        false;
-
-
-    let sportScoreStale =
-        false;
-
-    try {
-
-        const payload =
-            await fetchJsonWithRetry(
-                "/api/cricket-matches?mode=matches",
-                {
-                    cache: "no-store"
-                },
-                3,
-                700
-            );
-
-        if (
-            Array.isArray(
-                payload.matches
-            ) &&
-            payload.matches.length
-        ) {
-
-            sportScoreMatches =
-                payload.matches;
-
-            lastSportScoreMatches =
-                payload.matches;
-
-            lastSportScoreSuccessAt =
-                Date.now();
-
-            sportScoreAvailable =
-                true;
-
-            sportScoreStale =
-                Boolean(
-                    payload.stale
-                );
-
-        } else {
-            throw new Error(
-                "SportScore returned an empty match feed."
-            );
-        }
-
-    } catch (error) {
-
-        console.warn(
-            "SportScore refresh failed:",
-            error
-        );
-
-        if (
-            lastSportScoreMatches.length &&
-            (
-                Date.now() -
-                lastSportScoreSuccessAt
-            ) <= SPORT_SCORE_CACHE_MS
-        ) {
-
-            sportScoreMatches =
-                lastSportScoreMatches;
-
-            sportScoreAvailable =
-                true;
-
-            sportScoreStale =
-                true;
-
-        }
-
-    }
-
-
-    /*
-     * Index fresh SportScore feed.
-     */
-
-    const bySportScoreUrl =
-        new Map();
-
-
-    const byFixture =
-        new Map();
-
-
-    for (
-        const source of
-        sportScoreMatches
-    ) {
-
-        const team1 =
-            String(
-                source.home ||
-                source.team1 ||
-                ""
-            ).trim();
-
-
-        const team2 =
-            String(
-                source.away ||
-                source.team2 ||
-                ""
-            ).trim();
-
-
-        const sourceTime =
-            source.time ||
-            source.start_time ||
-            source.match_time ||
-            null;
-
-
-        const sourceUrl =
-            source.url
-                ? normalizeUrl(
-                    source.url
-                )
-                : "";
-
-
-        if (
-            sourceUrl
-        ) {
-
-            bySportScoreUrl.set(
-                sourceUrl,
-                source
-            );
-
-        }
-
-
-        const fixtureKey =
-            makeFixtureKey(
-                team1,
-                team2,
-                sourceTime
-            );
-
-
-        if (
-            fixtureKey
-        ) {
-
-            byFixture.set(
-                fixtureKey,
-                source
-            );
-
-        }
-
-    }
-
-
-    /*
-     * Match each Cricketive row to latest SportScore row.
-     */
-
-    const normalized =
-        storedMatches.map(
-            match => {
-
-                const storedUrl =
-                    match.sportscore_url
-                        ? normalizeUrl(
-                            match.sportscore_url
-                        )
-                        : "";
-
-
-                const fixtureKey =
-                    makeFixtureKey(
-                        match.team1,
-                        match.team2,
-                        match.start_time ||
-                            match.match_time
-                    );
-
-
-                const source =
-                    (
-                        storedUrl
-                            ? bySportScoreUrl.get(
-                                storedUrl
-                            )
-                            : null
-                    ) ||
-
-                    byFixture.get(
-                        fixtureKey
-                    ) ||
-
-                    null;
-
-
-                /*
-                 * SportScore is authoritative when it explicitly
-                 * reports Live or Finished.
-                 *
-                 * Otherwise start_time is used so old database
-                 * Upcoming values cannot survive past their time.
-                 */
-
-                const currentStatus =
-                    sportScoreAvailable
-                        ? canonicalStatus(source?.status)
-                        : canonicalStoredStatus(
-                            match.status,
-                            match.start_time || match.match_time
-                          );
-
-
-                return {
-
-                    ...match,
-
-                    source,
-
-                    currentStatus
-
-                };
-
-            }
-        );
-
-
-    /*
-     * Remove duplicate fixtures from display.
-     * Prefer row containing saved stream.
-     */
-
-    const uniqueMatches =
-        new Map();
-
-
-    for (
-        const match of normalized
-    ) {
-
-        const fixtureKey =
-            makeFixtureKey(
-                match.team1,
-                match.team2,
-                match.start_time ||
-                    match.match_time
-            );
-
-
-        if (!fixtureKey) {
-
-            continue;
-
-        }
-
-
-        const previous =
-            uniqueMatches.get(
-                fixtureKey
-            );
-
-
-        if (!previous) {
-
-            uniqueMatches.set(
-                fixtureKey,
-                match
-            );
-
-            continue;
-
-        }
-
-
-        const previousHasStream =
-            Boolean(
-                previous.embed_url
-            );
-
-
-        const currentHasStream =
-            Boolean(
-                match.embed_url
-            );
-
-
-        if (
-            currentHasStream &&
-            !previousHasStream
-        ) {
-
-            uniqueMatches.set(
-                fixtureKey,
-                match
-            );
-
-        }
-
-    }
-
-
-    const currentMatches =
-        Array.from(
-            uniqueMatches.values()
-        );
-
-
-    /*
-     * Categorize.
-     */
-
-    const liveMatches =
-        currentMatches.filter(
-            match =>
-                match.currentStatus ===
-                "Live"
-        );
-
-
-    const upcomingMatches =
-        currentMatches.filter(
-            match =>
-                match.currentStatus ===
-                "Upcoming"
-        );
-
-
-    const finishedMatches =
-        currentMatches.filter(
-            match =>
-                match.currentStatus ===
-                "Finished"
-        );
-
-
-    /*
-     * Counters use exact same arrays.
-     */
-
-    const syncMessage =
-        document.getElementById(
-            "syncMessage"
-        );
-
-
-    if (
-        syncMessage
-    ) {
-
-        const sourceLabel =
-            sportScoreAvailable
-                ? (
-                    sportScoreStale
-                        ? "SportScore temporarily unavailable — showing the last successful live feed."
-                        : "Live status from SportScore + time-based fallback."
-                )
-                : "SportScore unavailable — status calculated from schedule time.";
-
-
-        syncMessage.innerHTML =
-            `Current schedule: ` +
-            `<strong>${currentMatches.length}</strong> matches.` +
-
-            `<br>🔴 Live: ${liveMatches.length}` +
-
-            ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingMatches.length}` +
-
-            ` &nbsp;·&nbsp; ✅ Finished: ${finishedMatches.length}` +
-
-            `<br><small>${sourceLabel}</small>`;
-
-    }
-
-
-    /*
-     * Render live.
-     */
-
-    renderMatchList(
-        liveContainer,
-        liveMatches,
-        "live"
-    );
-
-
-    /*
-     * Render upcoming.
-     */
-
-    renderMatchList(
-        upcomingContainer,
-        upcomingMatches,
-        "upcoming"
-    );
-
-    liveContainer.dataset.loaded =
-        "true";
-
-    upcomingContainer.dataset.loaded =
-        "true";
-
-}
-
 
 /* =========================================================
    RENDER MATCH LIST
@@ -2172,6 +1437,18 @@ function renderMatchList(
                             ${escapeHtml(
                                 match.team2
                             )}
+
+                            ${
+                                (getMatchScore(match, 1) || getMatchScore(match, 2))
+                                    ? `
+                                        <br>
+                                        <strong>Score:</strong>
+                                        ${escapeHtml(getMatchScore(match, 1) || "—")}
+                                        &nbsp;–&nbsp;
+                                        ${escapeHtml(getMatchScore(match, 2) || "—")}
+                                      `
+                                    : ""
+                            }
 
                             ${
                                 match.competition
