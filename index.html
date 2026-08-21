@@ -2408,11 +2408,7 @@ function formatScore(
 ========================================================= */
 
 function canonicalStatus(status) {
-    return status === "Live"
-        ? "Live"
-        : status === "Finished"
-            ? "Finished"
-            : "Upcoming";
+    return normalizeStatus(status);
 }
 
 
