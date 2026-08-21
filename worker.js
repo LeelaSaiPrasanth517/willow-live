@@ -999,3 +999,198 @@ async function writeAdminAudit(
     }
   );
 }
+
+/* =========================================================
+   JSON RESPONSE HELPER
+========================================================= */
+
+function json(data, status = 200, extraHeaders = {}) {
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Authorization, Content-Type",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+        ...extraHeaders
+      }
+    }
+  );
+}
+
+
+/* =========================================================
+   CLOUDFLARE WORKER ENTRY POINT
+========================================================= */
+
+export default {
+  async fetch(request, env, ctx) {
+
+    const url = new URL(request.url);
+
+
+    /* -------------------------------------------------------
+       CORS PREFLIGHT
+    ------------------------------------------------------- */
+
+    if (request.method === "OPTIONS") {
+
+      return new Response(null, {
+        status: 204,
+
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers":
+            "Authorization, Content-Type",
+
+          "Access-Control-Allow-Methods":
+            "GET, POST, DELETE, OPTIONS",
+
+          "Access-Control-Max-Age":
+            "86400"
+        }
+      });
+    }
+
+
+    /* -------------------------------------------------------
+       GET CURRENT ADMIN
+       /api/admin/me
+    ------------------------------------------------------- */
+
+    if (
+      url.pathname === "/api/admin/me" &&
+      request.method === "GET"
+    ) {
+
+      return handleAdminMe(
+        request,
+        env
+      );
+    }
+
+
+    /* -------------------------------------------------------
+       LIST ADMINS
+       /api/admin/users
+       OWNER ONLY
+    ------------------------------------------------------- */
+
+    if (
+      url.pathname === "/api/admin/users" &&
+      request.method === "GET"
+    ) {
+
+      return handleAdminUsers(
+        request,
+        env
+      );
+    }
+
+
+    /* -------------------------------------------------------
+       CREATE ADMIN
+       /api/admin/users
+       OWNER ONLY
+    ------------------------------------------------------- */
+
+    if (
+      url.pathname === "/api/admin/users" &&
+      request.method === "POST"
+    ) {
+
+      return handleCreateAdmin(
+        request,
+        env
+      );
+    }
+
+
+    /* -------------------------------------------------------
+       DELETE ADMIN
+       /api/admin/users
+       OWNER ONLY
+    ------------------------------------------------------- */
+
+    if (
+      url.pathname === "/api/admin/users" &&
+      request.method === "DELETE"
+    ) {
+
+      return handleDeleteAdmin(
+        request,
+        env
+      );
+    }
+
+
+    /* -------------------------------------------------------
+       PASSWORD AUDIT
+       /api/admin/password-audit
+    ------------------------------------------------------- */
+
+    if (
+      url.pathname ===
+        "/api/admin/password-audit" &&
+      request.method === "POST"
+    ) {
+
+      return handlePasswordAudit(
+        request,
+        env
+      );
+    }
+
+
+    /* -------------------------------------------------------
+       UNKNOWN API ROUTE
+    ------------------------------------------------------- */
+
+    if (
+      url.pathname.startsWith("/api/")
+    ) {
+
+      return json(
+        {
+          error:
+            "API endpoint not found."
+        },
+
+        404
+      );
+    }
+
+
+    /* -------------------------------------------------------
+       STATIC ASSETS
+    ------------------------------------------------------- */
+
+    if (env.ASSETS) {
+
+      return env.ASSETS.fetch(
+        request
+      );
+    }
+
+
+    /* -------------------------------------------------------
+       WORKER FALLBACK
+    ------------------------------------------------------- */
+
+    return new Response(
+      "Cricketive Worker is running.",
+
+      {
+        status: 200,
+
+        headers: {
+          "Content-Type":
+            "text/plain; charset=utf-8"
+        }
+      }
+    );
+  }
+};
