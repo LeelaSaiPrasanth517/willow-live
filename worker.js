@@ -336,26 +336,51 @@ async function fetchJsonWithRetry(url, options = {}, attempts = 3, delayMs = 700
 }
 
 async function handleCricketMatches(request, env) {
-  // Proxy to SportScore (your actual endpoint)
-  const url = "https://cricketive.cricketive.workers.dev/api/cricket-matches"; // change to your actual SportScore endpoint
-  // Or if you have a separate SportScore proxy, use it.
-  // For now, we'll just fetch from the Worker's own endpoint? This is recursive.
-  // In a real setup, you'd fetch from the external SportScore API.
-  // I'll assume you have an external endpoint; replace with your actual SportScore URL.
+  const SPORTSCORE_MATCHES_URL =
+    "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50&src=cricketive";
+
   try {
-    // Example: fetch from a mock or external
     const payload = await fetchJsonWithRetry(
-      "https://cricketive.cricketive.workers.dev/api/cricket-matches", // placeholder
-      { cache: "no-store" },
+      SPORTSCORE_MATCHES_URL,
+      {
+        cf: {
+          cacheTtl: 60,
+          cacheEverything: true
+        }
+      },
       3,
-      700,
+      8000
     );
+
+    if (!payload || typeof payload !== "object") {
+      return json(
+        {
+          error: "Invalid response from SportScore."
+        },
+        502
+      );
+    }
+
     return json(payload);
+
   } catch (err) {
-    return json({ error: err.message || "Failed to fetch matches." }, 500);
+
+    console.error(
+      "Cricketive SportScore match feed error:",
+      err
+    );
+
+    return json(
+      {
+        error:
+          err?.message ||
+          "Unable to fetch cricket matches from SportScore.",
+        source: "sportscore-api"
+      },
+      502
+    );
   }
 }
-
 async function handleLiveScores(request, env) {
   const url = new URL(request.url);
   const matchUrl = url.searchParams.get("url");
