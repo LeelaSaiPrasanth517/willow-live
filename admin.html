@@ -1424,7 +1424,7 @@ function canonicalStatus(status) {
             : "Upcoming";
 }
 
-function canonicalStoredStatus(status) {
+function canonicalStoredStatus(status, startTime) {
     const value = String(status || "").trim().toLowerCase();
     if (value === "live" || value === "in_progress" || value === "started" || value === "playing" || value === "ongoing") {
         return "Live";
@@ -1432,216 +1432,24 @@ function canonicalStoredStatus(status) {
     if (value === "finished" || value === "ended" || value === "completed" || value === "complete" || value === "ft") {
         return "Finished";
     }
-    return "Upcoming";
-}
-
-function getDisplayStatus(
-    storedStatus,
-    startTime,
-    sportScoreStatus = null,
-    sportScoreAvailable = false
-) {
-
-    const sportStatus =
-        String(
-            sportScoreStatus || ""
-        )
-            .trim()
-            .toLowerCase();
-
 
     /*
-     * -------------------------------------------------------
-     * 1. SportScore explicitly says LIVE.
-     * -------------------------------------------------------
+     * FIX: when SportScore is unavailable we fall back to whatever
+     * status is sitting in the database. That value can be stale
+     * (e.g. still "Upcoming" from when the row was first synced).
+     * Never let a stored "Upcoming" survive past its own start_time —
+     * that reproduces the exact "shows Upcoming hours after it
+     * started" bug, just via the DB-fallback path instead of the
+     * live SportScore path.
      */
-
-    if (
-        sportStatus === "live" ||
-        sportStatus === "in_progress" ||
-        sportStatus === "in progress" ||
-        sportStatus === "started" ||
-        sportStatus === "playing" ||
-        sportStatus === "ongoing"
-    ) {
-
-        return "Live";
-
-    }
-
-
-    /*
-     * -------------------------------------------------------
-     * 2. SportScore explicitly says FINISHED.
-     * -------------------------------------------------------
-     */
-
-    if (
-        sportStatus === "finished" ||
-        sportStatus === "ended" ||
-        sportStatus === "completed" ||
-        sportStatus === "complete" ||
-        sportStatus === "ft"
-    ) {
-
-        return "Finished";
-
-    }
-
-
-    /*
-     * -------------------------------------------------------
-     * 3. Use scheduled start time.
-     *
-     * If start time is in the future:
-     *     Upcoming
-     *
-     * If start time has passed:
-     *     Finished
-     *
-     * This prevents an old database "Upcoming" value from
-     * remaining Upcoming forever.
-     * -------------------------------------------------------
-     */
-
     if (startTime) {
-
-        const start =
-            new Date(
-                startTime
-            );
-
-
-        if (
-            !Number.isNaN(
-                start.getTime()
-            )
-        ) {
-
-            const now =
-                Date.now();
-
-
-            const scheduled =
-                start.getTime();
-
-
-            /*
-             * Future match.
-             */
-
-            if (
-                scheduled > now
-            ) {
-
-                return "Upcoming";
-
-            }
-
-
-            /*
-             * Start time has passed.
-             *
-             * If SportScore said Live, we already returned
-             * Live above.
-             *
-             * Therefore a passed match without an explicit
-             * Live status is considered Finished.
-             */
-
+        const start = new Date(startTime).getTime();
+        if (Number.isFinite(start) && start <= Date.now()) {
             return "Finished";
-
         }
-
     }
-
-
-    /*
-     * -------------------------------------------------------
-     * 4. If there is no usable time, use SportScore status.
-     * -------------------------------------------------------
-     */
-
-    if (
-        sportStatus === "upcoming" ||
-        sportStatus === "scheduled" ||
-        sportStatus === "not_started" ||
-        sportStatus === "not started"
-    ) {
-
-        return "Upcoming";
-
-    }
-
-
-    /*
-     * -------------------------------------------------------
-     * 5. Last-resort stored database status.
-     * -------------------------------------------------------
-     */
-
-    const stored =
-        String(
-            storedStatus || ""
-        )
-            .trim()
-            .toLowerCase();
-
-
-    if (
-        stored === "live" ||
-        stored === "in_progress" ||
-        stored === "started"
-    ) {
-
-        /*
-         * Never blindly trust an old cached Live state.
-         */
-
-        if (startTime) {
-
-            const start =
-                new Date(
-                    startTime
-                );
-
-
-            if (
-                !Number.isNaN(
-                    start.getTime()
-                )
-            ) {
-
-                return (
-                    start.getTime() >
-                    Date.now()
-                )
-                    ? "Upcoming"
-                    : "Finished";
-
-            }
-
-        }
-
-
-        return "Finished";
-
-    }
-
-
-    if (
-        stored === "finished" ||
-        stored === "ended" ||
-        stored === "completed"
-    ) {
-
-        return "Finished";
-
-    }
-
 
     return "Upcoming";
-
 }
 
 
@@ -2097,7 +1905,10 @@ async function loadMatches() {
                 const currentStatus =
                     sportScoreAvailable
                         ? canonicalStatus(source?.status)
-                        : canonicalStoredStatus(match.status);
+                        : canonicalStoredStatus(
+                            match.status,
+                            match.start_time || match.match_time
+                          );
 
 
                 return {
