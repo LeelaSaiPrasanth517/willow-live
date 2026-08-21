@@ -1,7 +1,8 @@
 /* =========================================================
-   Cricketive Worker v7
-   Canonical source of truth: SportScore API match status.
-   Detail endpoints are used to resolve ambiguous candidate matches.
+   Cricketive Worker v8
+   Status authority: SportScore cricket match-list endpoint.
+   Individual match endpoints are enrichment-only (scores, overs,
+   batting team, logos, etc.) and MUST NOT override match status.
 ========================================================= */
 
 const SPORTSCORE_MATCHES_URL =
@@ -193,11 +194,11 @@ function normalizeMatch(match, details) {
   const base = isObject(match) ? match : {};
   const detail = isObject(details) ? details : {};
 
-  const status = getProviderStatus(detail) ?? getProviderStatus(base);
-  const statusText =
-    getProviderStatusText(detail) ??
-    getProviderStatusText(base) ??
-    "";
+  // IMPORTANT: status comes ONLY from the SportScore LIST record.
+  // The individual match endpoint is enrichment-only and must never
+  // promote an Upcoming/unknown match to Live.
+  const status = getProviderStatus(base);
+  const statusText = getProviderStatusText(base) ?? "";
 
   const home = cleanTeamName(base.home ?? detail.home);
   const away = cleanTeamName(base.away ?? detail.away);
@@ -231,8 +232,7 @@ function normalizeMatch(match, details) {
     status: normalizeSportScoreStatus(
       status,
       statusText,
-      base.time ?? detail.time ?? null,
-      Boolean(details)
+      base.time ?? detail.time ?? null
     ),
     status_text: statusText,
     batting_team: battingTeam,
@@ -465,30 +465,31 @@ function isExplicitNonLiveStatus(status, statusText = "") {
   ].includes(text);
 }
 
-function normalizeSportScoreStatus(status, statusText = "", matchTime = null, fromDetail = false) {
+function normalizeSportScoreStatus(status, statusText = "", matchTime = null) {
   const start = getMatchStartTime(matchTime);
 
-  /* A future fixture can never be live. */
+  /* A future fixture can never be live, even if a provider payload is
+     contradictory. */
   if (Number.isFinite(start) && start > Date.now()) {
     return "Upcoming";
   }
 
+  /* Explicit terminal state wins. */
   if (isExplicitFinishedStatus(status, statusText)) return "Finished";
 
+  /* Live is accepted ONLY from the SportScore list record. */
   if (isStrongLiveStatus(status, statusText)) return "Live";
 
-  /*
-   * The individual match endpoint is authoritative enough to resolve
-   * cricket-specific labels such as "started" / "1st Inn". We only
-   * accept those labels when they came from the detail request.
-   * This prevents a stale list status from manufacturing a false LIVE.
-   */
-  if (fromDetail && isDetailLiveStatus(status, statusText)) return "Live";
+  /* A past match must NEVER be rendered as Upcoming. If SportScore still
+     reports Scheduled/Upcoming after the scheduled time, treat the record
+     as non-live/closed for the public feed rather than inventing LIVE. */
+  if (Number.isFinite(start) && start <= Date.now()) {
+    return "Finished";
+  }
 
   if (isExplicitNonLiveStatus(status, statusText)) return "Upcoming";
 
-  /* Unknown is deliberately conservative. Never manufacture LIVE. */
-  if (Number.isFinite(start) && start <= Date.now()) return "Finished";
+  /* Conservative fallback: never manufacture LIVE. */
   return "Upcoming";
 }
 
@@ -498,15 +499,6 @@ function isStrongLiveStatus(status, statusText = "") {
   return (
     ["live", "in_progress", "inplay", "in_play"].includes(value) ||
     ["live", "in_progress", "inplay", "in_play"].includes(text)
-  );
-}
-
-function isDetailLiveStatus(status, statusText = "") {
-  const value = normalizeStatusValue(status);
-  const text = normalizeStatusValue(statusText);
-  return (
-    ["live", "in_progress", "started", "playing", "ongoing", "inplay", "in_play"].includes(value) ||
-    ["live", "in_progress", "started", "playing", "ongoing", "inplay", "in_play", "1st_inn", "2nd_inn"].includes(text)
   );
 }
 
@@ -799,9 +791,8 @@ async function handleLiveScores(request) {
 
       try {
         const details = await getIndividualMatch(source.url);
-        const detailStatus = getProviderStatus(details) ?? listStatus;
-        const detailStatusText = getProviderStatusText(details) ?? listStatusText;
-        const status = normalizeSportScoreStatus(detailStatus, detailStatusText, source.time, true);
+        // Detail is enrichment-only. Status remains the SportScore LIST status.
+        const status = normalizeSportScoreStatus(listStatus, listStatusText, source.time);
 
         return json({
           score: {
@@ -810,7 +801,7 @@ async function handleLiveScores(request) {
             home_score: extractTeamScore(details || source, source, "home") || extractTeamScore(source, source, "home"),
             away_score: extractTeamScore(details || source, source, "away") || extractTeamScore(source, source, "away"),
             status,
-            status_text: detailStatusText,
+            status_text: listStatusText,
             batting_team: extractBattingTeam(details) || extractBattingTeam(source),
             overs: extractMatchOvers(details) ?? extractMatchOvers(source),
             time: source.time || details?.time || null
@@ -846,9 +837,10 @@ async function handleLiveScores(request) {
     const rows = await mapWithConcurrency(candidates, DETAIL_CONCURRENCY, async item => {
       try {
         const details = await getIndividualMatch(item.match.url);
+        // Detail is enrichment-only. Status remains the SportScore LIST status.
         const status = normalizeSportScoreStatus(
-          getProviderStatus(details) ?? getProviderStatus(item.match),
-          (getProviderStatusText(details) ?? getProviderStatusText(item.match) ?? ""),
+          getProviderStatus(item.match),
+          getProviderStatusText(item.match) ?? "",
           item.match.time
         );
         if (status !== "Live") return null;
@@ -861,7 +853,7 @@ async function handleLiveScores(request) {
             home_score: extractTeamScore(details || item.match, item.match, "home") || extractTeamScore(item.match, item.match, "home"),
             away_score: extractTeamScore(details || item.match, item.match, "away") || extractTeamScore(item.match, item.match, "away"),
             status,
-            status_text: getProviderStatusText(details) ?? getProviderStatusText(item.match) ?? "",
+            status_text: getProviderStatusText(item.match) ?? "",
             batting_team: extractBattingTeam(details) || extractBattingTeam(item.match),
             overs: extractMatchOvers(details) ?? extractMatchOvers(item.match),
             time: item.match.time || details?.time || null
