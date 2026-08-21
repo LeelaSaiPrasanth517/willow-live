@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cricketive Admin Activity</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#070707;color:#fff;font-family:Arial,Helvetica,sans-serif}
+.container{width:100%;max-width:1000px;margin:auto;padding:30px 18px}
+.header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:25px}
+.logo{font-size:24px;font-weight:800}
+.card{background:#111;border:1px solid #242424;border-radius:12px;padding:22px;margin-bottom:20px}
+h1,h2{margin-top:0}
+button{border:0;cursor:pointer}
+.primary{padding:11px 16px;background:#5865f2;color:#fff;border-radius:7px;font-weight:700}
+.secondary{padding:9px 13px;background:#222;color:#fff;border-radius:6px}
+.logout{padding:9px 14px;border-radius:7px;background:#222;color:#fff}
+.sync-note,.meta{color:#999;font-size:13px;line-height:1.5}
+.message{margin-top:12px;font-size:13px}
+.hidden{display:none!important}
+.audit-entry{background:#0a0a0a;border:1px solid #292929;border-radius:9px;padding:14px;margin-top:10px}
+.audit-top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.audit-action{font-weight:800}
+.audit-time,.audit-meta{color:#888;font-size:12px}
+.audit-json{margin-top:8px;padding:10px;background:#050505;border-radius:6px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#aaa;font-size:11px}
+.badge{display:inline-block;margin-left:8px;padding:4px 8px;border-radius:999px;background:#222;color:#bbb;font-size:11px;font-weight:700}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
+select{padding:10px;background:#080808;color:#fff;border:1px solid #333;border-radius:7px}
+@media(max-width:600px){.container{padding:20px 12px}.logo{font-size:20px}}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div id="loginPanel" class="card">
+  <h2>🏏 Cricketive Admin Activity</h2>
+  <p class="sync-note">Owner-only administrator activity.</p>
+  <button class="secondary" onclick="window.location.href='admin.html'">← BACK TO ADMIN</button>
+</div>
+
+<div id="activityPanel" class="hidden">
+  <div class="header">
+    <div class="logo">CRICKETIVE 🏏 <span class="badge">OWNER</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="secondary" onclick="window.location.href='admin.html'">← ADMIN</button>
+      <button class="logout" onclick="logout()">LOGOUT</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📋 Admin Activity</h2>
+    <p class="sync-note">
+      Every INSERT, UPDATE and DELETE recorded by Cricketive's audit system.
+    </p>
+    <div class="filters">
+      <select id="actionFilter" onchange="renderAudit()">
+        <option value="">All actions</option>
+        <option value="INSERT">Added</option>
+        <option value="UPDATE">Updated</option>
+        <option value="DELETE">Deleted</option>
+      </select>
+      <select id="tableFilter" onchange="renderAudit()">
+        <option value="">All tables</option>
+      </select>
+      <button class="secondary" onclick="loadAudit()">↻ REFRESH</button>
+    </div>
+    <div id="message" class="message"></div>
+  </div>
+
+  <div id="auditList"></div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://qkzwzdyahwzcwtqgcbud.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let auditData = [];
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return String(value);
+  return date.toLocaleString([], {dateStyle:"medium", timeStyle:"short"});
+}
+
+function setMessage(text, error=false) {
+  const el = document.getElementById("message");
+  el.textContent = text || "";
+  el.style.color = error ? "#ff6666" : "#999";
+}
+
+async function initialize() {
+  const {data:{user}, error:userError} = await client.auth.getUser();
+
+  if (userError || !user) {
+    setMessage("Please sign in through the Admin page first.", true);
+    return;
+  }
+
+  const {data:admin, error} = await client
+    .from("admin_users")
+    .select("user_id, role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    setMessage("Unable to verify admin access: " + error.message, true);
+    return;
+  }
+
+  if (!admin || admin.role !== "owner") {
+    setMessage("Owner access required.", true);
+    return;
+  }
+
+  document.getElementById("loginPanel").classList.add("hidden");
+  document.getElementById("activityPanel").classList.remove("hidden");
+  await loadAudit();
+}
+
+async function loadAudit() {
+  setMessage("Loading activity...");
+
+  const {data, error} = await client
+    .from("admin_audit_log")
+    .select("*")
+    .order("created_at", {ascending:false})
+    .limit(500);
+
+  if (error) {
+    setMessage("Unable to load activity: " + error.message, true);
+    return;
+  }
+
+  auditData = data || [];
+
+  const tableFilter = document.getElementById("tableFilter");
+  const current = tableFilter.value;
+  const tables = [...new Set(auditData.map(x => x.table_name).filter(Boolean))].sort();
+
+  tableFilter.innerHTML =
+    '<option value="">All tables</option>' +
+    tables.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+
+  if (tables.includes(current)) tableFilter.value = current;
+
+  setMessage(`${auditData.length} activity record${auditData.length === 1 ? "" : "s"} loaded.`);
+  renderAudit();
+}
+
+function renderAudit() {
+  const action = document.getElementById("actionFilter").value;
+  const table = document.getElementById("tableFilter").value;
+  const container = document.getElementById("auditList");
+
+  const filtered = auditData.filter(entry =>
+    (!action || String(entry.action || "").toUpperCase() === action) &&
+    (!table || entry.table_name === table)
+  );
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="card"><div class="meta">No matching activity.</div></div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(entry => {
+    const rawAction = String(entry.action || "").toUpperCase();
+    const label = rawAction === "INSERT" ? "ADDED" :
+                  rawAction === "UPDATE" ? "UPDATED" :
+                  rawAction === "DELETE" ? "DELETED" : rawAction;
+
+    return `
+      <div class="card audit-entry">
+        <div class="audit-top">
+          <div>
+            <span class="audit-action">${escapeHtml(label)}</span>
+            <span class="audit-meta"> · ${escapeHtml(entry.table_name || "")}</span>
+          </div>
+          <div class="audit-time">${escapeHtml(formatDate(entry.created_at))}</div>
+        </div>
+
+        <div class="audit-meta" style="margin-top:7px">
+          Admin: ${escapeHtml(entry.actor_user_id || "System")}
+          · Record: ${escapeHtml(entry.record_id || "")}
+          ${entry.actor_type ? ` · Type: ${escapeHtml(entry.actor_type)}` : ""}
+        </div>
+
+        ${entry.old_data ? `
+          <details style="margin-top:10px">
+            <summary class="audit-meta">Previous data</summary>
+            <div class="audit-json">${escapeHtml(JSON.stringify(entry.old_data, null, 2))}</div>
+          </details>` : ""}
+
+        ${entry.new_data ? `
+          <details style="margin-top:10px">
+            <summary class="audit-meta">New data</summary>
+            <div class="audit-json">${escapeHtml(JSON.stringify(entry.new_data, null, 2))}</div>
+          </details>` : ""}
+      </div>`;
+  }).join("");
+}
+
+async function logout() {
+  await client.auth.signOut();
+  window.location.href = "admin.html";
+}
+
+initialize();
+</script>
+</body>
+</html>
