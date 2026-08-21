@@ -382,23 +382,84 @@ async function handleCricketMatches(request, env) {
   }
 }
 async function handleLiveScores(request, env) {
-  const url = new URL(request.url);
-  const matchUrl = url.searchParams.get("url");
-  if (!matchUrl) {
-    return json({ error: "Missing 'url' parameter." }, 400);
-  }
-  // Fetch from SportScore live score endpoint (you need to implement the actual call)
-  // This is a placeholder; replace with your actual logic.
   try {
-    // Example: forward to SportScore API
-    const resp = await fetch(
-      `https://sportscore.com/api/live?url=${encodeURIComponent(matchUrl)}`,
-      { cache: "no-store" },
+    const requestUrl = new URL(request.url);
+    const requestedSource =
+      requestUrl.searchParams.get("url") || "";
+
+    const response = await fetch(
+      `${requestUrl.origin}/api/cricket-matches`,
+      {
+        headers: {
+          "Accept": "application/json"
+        },
+        cf: {
+          cacheTtl: 30,
+          cacheEverything: false
+        }
+      }
     );
-    const data = await resp.json();
-    return json({ score: data });
-  } catch (err) {
-    return json({ error: err.message || "Live score unavailable." }, 500);
+
+    if (!response.ok) {
+      return json(
+        {
+          error: `Match feed unavailable (HTTP ${response.status}).`
+        },
+        502
+      );
+    }
+
+    const payload = await response.json();
+
+    const matches = Array.isArray(payload?.matches)
+      ? payload.matches
+      : [];
+
+    let liveMatches = matches.filter(
+      match => String(match?.status || "").toLowerCase() === "live"
+    );
+
+    if (requestedSource) {
+      const normalizedSource =
+        requestedSource.replace(/^\/+/, "").toLowerCase();
+
+      liveMatches = liveMatches.filter(match => {
+        const matchUrl =
+          String(match?.url || "")
+            .replace(/^\/+/, "")
+            .toLowerCase();
+
+        return (
+          matchUrl === normalizedSource ||
+          matchUrl.endsWith(normalizedSource) ||
+          normalizedSource.endsWith(matchUrl)
+        );
+      });
+    }
+
+    return json({
+      sport: "cricket",
+      count: liveMatches.length,
+      matches: liveMatches,
+      updated: payload?.updated || null,
+      stale: payload?.stale || false,
+      source: "cricketive-match-feed"
+    });
+
+  } catch (error) {
+    console.error(
+      "Cricketive live-score error:",
+      error
+    );
+
+    return json(
+      {
+        error:
+          error?.message ||
+          "Live scores unavailable."
+      },
+      502
+    );
   }
 }
 
