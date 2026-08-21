@@ -959,47 +959,28 @@ async function checkSession() {
    ========================================================= */
 
 async function initializeAdmin() {
-
-    const {
-        data: { user },
-        error: userError
-    } = await client.auth.getUser();
-
+    const { data: { user }, error: userError } = await client.auth.getUser();
     if (userError || !user) {
         showLoginMessage("Unable to verify your session.");
         return false;
     }
-
     currentUser = user;
-
-    const {
-        data: adminRecord,
-        error: adminError
-    } = await client
-        .from("admin_users")
-        .select("user_id, role, created_at")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-    if (adminError) {
-        console.error("Admin verification error:", adminError);
-        showLoginMessage("Unable to verify admin access.");
+    try {
+        const adminRecord = await adminApi("/api/admin/me");
+        if (!adminRecord || !["admin", "owner"].includes(adminRecord.role)) {
+            showLoginMessage("This account is not authorized to access Cricketive Admin.");
+            return false;
+        }
+        currentAdminRecord = adminRecord;
+        currentAdminRole = adminRecord.role;
+        showAdmin();
+        return true;
+    } catch (error) {
+        console.error("Admin verification error:", error);
+        showLoginMessage(error?.message || "Unable to verify admin access.");
         return false;
     }
-
-    if (!adminRecord || !["admin", "owner"].includes(adminRecord.role)) {
-        showLoginMessage("This account is not authorized to access Cricketive Admin.");
-        return false;
-    }
-
-    currentAdminRecord = adminRecord;
-    currentAdminRole = adminRecord.role;
-
-    showAdmin();
-
-    return true;
 }
-
 
 function showLoginMessage(message) {
     const element = document.getElementById("loginMessage");
