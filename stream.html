@@ -514,10 +514,18 @@ async function loadLiveScore() {
 
     try {
 
-        const sourceUrl =
-            currentMatch.sportscore_url ||
-            currentMatch.api_match_id ||
-            "";
+        /*
+         * FIX: this used to fall back to currentMatch.api_match_id
+         * when sportscore_url was missing. api_match_id is stored as
+         * "sportscore:<normalized-url>" (see admin.html), not a bare
+         * SportScore URL — passing it here made the Worker's
+         * normalizeUrl() build a nonsense address, the lookup would
+         * silently fail to match any feed entry, and the score panel
+         * would just stay hidden with no error. sportscore_url is the
+         * only field that is actually a usable SportScore URL, so it
+         * is the only thing we send.
+         */
+        const sourceUrl = currentMatch.sportscore_url || "";
 
         if (!sourceUrl) {
             card.style.display = "none";
