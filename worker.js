@@ -27,39 +27,6 @@ export default {
       return handleLiveScores(request);
     }
 
-    /*
-     * TEMPORARY DEBUG ENDPOINT — remove once the score-enrichment bug
-     * is confirmed fixed. Returns SportScore's raw, unprocessed
-     * individual-match payload with zero normalization, so we can see
-     * exactly what shape it's in instead of guessing again.
-     *
-     * Usage: /api/debug-match?url=/cricket/match/<slug>/
-     * (use the "url" value straight out of /api/cricket-matches)
-     */
-    if (url.pathname === "/api/debug-match") {
-      const matchUrl = url.searchParams.get("url") || "";
-      if (!matchUrl) {
-        return json({ error: "Pass ?url=/cricket/match/<slug>/ (copy the url field from /api/cricket-matches)." }, 400);
-      }
-      try {
-        const slug = extractSlug(matchUrl);
-        const apiUrl =
-          "https://sportscore.com/api/widget/match/" +
-          `?sport=cricket&slug=${encodeURIComponent(slug)}&src=cricketive`;
-        const response = await fetch(apiUrl, { cf: { cacheTtl: 0, cacheEverything: false } });
-        const rawText = await response.text();
-        return json({
-          requested_url: matchUrl,
-          resolved_slug: slug,
-          fetched_from: apiUrl,
-          http_status: response.status,
-          raw_body: rawText
-        });
-      } catch (error) {
-        return json({ error: error?.message || String(error) }, 500);
-      }
-    }
-
     return env.ASSETS.fetch(request);
   }
 };
