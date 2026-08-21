@@ -101,73 +101,38 @@ function setMessage(text, error=false) {
   el.style.color = error ? "#ff6666" : "#999";
 }
 
+async function getAccessToken() {
+  const { data: { session }, error } = await client.auth.getSession();
+  if (error || !session?.access_token) throw new Error("Your session has expired. Please log in again.");
+  return session.access_token;
+}
+
+async function adminApi(path, options = {}) {
+  const token = await getAccessToken();
+  const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error || `Request failed (${response.status}).`);
+  return payload;
+}
+
 async function initialize() {
-  const {data:{user}, error:userError} = await client.auth.getUser();
-
-  if (userError || !user) {
-    setMessage("Please sign in through the Admin page first.", true);
-    return;
-  }
-
-  const {data:admin, error} = await client
-    .from("admin_users")
-    .select("user_id, role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (error) {
-    setMessage("Unable to verify admin access: " + error.message, true);
-    return;
-  }
-
-  if (!admin || admin.role !== "owner") {
-    setMessage("Owner access required.", true);
-    return;
-  }
-
-  document.getElementById("loginPanel").classList.add("hidden");
-  document.getElementById("activityPanel").classList.remove("hidden");
-  await loadAudit();
+  try {
+    const admin = await adminApi("/api/admin/me");
+    if (!admin || admin.role !== "owner") { setMessage("Owner access required.", true); return; }
+    document.getElementById("loginPanel").classList.add("hidden");
+    document.getElementById("activityPanel").classList.remove("hidden");
+    await loadAudit();
+  } catch (error) { setMessage(error?.message || "Unable to verify owner access.", true); }
 }
 
 async function loadAudit() {
   setMessage("Loading activity...");
-
-  const {data, error} = await client
-    .from("admin_audit_log")
-    .select("*")
-    .order("created_at", {ascending:false})
-    .limit(500);
-
-  if (error) {
-    setMessage("Unable to load activity: " + error.message, true);
+  try {
+    auditData = await adminApi("/api/admin/audit");
+  } catch (error) {
+    setMessage("Unable to load activity: " + (error?.message || "Unknown error"), true);
     return;
   }
-
-  auditData = data || [];
-
-  const {
-    data: adminUsers,
-    error: adminUsersError
-  } = await client
-    .from("admin_users")
-    .select("user_id, display_name, email, role");
-
-  if (adminUsersError) {
-    setMessage(
-      "Unable to load administrator identities: " +
-      adminUsersError.message,
-      true
-    );
-    return;
-  }
-
-  window.adminIdentityMap = new Map(
-    (adminUsers || []).map(admin => [
-      admin.user_id,
-      admin
-    ])
-  );
 
   const tableFilter = document.getElementById("tableFilter");
   const current = tableFilter.value;
@@ -204,18 +169,6 @@ function renderAudit() {
                   rawAction === "UPDATE" ? "UPDATED" :
                   rawAction === "DELETE" ? "DELETED" : rawAction;
 
-    const actor =
-      window.adminIdentityMap?.get(
-        entry.actor_user_id
-      );
-
-    const actorLabel =
-      actor
-        ? `${actor.display_name || "Administrator"} · ${actor.email || ""}`
-        : entry.actor_type === "system"
-            ? "System"
-            : entry.actor_user_id || "Unknown administrator";
-
     return `
       <div class="card audit-entry">
         <div class="audit-top">
@@ -227,7 +180,7 @@ function renderAudit() {
         </div>
 
         <div class="audit-meta" style="margin-top:7px">
-          Admin: ${escapeHtml(actorLabel)}
+          Admin: ${escapeHtml(entry.actor_user_id || "System")}
           · Record: ${escapeHtml(entry.record_id || "")}
           ${entry.actor_type ? ` · Type: ${escapeHtml(entry.actor_type)}` : ""}
         </div>
