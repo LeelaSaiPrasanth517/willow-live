@@ -341,9 +341,52 @@ body {
                         fullscreen
                     "
                     allowfullscreen
+                    sandbox="
+                        allow-scripts
+                        allow-same-origin
+                        allow-presentation
+                    "
+                    referrerpolicy="no-referrer"
                 ></iframe>
 
             </div>
+
+
+            <!--
+                FIX: the embedded page (e.g. ckdlive.blogspot.com)
+                is a third-party site we don't control, and some of
+                the "free" stream pages we link to are ad-supported —
+                that's how they stay free. Embedding them means we
+                inherit whatever their ad network injects into the
+                page.
+
+                We can't strip an inline overlay drawn by the page's
+                own script without effectively building an ad
+                blocker for someone else's site, which we're not
+                going to do. What we CAN do — and just did — is add
+                a `sandbox` attribute that omits allow-popups and
+                allow-top-navigation. That stops the two most
+                disruptive behaviors these ad networks use: spawning
+                popup/popunder tabs, and hijacking the whole browser
+                tab with a redirect. The inline "I'm not a robot /
+                Show content" box itself can still render (it only
+                needs allow-scripts, which the player also needs to
+                function), but it can no longer take over your
+                viewers' browser.
+
+                This is also exactly why an ad blocker (Brave's
+                Shields, uBlock Origin, AdGuard DNS) removes it
+                entirely on your end: those block the ad script's
+                network request before it loads at all, which no
+                amount of iframe sandboxing from our side can
+                replicate — sandboxing restricts what an already-
+                loaded script can DO, not whether it loads. If you
+                want streams with zero embedded ads, the real fix is
+                preferring direct .m3u8/.mp4 URLs when adding a
+                stream in Admin — those play through the native
+                <video>/hls.js player with no third-party page (and
+                no third-party ads) involved at all.
+            -->
 
 
             <div
