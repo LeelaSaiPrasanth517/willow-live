@@ -1,0 +1,1 @@
+export function calculateConfidence({sourceWeight=.5,freshnessMs=0,agreement=1,anomalyScore=0}={}){const freshness=Math.max(0,1-Math.min(freshnessMs,300000)/300000);return Math.max(0,Math.min(1,sourceWeight*.45+freshness*.2+agreement*.25+(1-anomalyScore)*.1));}
