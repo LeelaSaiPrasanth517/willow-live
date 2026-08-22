@@ -574,6 +574,8 @@ function detectStreamType(url) {
    PLAY STREAM (WITH RESOLVER & PROXY)
 ========================================= */
 
+const WORKER_URL = "https://cricketive.cricketive.workers.dev";
+
 async function playStream(url, streamName) {
     if (!url) {
         showMessage("No stream URL provided.", true);
@@ -614,8 +616,8 @@ async function playStream(url, streamName) {
     /* DIRECT HLS */
     if (type === "hls") {
         videoContainer.style.display = "block";
-        // Route through worker proxy to eliminate CORS errors
-        const proxyUrl = `/api/proxy-stream?url=${encodeURIComponent(url)}`;
+        // Route through worker proxy with absolute URL
+        const proxyUrl = `${WORKER_URL}/api/proxy-stream?url=${encodeURIComponent(url)}`;
         playHLS(proxyUrl, video);
         scrollPlayer();
         return;
@@ -624,7 +626,7 @@ async function playStream(url, streamName) {
     /* DIRECT MP4 */
     if (type === "video") {
         videoContainer.style.display = "block";
-        const proxyUrl = `/api/proxy-stream?url=${encodeURIComponent(url)}`;
+        const proxyUrl = `${WORKER_URL}/api/proxy-stream?url=${encodeURIComponent(url)}`;
         video.src = proxyUrl;
         showMessage("Video loaded.");
         video.play().catch(() => {});
@@ -637,25 +639,28 @@ async function playStream(url, streamName) {
     scrollPlayer();
 
     try {
-        const res = await fetch(`/api/resolve-stream?url=${encodeURIComponent(url)}`);
+        // Fetch from absolute Worker URL
+        const res = await fetch(`${WORKER_URL}/api/resolve-stream?url=${encodeURIComponent(url)}`);
         const payload = await res.json();
 
         if (payload.success && payload.streamUrl) {
             showMessage("Stream extracted successfully! Loading ad-free player...");
             videoContainer.style.display = "block";
 
-            const proxyUrl = `/api/proxy-stream?url=${encodeURIComponent(payload.streamUrl)}&referer=${encodeURIComponent(url)}`;
+            const proxyUrl = `${WORKER_URL}/api/proxy-stream?url=${encodeURIComponent(payload.streamUrl)}&referer=${encodeURIComponent(url)}`;
 
             if (payload.type === "hls") {
                 playHLS(proxyUrl, video);
             } else {
                 video.src = proxyUrl;
-                video.play().catch(() => {});
+                video.play().catch(e => console.warn("Video play blocked:", e));
             }
             return;
+        } else {
+            console.warn("Resolver could not find a stream:", payload.message);
         }
     } catch (e) {
-        console.warn("Resolver failed, falling back:", e);
+        console.warn("Resolver network fetch failed. Is the Worker deployed?", e);
     }
 
     /* FALLBACK: IF RESOLVER CANNOT EXTRACT, LOAD IFRAME WITH RESTRICTIONS */
@@ -663,7 +668,6 @@ async function playStream(url, streamName) {
     iframe.src = url;
     iframeContainer.style.display = "block";
 }
-
 
 /* =========================================
    HLS PLAYER INITIALIZATION
