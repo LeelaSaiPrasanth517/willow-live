@@ -117,6 +117,8 @@ body {
     margin-top: 12px;
 }
 
+
+
 /* LIVE SCORECARD */
 .live-scorecard{margin-top:22px;background:#101010;border:1px solid #252525;border-radius:12px;overflow:hidden}
 .live-score-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#0b0b0b;border-bottom:1px solid #222}
@@ -191,24 +193,30 @@ body {
 }
 
 @media(max-width:600px) {
+
     .header {
         height: 60px;
         padding: 0 14px;
     }
+
     .brand img {
         height: 40px;
         width: 40px;
     }
+
     .brand span {
         font-size: 18px;
     }
+
     .title {
         font-size: 20px;
     }
+
     .stream {
         align-items: flex-start;
         flex-direction: column;
     }
+
 }
 
 </style>
@@ -218,6 +226,7 @@ body {
 <body>
 
 <header class="header">
+
     <div class="brand">
         <img
             src="cricketive-logo.webp"
@@ -225,19 +234,29 @@ body {
         >
         <span>CRICKETIVE</span>
     </div>
-    <a class="back" href="index.html">
+
+    <a
+        class="back"
+        href="index.html"
+    >
         ← HOME
     </a>
+
 </header>
 
 
 <main class="wrap">
 
-    <section class="match-head" id="match">
+    <section
+        class="match-head"
+        id="match"
+    >
         <div class="empty">
             Loading match...
         </div>
     </section>
+
+
 
     <section class="live-scorecard" id="liveScore" style="display:none;">
         <div class="live-score-header">
@@ -262,11 +281,21 @@ body {
 
 
         <!-- PLAYER -->
-        <section class="player" id="player">
+
+        <section
+            class="player"
+            id="player"
+        >
+
             <div class="player-header">
-                <div class="player-title" id="playerTitle">
+
+                <div
+                    class="player-title"
+                    id="playerTitle"
+                >
                     Cricketive Player
                 </div>
+
                 <button
                     class="close-player"
                     type="button"
@@ -274,22 +303,34 @@ body {
                 >
                     CLOSE
                 </button>
+
             </div>
 
 
-            <!-- VIDEO PLAYER (Clean Ad-Free Stream) -->
-            <div class="video-container" id="videoContainer">
+            <!-- VIDEO PLAYER -->
+
+            <div
+                class="video-container"
+                id="videoContainer"
+            >
+
                 <video
                     id="videoPlayer"
                     controls
                     playsinline
                     preload="metadata"
                 ></video>
+
             </div>
 
 
-            <!-- IFRAME PLAYER (Fallback for unresolved embeds) -->
-            <div class="video-container" id="iframeContainer">
+            <!-- IFRAME PLAYER -->
+
+            <div
+                class="video-container"
+                id="iframeContainer"
+            >
+
                 <iframe
                     id="videoFrame"
                     title="Cricketive Stream"
@@ -308,13 +349,63 @@ body {
                     "
                     referrerpolicy="no-referrer"
                 ></iframe>
+
             </div>
 
-            <div class="player-message" id="playerMessage">
+
+            <!--
+                FIX: the embedded page (e.g. ckdlive.blogspot.com)
+                is a third-party site we don't control, and some of
+                the "free" stream pages we link to are ad-supported —
+                that's how they stay free. Embedding them means we
+                inherit whatever their ad network injects into the
+                page.
+
+                We can't strip an inline overlay drawn by the page's
+                own script without effectively building an ad
+                blocker for someone else's site, which we're not
+                going to do. The `sandbox` attribute below still
+                omits allow-top-navigation, which blocks the worst
+                behavior: the embedded page hijacking the entire
+                browser tab with a redirect away from Cricketive.
+
+                allow-popups had to be restored: this particular
+                embed's "unlock" script apparently opens a popup as
+                part of the same click that loads the actual player,
+                so blocking popups outright also silently broke
+                playback (the script likely threw when window.open()
+                was denied, before it ever reached the code that
+                starts the video). So a stray ad tab may still open
+                on click — that trade-off is unavoidable for THIS
+                specific embed without breaking video entirely. Full
+                tab hijacking is still blocked either way.
+
+                This is also exactly why an ad blocker (Brave's
+                Shields, uBlock Origin, AdGuard DNS) removes it
+                entirely on your end: those block the ad script's
+                network request before it loads at all, which no
+                amount of iframe sandboxing from our side can
+                replicate — sandboxing restricts what an already-
+                loaded script can DO, not whether it loads. If you
+                want streams with zero embedded ads, the real fix is
+                preferring direct .m3u8/.mp4 URLs when adding a
+                stream in Admin — those play through the native
+                <video>/hls.js player with no third-party page (and
+                no third-party ads) involved at all.
+            -->
+
+
+            <div
+                class="player-message"
+                id="playerMessage"
+            >
                 Loading stream...
             </div>
+
         </section>
+
     </section>
+
 </main>
 
 
@@ -354,6 +445,7 @@ const matchId =
 let currentHls = null;
 let scoreTimer = null;
 let currentMatch = null;
+const WORKER_URL = "https://cricketive.cricketive.workers.dev";
 
 
 /* =========================================
@@ -363,10 +455,15 @@ let currentMatch = null;
 async function load() {
 
     if (!matchId) {
-        document.getElementById("match").innerHTML =
+
+        document.getElementById(
+            "match"
+        ).innerHTML =
             '<div class="empty">No match selected.</div>';
+
         return;
     }
+
 
     const mr =
         await db
@@ -375,39 +472,82 @@ async function load() {
             .eq("id", matchId)
             .maybeSingle();
 
+
     if (mr.error || !mr.data) {
+
         console.error(mr.error);
-        document.getElementById("match").innerHTML =
+
+        document.getElementById(
+            "match"
+        ).innerHTML =
             '<div class="empty">Match not found.</div>';
+
         return;
     }
 
-    const m = mr.data;
-    document.title = `${m.team1} vs ${m.team2} | Cricketive`;
 
-    document.getElementById("match").innerHTML = `
+    const m = mr.data;
+
+
+    document.title =
+        `${m.team1} vs ${m.team2} | Cricketive`;
+
+
+    document.getElementById(
+        "match"
+    ).innerHTML = `
+
         <div class="title">
             ${esc(m.team1)} vs ${esc(m.team2)}
         </div>
+
         <div class="meta">
+
             ${esc(m.competition || "Cricket")}
+
             <br>
+
             ${
                 m.start_time
-                    ? new Date(m.start_time).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })
-                    : esc(m.match_time || "")
+                    ? new Date(
+                        m.start_time
+                    ).toLocaleString(
+                        [],
+                        {
+                            dateStyle: "medium",
+                            timeStyle: "short"
+                        }
+                    )
+                    : esc(
+                        m.match_time || ""
+                    )
             }
-            ${m.venue ? "<br>" + esc(m.venue) : ""}
+
+            ${
+                m.venue
+                    ? "<br>" + esc(m.venue)
+                    : ""
+            }
+
             <br>
-            <b>${esc(m.status || "")}</b>
+
+            <b>
+                ${esc(m.status || "")}
+            </b>
+
         </div>
+
     `;
 
+
     await loadStreams();
+
     currentMatch = m;
     await loadLiveScore();
     startScorePolling();
+
 }
+
 
 
 /* =========================================
@@ -415,6 +555,7 @@ async function load() {
 ========================================= */
 
 async function loadLiveScore() {
+
     const card = document.getElementById("liveScore");
     const content = document.getElementById("scoreContent");
     const updated = document.getElementById("scoreUpdated");
@@ -422,16 +563,31 @@ async function loadLiveScore() {
     if (!card || !content || !currentMatch) return;
 
     try {
+
+        /*
+         * FIX: this used to fall back to currentMatch.api_match_id
+         * when sportscore_url was missing. api_match_id is stored as
+         * "sportscore:<normalized-url>" (see admin.html), not a bare
+         * SportScore URL — passing it here made the Worker's
+         * normalizeUrl() build a nonsense address, the lookup would
+         * silently fail to match any feed entry, and the score panel
+         * would just stay hidden with no error. sportscore_url is the
+         * only field that is actually a usable SportScore URL, so it
+         * is the only thing we send.
+         */
         const sourceUrl = currentMatch.sportscore_url || "";
+
         if (!sourceUrl) {
             card.style.display = "none";
             return;
         }
 
         const response = await fetch(
-            "/api/live-scores?url=" + encodeURIComponent(sourceUrl),
+            "/api/live-scores?url=" +
+            encodeURIComponent(sourceUrl),
             { cache: "no-store" }
         );
+
         const payload = await response.json();
 
         if (!response.ok || payload.error || !payload.score) {
@@ -440,10 +596,15 @@ async function loadLiveScore() {
         }
 
         const score = payload.score;
+
         const homeScore = formatScore(score.home_score);
         const awayScore = formatScore(score.away_score);
-        const overs = score.overs ? `Overs: ${esc(score.overs)}` : "";
-        const batting = score.batting_team ? `Batting: ${esc(score.batting_team)}` : "";
+        const overs = score.overs
+            ? `Overs: ${esc(score.overs)}`
+            : "";
+        const batting = score.batting_team
+            ? `Batting: ${esc(score.batting_team)}`
+            : "";
 
         if (!homeScore && !awayScore && !overs) {
             card.style.display = "none";
@@ -451,46 +612,94 @@ async function loadLiveScore() {
         }
 
         card.style.display = "block";
+
         content.innerHTML = `
             <div class="score-row">
                 <div>
-                    <div class="score-team">${esc(currentMatch.team1)}</div>
+                    <div class="score-team">
+                        ${esc(currentMatch.team1)}
+                    </div>
                     ${overs ? `<div class="score-extra">${overs}</div>` : ""}
                 </div>
-                <div class="score-value">${homeScore || "—"}</div>
+                <div class="score-value">
+                    ${homeScore || "—"}
+                </div>
             </div>
 
             <div class="score-row">
-                <div>
-                    <div class="score-team">${esc(currentMatch.team2)}</div>
+                <div class="score-team">
+                    ${esc(currentMatch.team2)}
                 </div>
-                <div class="score-value">${awayScore || "—"}</div>
+                <div class="score-value">
+                    ${awayScore || "—"}
+                </div>
             </div>
 
             ${batting ? `<div class="score-footer">${batting}</div>` : ""}
         `;
 
-        updated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+        updated.textContent =
+            `Updated ${new Date().toLocaleTimeString()}`;
+
     } catch (error) {
+
         console.error("Live score error:", error);
         card.style.display = "none";
+
     }
 }
 
+
 function formatScore(value) {
-    if (value === null || value === undefined || value === "") return "";
-    if (typeof value === "object") {
-        const runs = value.runs ?? value.total ?? value.score ?? null;
-        const wickets = value.wickets ?? value.outs ?? null;
-        if (runs !== null && wickets !== null) return `${runs}/${wickets}`;
-        if (runs !== null) return String(runs);
+
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
+        return "";
     }
+
+    if (typeof value === "object") {
+
+        const runs =
+            value.runs ??
+            value.total ??
+            value.score ??
+            null;
+
+        const wickets =
+            value.wickets ??
+            value.outs ??
+            null;
+
+        if (
+            runs !== null &&
+            wickets !== null
+        ) {
+            return `${runs}/${wickets}`;
+        }
+
+        if (runs !== null) {
+            return String(runs);
+        }
+    }
+
     return String(value);
 }
 
+
 function startScorePolling() {
-    if (scoreTimer) clearInterval(scoreTimer);
-    scoreTimer = setInterval(loadLiveScore, 60000);
+
+    if (scoreTimer) {
+        clearInterval(scoreTimer);
+    }
+
+    scoreTimer =
+        setInterval(
+            loadLiveScore,
+            60000
+        );
 }
 
 
@@ -499,47 +708,101 @@ function startScorePolling() {
 ========================================= */
 
 async function loadStreams() {
-    const el = document.getElementById("streamList");
-    const sr = await db
-        .from("streams")
-        .select("*")
-        .eq("match_id", matchId)
-        .eq("active", true)
-        .order("created_at", { ascending: true });
+
+    const el =
+        document.getElementById(
+            "streamList"
+        );
+
+
+    const sr =
+        await db
+            .from("streams")
+            .select("*")
+            .eq("match_id", matchId)
+            .eq("active", true)
+            .order(
+                "created_at",
+                {
+                    ascending: true
+                }
+            );
+
 
     if (sr.error) {
+
         console.error(sr.error);
-        el.innerHTML = '<div class="empty">Unable to load streams.</div>';
+
+        el.innerHTML =
+            '<div class="empty">Unable to load streams.</div>';
+
         return;
     }
+
 
     if (!sr.data.length) {
-        el.innerHTML = '<div class="empty">⏳ No stream is available for this match yet.</div>';
+
+        el.innerHTML =
+            '<div class="empty">⏳ No stream is available for this match yet.</div>';
+
         return;
     }
 
-    el.innerHTML = sr.data
-        .map(
-            s => `
-            <div class="stream">
-                <div>
-                    <b>${esc(s.language || "Unknown")}</b>
-                    <br>
-                    <span style="color:#999;font-size:12px">${esc(s.stream_name || "Stream")}</span>
+
+    el.innerHTML =
+        sr.data
+            .map(
+                s => `
+
+                <div class="stream">
+
+                    <div>
+
+                        <b>
+                            ${esc(
+                                s.language ||
+                                "Unknown"
+                            )}
+                        </b>
+
+                        <br>
+
+                        <span
+                            style="
+                                color:#999;
+                                font-size:12px
+                            "
+                        >
+                            ${esc(
+                                s.stream_name ||
+                                "Stream"
+                            )}
+                        </span>
+
+                    </div>
+
+
+                    <button
+                        class="watch"
+                        onclick='playStream(
+                            ${JSON.stringify(
+                                s.embed_url
+                            )},
+                            ${JSON.stringify(
+                                s.stream_name ||
+                                "Cricketive Stream"
+                            )}
+                        )'
+                    >
+                        ▶ WATCH
+                    </button>
+
                 </div>
-                <button
-                    class="watch"
-                    onclick='playStream(
-                        ${JSON.stringify(s.embed_url)},
-                        ${JSON.stringify(s.stream_name || "Cricketive Stream")}
-                    )'
-                >
-                    ▶ WATCH
-                </button>
-            </div>
-        `
-        )
-        .join("");
+
+            `
+            )
+            .join("");
+
 }
 
 
@@ -548,165 +811,120 @@ async function loadStreams() {
 ========================================= */
 
 function detectStreamType(url) {
-    const lower = url.toLowerCase();
+
+    const lower =
+        url.toLowerCase();
+
 
     if (
-        lower.includes("youtube.com/watch") ||
-        lower.includes("youtube.com/live/") ||
-        lower.includes("youtu.be/")
+        lower.includes(
+            "youtube.com/watch"
+        ) ||
+        lower.includes(
+            "youtube.com/live/"
+        ) ||
+        lower.includes(
+            "youtu.be/"
+        )
     ) {
+
         return "youtube";
+
     }
 
-    if (lower.includes(".m3u8")) {
+
+    if (
+        lower.includes(".m3u8")
+    ) {
+
         return "hls";
+
     }
 
-    if (/\.(mp4|webm|ogg)(\?|#|$)/i.test(url)) {
+
+    if (
+        /\.(mp4|webm|ogg)(\?|#|$)/i
+            .test(url)
+    ) {
+
         return "video";
+
     }
+
+
+    if (
+        lower.includes("/embed/") ||
+        lower.includes("player.php") ||
+        lower.includes("embed.php")
+    ) {
+
+        return "embed";
+
+    }
+
 
     return "webpage";
+
 }
 
 
 /* =========================================
-   PLAY STREAM (WITH RESOLVER & PROXY)
+   PLAY STREAM
 ========================================= */
 
-const WORKER_URL = "https://cricketive.cricketive.workers.dev";
-
 async function playStream(url, streamName) {
-    if (!url) {
-        showMessage("No stream URL provided.", true);
-        return;
-    }
-
+    if (!url) { showMessage("No stream URL provided.", true); return; }
     stopPlayer();
-
-    const player = document.getElementById("player");
-    const iframeContainer = document.getElementById("iframeContainer");
-    const videoContainer = document.getElementById("videoContainer");
-    const iframe = document.getElementById("videoFrame");
-    const video = document.getElementById("videoPlayer");
-
-    document.getElementById("playerTitle").textContent =
-        streamName || "Cricketive Player";
-
-    player.style.display = "block";
-    iframeContainer.style.display = "none";
-    videoContainer.style.display = "none";
-
-    let type = detectStreamType(url);
-
-    /* YOUTUBE */
-    if (type === "youtube") {
-        const embed = youtubeEmbed(url);
-        if (!embed) {
-            showMessage("Invalid YouTube URL.", true);
-            return;
-        }
-        iframe.src = embed;
-        iframeContainer.style.display = "block";
-        showMessage("YouTube player loaded.");
-        scrollPlayer();
-        return;
-    }
-
-    /* DIRECT HLS */
-    if (type === "hls") {
-        videoContainer.style.display = "block";
-        // Route through worker proxy with absolute URL
-        const proxyUrl = `${WORKER_URL}/api/proxy-stream?url=${encodeURIComponent(url)}`;
-        playHLS(proxyUrl, video);
-        scrollPlayer();
-        return;
-    }
-
-    /* DIRECT MP4 */
-    if (type === "video") {
-        videoContainer.style.display = "block";
-        const proxyUrl = `${WORKER_URL}/api/proxy-stream?url=${encodeURIComponent(url)}`;
-        video.src = proxyUrl;
-        showMessage("Video loaded.");
-        video.play().catch(() => {});
-        scrollPlayer();
-        return;
-    }
-
-    /* WEBPAGE / EMBED: ATTEMPT RESOLVER FIRST */
-    showMessage("Extracting clean stream from source (removing ads)...");
-    scrollPlayer();
-
+    const player=document.getElementById("player");
+    const iframeContainer=document.getElementById("iframeContainer");
+    const videoContainer=document.getElementById("videoContainer");
+    const iframe=document.getElementById("videoFrame");
+    const video=document.getElementById("videoPlayer");
+    document.getElementById("playerTitle").textContent=streamName||"Cricketive Player";
+    player.style.display="block"; iframeContainer.style.display="none"; videoContainer.style.display="none";
+    showMessage("Resolving stream..."); scrollPlayer();
+    const type=detectStreamType(url);
+    if(type === "youtube") { const embed=youtubeEmbed(url); if(!embed){showMessage("Invalid YouTube URL.",true);return;} iframe.src=embed; iframeContainer.style.display="block"; showMessage("YouTube player loaded."); return; }
     try {
-        // Fetch from absolute Worker URL
-        const res = await fetch(`${WORKER_URL}/api/resolve-stream?url=${encodeURIComponent(url)}`);
-        const payload = await res.json();
-
-        if (payload.success && payload.streamUrl) {
-            showMessage("Stream extracted successfully! Loading ad-free player...");
-            videoContainer.style.display = "block";
-
-            const proxyUrl = `${WORKER_URL}/api/proxy-stream?url=${encodeURIComponent(payload.streamUrl)}&referer=${encodeURIComponent(url)}`;
-
-            if (payload.type === "hls") {
-                playHLS(proxyUrl, video);
-            } else {
-                video.src = proxyUrl;
-                video.play().catch(e => console.warn("Video play blocked:", e));
-            }
-            return;
-        } else {
-            console.warn("Resolver could not find a stream:", payload.message);
-        }
-    } catch (e) {
-        console.warn("Resolver network fetch failed. Is the Worker deployed?", e);
+        const response=await fetch(`${WORKER_URL}/api/resolve-stream?url=${encodeURIComponent(url)}`,{cache:"no-store"});
+        const result=await response.json();
+        if(!response.ok || !result.ok || !result.playable_url) throw new Error(result.error || `Resolver HTTP ${response.status}`);
+        const playable=result.playable_url; const resolvedType=result.type || detectStreamType(playable);
+        if(resolvedType === "hls") { videoContainer.style.display="block"; playHLS(playable,video); return; }
+        if(resolvedType === "video") { videoContainer.style.display="block"; playVideo(playable,video); return; }
+        if(resolvedType === "dash") { iframe.src=url; iframeContainer.style.display="block"; showMessage("DASH stream detected; loading provider player."); return; }
+        iframe.src=url; iframeContainer.style.display="block"; showMessage("Loading provider player...");
+    } catch(error) {
+        console.error("Stream resolution failed:",error);
+        iframe.src=url; iframeContainer.style.display="block"; showMessage("Direct playback unavailable; loading provider player...",true);
     }
-
-    /* FALLBACK: IF RESOLVER CANNOT EXTRACT, LOAD IFRAME WITH RESTRICTIONS */
-    showMessage("Notice: Playing embedded stream (sandbox enabled).");
-    iframe.src = url;
-    iframeContainer.style.display = "block";
 }
 
+function playVideo(url,video) {
+    showMessage("Loading video..."); video.src=url; video.load();
+    video.play().catch(()=>showMessage("Video loaded. Press play if autoplay was blocked."));
+}
+
+
 /* =========================================
-   HLS PLAYER INITIALIZATION
+   HLS
 ========================================= */
 
 function playHLS(url, video) {
     showMessage("Loading HLS stream...");
-
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = url;
-        video.play().catch(() => {});
-        return;
+    if(video.canPlayType("application/vnd.apple.mpegurl")) { video.src=url; video.load(); video.play().catch(()=>showMessage("HLS loaded. Press play if autoplay was blocked.")); return; }
+    if(typeof Hls !== "undefined" && Hls.isSupported()) {
+        currentHls=new Hls({enableWorker:true,lowLatencyMode:true,backBufferLength:30,manifestLoadingMaxRetry:2,levelLoadingMaxRetry:3,fragLoadingMaxRetry:3});
+        currentHls.on(Hls.Events.ERROR,(event,data)=>{
+            console.error("HLS error:",data); if(!data.fatal)return;
+            if(data.type===Hls.ErrorTypes.NETWORK_ERROR){showMessage("HLS network error — retrying...",true);currentHls.startLoad();return;}
+            if(data.type===Hls.ErrorTypes.MEDIA_ERROR){showMessage("HLS media error — recovering...",true);currentHls.recoverMediaError();return;}
+            showMessage(`Unable to play HLS stream (${data.details||"fatal error"}).`,true);
+        });
+        currentHls.on(Hls.Events.MANIFEST_PARSED,()=>{showMessage("HLS stream loaded.");video.play().catch(()=>showMessage("HLS loaded. Press play if autoplay was blocked."));});
+        currentHls.attachMedia(video); currentHls.loadSource(url); return;
     }
-
-    if (typeof Hls !== "undefined" && Hls.isSupported()) {
-        currentHls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true
-        });
-
-        currentHls.loadSource(url);
-        currentHls.attachMedia(video);
-
-        currentHls.on(Hls.Events.MANIFEST_PARSED, function () {
-            showMessage("Ad-free stream loaded.");
-            video.play().catch(() => {});
-        });
-
-        currentHls.on(Hls.Events.ERROR, function (event, data) {
-            console.error("HLS error:", data);
-            if (data.fatal) {
-                showMessage("Unable to play this stream.", true);
-            }
-        });
-
-        return;
-    }
-
-    showMessage("HLS is not supported in this browser.", true);
+    showMessage("HLS is not supported in this browser.",true);
 }
 
 
@@ -714,76 +932,212 @@ function playHLS(url, video) {
    YOUTUBE
 ========================================= */
 
-function youtubeEmbed(url) {
+function youtubeEmbed(
+    url
+) {
+
     try {
-        const u = new URL(url);
+
+        const u =
+            new URL(url);
+
+
         let id = "";
 
-        if (u.hostname.includes("youtube.com")) {
-            if (u.pathname.startsWith("/live/")) {
-                id = u.pathname.split("/")[2];
+
+        if (
+            u.hostname.includes(
+                "youtube.com"
+            )
+        ) {
+
+            if (
+                u.pathname.startsWith(
+                    "/live/"
+                )
+            ) {
+
+                id =
+                    u.pathname
+                        .split("/")[2];
+
             } else {
-                id = u.searchParams.get("v");
+
+                id =
+                    u.searchParams.get(
+                        "v"
+                    );
+
             }
+
         }
 
-        if (u.hostname === "youtu.be") {
-            id = u.pathname.replace("/", "");
+
+        if (
+            u.hostname ===
+            "youtu.be"
+        ) {
+
+            id =
+                u.pathname
+                    .replace(
+                        "/",
+                        ""
+                    );
+
         }
 
-        if (!id) return null;
-        return `https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1`;
+
+        if (!id) {
+            return null;
+        }
+
+
+        return (
+            "https://www.youtube.com/embed/" +
+            encodeURIComponent(id) +
+            "?autoplay=1"
+        );
+
     } catch {
+
         return null;
     }
+
 }
 
 
 /* =========================================
-   STOP / CLOSE
+   STOP PLAYER
 ========================================= */
 
 function stopPlayer() {
-    const video = document.getElementById("videoPlayer");
-    const iframe = document.getElementById("videoFrame");
+
+    const video =
+        document.getElementById(
+            "videoPlayer"
+        );
+
+    const iframe =
+        document.getElementById(
+            "videoFrame"
+        );
+
 
     if (currentHls) {
+
         currentHls.destroy();
-        currentHls = null;
+
+        currentHls =
+            null;
     }
 
+
     video.pause();
-    video.removeAttribute("src");
+
+    video.removeAttribute(
+        "src"
+    );
+
     video.load();
+
     iframe.src = "";
+
 }
+
+
+/* =========================================
+   CLOSE
+========================================= */
 
 function closePlayer() {
+
     stopPlayer();
-    document.getElementById("player").style.display = "none";
+
+
+    document.getElementById(
+        "player"
+    ).style.display =
+        "none";
+
 }
 
-function showMessage(message, error = false) {
-    const el = document.getElementById("playerMessage");
-    el.textContent = message;
-    el.style.color = error ? "#ff6b6b" : "#999";
+
+/* =========================================
+   MESSAGE
+========================================= */
+
+function showMessage(
+    message,
+    error = false
+) {
+
+    const el =
+        document.getElementById(
+            "playerMessage"
+        );
+
+
+    el.textContent =
+        message;
+
+
+    el.style.color =
+        error
+            ? "#ff6b6b"
+            : "#999";
+
 }
+
+
+/* =========================================
+   SCROLL
+========================================= */
 
 function scrollPlayer() {
-    document.getElementById("player").scrollIntoView({
+
+    document.getElementById(
+        "player"
+    ).scrollIntoView({
         behavior: "smooth",
         block: "center"
     });
+
 }
 
+
+/* =========================================
+   ESCAPE HTML
+========================================= */
+
 function esc(value) {
-    return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+
+    return String(
+        value ?? ""
+    )
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
 }
+
 
 /* =========================================
    START
