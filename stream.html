@@ -345,6 +345,7 @@ body {
                         allow-scripts
                         allow-same-origin
                         allow-presentation
+                        allow-popups
                     "
                     referrerpolicy="no-referrer"
                 ></iframe>
@@ -363,16 +364,21 @@ body {
                 We can't strip an inline overlay drawn by the page's
                 own script without effectively building an ad
                 blocker for someone else's site, which we're not
-                going to do. What we CAN do — and just did — is add
-                a `sandbox` attribute that omits allow-popups and
-                allow-top-navigation. That stops the two most
-                disruptive behaviors these ad networks use: spawning
-                popup/popunder tabs, and hijacking the whole browser
-                tab with a redirect. The inline "I'm not a robot /
-                Show content" box itself can still render (it only
-                needs allow-scripts, which the player also needs to
-                function), but it can no longer take over your
-                viewers' browser.
+                going to do. The `sandbox` attribute below still
+                omits allow-top-navigation, which blocks the worst
+                behavior: the embedded page hijacking the entire
+                browser tab with a redirect away from Cricketive.
+
+                allow-popups had to be restored: this particular
+                embed's "unlock" script apparently opens a popup as
+                part of the same click that loads the actual player,
+                so blocking popups outright also silently broke
+                playback (the script likely threw when window.open()
+                was denied, before it ever reached the code that
+                starts the video). So a stray ad tab may still open
+                on click — that trade-off is unavoidable for THIS
+                specific embed without breaking video entirely. Full
+                tab hijacking is still blocked either way.
 
                 This is also exactly why an ad blocker (Brave's
                 Shields, uBlock Origin, AdGuard DNS) removes it
