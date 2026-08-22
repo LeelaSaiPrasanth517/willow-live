@@ -1,0 +1,1 @@
+export function makeCorrectionEvent(matchId,previousState,correctedState,source="system"){const now=new Date().toISOString();return{event_id:`${matchId}:correction:${Date.now()}`,match_id:matchId,type:"CORRECTION",source,occurred_at:now,received_at:now,state:"VERIFIED",payload:{previous:previousState,corrected:correctedState}};}

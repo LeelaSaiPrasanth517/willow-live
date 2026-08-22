@@ -1,0 +1,1 @@
+export function unavailableBackupAdapter(){return{provider:"backup",available:false,observations:[],reason:"No backup upstream endpoint is configured in this repository."};}export function normalizeBackupObservation(raw){if(!raw||typeof raw!=="object")return null;return{provider:"backup",available:true,...raw};}

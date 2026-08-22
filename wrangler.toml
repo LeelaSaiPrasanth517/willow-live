@@ -1,7 +1,21 @@
 name = "willow-live"
 main = "worker.js"
-compatibility_date = "2026-08-19"
+compatibility_date = "2026-08-22"
 
 [assets]
 directory = "."
 binding = "ASSETS"
+
+[vars]
+SUPABASE_PROJECT_URL = "https://qkzwzdyahwzcwtqgcbud.supabase.co"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[durable_objects.bindings]]
+name = "MATCH_STATE"
+class_name = "MatchStateDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MatchStateDurableObject"]

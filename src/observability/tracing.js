@@ -1,0 +1,1 @@
+export function trace(event,fields={}){console.log(JSON.stringify({ts:new Date().toISOString(),event,...fields}));}export function safeError(error){return String(error?.message||error||"Unknown error").slice(0,500);}

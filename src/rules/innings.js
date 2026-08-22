@@ -1,0 +1,1 @@
+export function normalizeInnings(value){const n=Number(value);return Number.isFinite(n)&&n>0?n:1;}export function validInningsTransition(previous,next,eventType){if(!previous||next===previous)return true;return next===previous+1&&["INNINGS_STARTED","INNINGS_ENDED","STATE_OBSERVATION","CORRECTION"].includes(eventType);}
