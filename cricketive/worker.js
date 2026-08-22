@@ -1,6 +1,7 @@
 import { handleLiveRequest } from './src/api/live.js';
 import { handleMatchRequest } from './src/api/match.js';
 import { handleAdminRequest } from './src/api/admin.js';
+export { MatchDurableObject } from './src/match/durable-object.js';
 
 export default {
   async fetch(request, env, ctx) {
