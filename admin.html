@@ -448,6 +448,19 @@
         <div class="card">
 
             <h2>
+                ✅ Finished Matches
+            </h2>
+
+            <div id="finishedMatches">
+                Loading...
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <h2>
                 📅 Upcoming Matches
             </h2>
 
@@ -1478,83 +1491,105 @@ function maxPlausibleMatchDurationMs(competition, title) {
     return 24 * 60 * 60 * 1000; // 24 hours — covers ODIs/rain delays with a big margin over a T20
 }
 
-function canonicalStatus(status, startTime, competition, title) {
+function normalizeAdminStatus(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[-\s]+/g, "_");
+}
 
-    if (status === "Live") {
-        return "Live";
-    }
+function isAdminLiveStatus(status, statusText = "") {
+    const value = normalizeAdminStatus(status);
+    const text = normalizeAdminStatus(statusText);
+    const live = [
+        "live", "in_progress", "inprogress", "inplay", "in_play",
+        "started", "playing", "ongoing", "1st_inn", "2nd_inn",
+        "innings", "batting"
+    ];
+    return live.includes(value) || live.includes(text) ||
+        text.includes("1st_inn") || text.includes("2nd_inn") ||
+        text.includes("innings") || text.includes("batting");
+}
 
-    if (status === "Finished") {
+function isAdminFinishedStatus(status, statusText = "") {
+    const value = normalizeAdminStatus(status);
+    const text = normalizeAdminStatus(statusText);
+    const finished = [
+        "finished", "finish", "ended", "end", "completed",
+        "complete", "ft", "full_time", "fulltime", "after_match"
+    ];
+    return finished.includes(value) || finished.includes(text) ||
+        text.includes("match_finished") ||
+        text.includes("match_ended") ||
+        text.includes("won_by");
+}
+
+function isAdminUpcomingStatus(status, statusText = "") {
+    const value = normalizeAdminStatus(status);
+    const text = normalizeAdminStatus(statusText);
+    const upcoming = [
+        "scheduled", "upcoming", "not_started", "notstarted",
+        "pre_match", "prematch", "postponed", "delayed",
+        "cancelled", "canceled", "abandoned"
+    ];
+    return upcoming.includes(value) || upcoming.includes(text);
+}
+
+function canonicalStatus(status, statusText, startTime, competition, title) {
+    // SportScore LIST status/text is authoritative.
+    if (isAdminFinishedStatus(status, statusText)) {
         return "Finished";
     }
 
-    /*
-     * status is either undefined (this match wasn't found in
-     * SportScore's *current* feed — it likely rolled off the
-     * feed's rolling time window) or "Unknown" (found, but SportScore
-     * itself couldn't confirm Live/Finished). Either way, we don't
-     * have a definite answer for this row right now.
-     *
-     * If the match's own scheduled start_time is still in the
-     * future, "Upcoming" is still a safe, correct answer.
-     *
-     * If it's started but still within a plausible match duration for
-     * its format, we genuinely don't know — surface that honestly as
-     * "Unknown" rather than guessing Live or Finished.
-     *
-     * If it's well past any plausible duration for its format with
-     * still no confirmation, a live match would almost certainly
-     * still be showing up in SportScore's feed — its absence is
-     * itself strong evidence the match ended. Call it Finished rather
-     * than leaving genuinely-over matches sitting in "Needs Review"
-     * indefinitely.
-     */
+    if (isAdminLiveStatus(status, statusText)) {
+        return "Live";
+    }
+
     if (startTime) {
         const start = new Date(startTime).getTime();
         if (Number.isFinite(start)) {
-            const elapsed = Date.now() - start;
-            if (elapsed < 0) {
+            if (start > Date.now()) {
                 return "Upcoming";
             }
-            if (elapsed <= maxPlausibleMatchDurationMs(competition, title)) {
+
+            // A match that has disappeared from SportScore's rolling feed
+            // and is well beyond a format-aware duration is finished.
+            // Recent ambiguous matches remain Unknown instead of being
+            // incorrectly promoted to Live.
+            const elapsed = Date.now() - start;
+            if (!isAdminUpcomingStatus(status, statusText) && elapsed <= maxPlausibleMatchDurationMs(competition, title)) {
                 return "Unknown";
             }
-            return "Finished";
+
+            if (elapsed > maxPlausibleMatchDurationMs(competition, title)) {
+                return "Finished";
+            }
+
+            return "Unknown";
         }
     }
 
-    return "Upcoming";
+    return isAdminUpcomingStatus(status, statusText) ? "Upcoming" : "Unknown";
 }
 
 function canonicalStoredStatus(status, startTime, competition, title) {
-    const value = String(status || "").trim().toLowerCase();
-    if (value === "live" || value === "in_progress" || value === "started" || value === "playing" || value === "ongoing") {
+    const value = normalizeAdminStatus(status);
+
+    if (isAdminLiveStatus(value)) {
+        if (startTime) {
+            const start = new Date(startTime).getTime();
+            if (Number.isFinite(start) && Date.now() - start > maxPlausibleMatchDurationMs(competition, title)) {
+                return "Finished";
+            }
+        }
         return "Live";
     }
-    if (value === "finished" || value === "ended" || value === "completed" || value === "complete" || value === "ft") {
+
+    if (isAdminFinishedStatus(value)) {
         return "Finished";
     }
 
-    /*
-     * SportScore itself is unreachable right now, so this is a
-     * pure DB-fallback read. Same rule as above: never let a
-     * stored "Upcoming" survive past its own start_time, and use
-     * the same format-aware staleness window before settling on
-     * Finished rather than leaving it stuck on "Unknown" forever.
-     */
-    if (startTime) {
-        const start = new Date(startTime).getTime();
-        if (Number.isFinite(start)) {
-            const elapsed = Date.now() - start;
-            if (elapsed >= 0) {
-                return elapsed <= maxPlausibleMatchDurationMs(competition, title)
-                    ? "Unknown"
-                    : "Finished";
-            }
-        }
-    }
-
-    return "Upcoming";
+    return canonicalStatus(value, "", startTime, competition, title);
 }
 
 
@@ -1706,6 +1741,12 @@ async function loadMatches() {
         );
 
 
+    const finishedContainer =
+        document.getElementById(
+            "finishedMatches"
+        );
+
+
     const upcomingContainer =
         document.getElementById(
             "upcomingMatches"
@@ -1726,6 +1767,15 @@ async function loadMatches() {
         unknownContainer.innerHTML =
             "Loading...";
     }
+
+    if (
+        finishedContainer &&
+        !finishedContainer.dataset.loaded
+    ) {
+        finishedContainer.innerHTML =
+            "Loading...";
+    }
+
 
     if (
         !upcomingContainer.dataset.loaded
@@ -2031,8 +2081,9 @@ async function loadMatches() {
                     sportScoreAvailable
                         ? canonicalStatus(
                             source?.status,
-                            match.start_time || match.match_time,
-                            match.competition,
+                            source?.status_text,
+                            source?.time || match.start_time || match.match_time,
+                            source?.competition || match.competition,
                             match.title
                           )
                         : canonicalStoredStatus(
@@ -2237,6 +2288,21 @@ async function loadMatches() {
         );
 
         unknownContainer.dataset.loaded =
+            "true";
+    }
+
+
+    /*
+     * Render finished.
+     */
+    if (finishedContainer) {
+        renderMatchList(
+            finishedContainer,
+            finishedMatches,
+            "finished"
+        );
+
+        finishedContainer.dataset.loaded =
             "true";
     }
 
