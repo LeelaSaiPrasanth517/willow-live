@@ -1456,7 +1456,29 @@ function isValidUuid(value) {
     );
 }
 
-function canonicalStatus(status, startTime) {
+/*
+ * How long a match can plausibly still be "in play" before we're
+ * confident it's over, even with zero provider confirmation. Needs
+ * to be format-aware: a T20 is done in ~4 hours, but Tests and
+ * County Championship matches legitimately run up to 4-5 days —
+ * using one flat threshold would either misclassify a still-live
+ * Test as Finished, or leave every T20 from 2 days ago sitting in
+ * "Needs Review" forever (this is exactly what happened with a flat
+ * "always Unknown" rule: 98 of 137 matches ended up there, most of
+ * them ordinary T20s from the day before).
+ */
+const MULTI_DAY_FORMAT_PATTERN =
+    /\btest\b|county championship|sheffield shield|ranji trophy|duleep trophy|first[- ]class|four[- ]day|three[- ]day|county cup/i;
+
+function maxPlausibleMatchDurationMs(competition, title) {
+    const text = `${competition || ""} ${title || ""}`;
+    if (MULTI_DAY_FORMAT_PATTERN.test(text)) {
+        return 6 * 24 * 60 * 60 * 1000; // 6 days — covers a 5-day Test plus buffer
+    }
+    return 24 * 60 * 60 * 1000; // 24 hours — covers ODIs/rain delays with a big margin over a T20
+}
+
+function canonicalStatus(status, startTime, competition, title) {
 
     if (status === "Live") {
         return "Live";
@@ -1469,30 +1491,42 @@ function canonicalStatus(status, startTime) {
     /*
      * status is either undefined (this match wasn't found in
      * SportScore's *current* feed — it likely rolled off the
-     * feed's rolling time window) or an ambiguous non-terminal
-     * value. Either way, SportScore has not given us a definite
-     * answer for this row right now.
+     * feed's rolling time window) or "Unknown" (found, but SportScore
+     * itself couldn't confirm Live/Finished). Either way, we don't
+     * have a definite answer for this row right now.
      *
      * If the match's own scheduled start_time is still in the
      * future, "Upcoming" is still a safe, correct answer.
      *
-     * If start_time has already passed, we do NOT have enough
-     * evidence to say Live or Finished — guessing either one is
-     * exactly the class of bug this project keeps hitting. Surface
-     * it honestly as "Unknown" so a human can check, instead of
-     * silently mislabeling it "Upcoming" forever.
+     * If it's started but still within a plausible match duration for
+     * its format, we genuinely don't know — surface that honestly as
+     * "Unknown" rather than guessing Live or Finished.
+     *
+     * If it's well past any plausible duration for its format with
+     * still no confirmation, a live match would almost certainly
+     * still be showing up in SportScore's feed — its absence is
+     * itself strong evidence the match ended. Call it Finished rather
+     * than leaving genuinely-over matches sitting in "Needs Review"
+     * indefinitely.
      */
     if (startTime) {
         const start = new Date(startTime).getTime();
-        if (Number.isFinite(start) && start <= Date.now()) {
-            return "Unknown";
+        if (Number.isFinite(start)) {
+            const elapsed = Date.now() - start;
+            if (elapsed < 0) {
+                return "Upcoming";
+            }
+            if (elapsed <= maxPlausibleMatchDurationMs(competition, title)) {
+                return "Unknown";
+            }
+            return "Finished";
         }
     }
 
     return "Upcoming";
 }
 
-function canonicalStoredStatus(status, startTime) {
+function canonicalStoredStatus(status, startTime, competition, title) {
     const value = String(status || "").trim().toLowerCase();
     if (value === "live" || value === "in_progress" || value === "started" || value === "playing" || value === "ongoing") {
         return "Live";
@@ -1504,14 +1538,19 @@ function canonicalStoredStatus(status, startTime) {
     /*
      * SportScore itself is unreachable right now, so this is a
      * pure DB-fallback read. Same rule as above: never let a
-     * stored "Upcoming" survive past its own start_time. We can't
-     * confirm Finished either without SportScore, so this also
-     * resolves to "Unknown" rather than guessing.
+     * stored "Upcoming" survive past its own start_time, and use
+     * the same format-aware staleness window before settling on
+     * Finished rather than leaving it stuck on "Unknown" forever.
      */
     if (startTime) {
         const start = new Date(startTime).getTime();
-        if (Number.isFinite(start) && start <= Date.now()) {
-            return "Unknown";
+        if (Number.isFinite(start)) {
+            const elapsed = Date.now() - start;
+            if (elapsed >= 0) {
+                return elapsed <= maxPlausibleMatchDurationMs(competition, title)
+                    ? "Unknown"
+                    : "Finished";
+            }
         }
     }
 
@@ -1992,11 +2031,15 @@ async function loadMatches() {
                     sportScoreAvailable
                         ? canonicalStatus(
                             source?.status,
-                            match.start_time || match.match_time
+                            match.start_time || match.match_time,
+                            match.competition,
+                            match.title
                           )
                         : canonicalStoredStatus(
                             match.status,
-                            match.start_time || match.match_time
+                            match.start_time || match.match_time,
+                            match.competition,
+                            match.title
                           );
 
 
