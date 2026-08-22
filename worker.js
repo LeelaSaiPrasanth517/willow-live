@@ -8,9 +8,6 @@
 const SPORTSCORE_MATCHES_URL =
   "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50&src=cricketive";
 
-const SPORTSCORE_MATCH_PAGE_SIZE = 50;
-const SPORTSCORE_MATCH_PAGES = 2;
-
 const DETAIL_CONCURRENCY = 5;
 const MAX_DETAIL_LOOKUPS = 15;
 const FEED_STALE_MS = 5 * 60 * 1000;
@@ -30,609 +27,9 @@ export default {
       return handleLiveScores(request);
     }
 
-    if (url.pathname === "/api/admin/me" && request.method === "GET") {
-      return handleAdminMe(request, env);
-    }
-
-    if (url.pathname === "/api/admin/users" && request.method === "GET") {
-      return handleAdminUsers(request, env);
-    }
-
-    if (url.pathname === "/api/admin/users" && request.method === "POST") {
-      return handleCreateAdmin(request, env);
-    }
-
-    if (url.pathname === "/api/admin/users" && request.method === "DELETE") {
-      return handleDeleteAdmin(request, env);
-    }
-
-    if (url.pathname === "/api/admin/password-audit" && request.method === "POST") {
-      return handlePasswordAudit(request, env);
-    }
-
     return env.ASSETS.fetch(request);
   }
 };
-
-
-/* =========================================================
-   SECURE ADMIN MANAGEMENT
-========================================================= */
-
-const SUPABASE_PROJECT_URL =
-  "https://qkzwzdyahwzcwtqgcbud.supabase.co";
-
-function getBearerToken(request) {
-  const value = request.headers.get("Authorization") || "";
-  return value.startsWith("Bearer ")
-    ? value.slice(7).trim()
-    : "";
-}
-
-async function requireOwner(request, env) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Server authentication is not configured." },
-        500
-      )
-    };
-  }
-
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Authentication required." },
-        401
-      )
-    };
-  }
-
-  const userResponse = await fetch(
-    `${SUPABASE_PROJECT_URL}/auth/v1/user`,
-    {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
-
-  if (!userResponse.ok) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Authentication required." },
-        401
-      )
-    };
-  }
-
-  const user = await userResponse.json();
-
-  if (!user?.id) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Invalid authenticated user." },
-        401
-      )
-    };
-  }
-
-  const ownerResponse = await supabaseAdminFetch(
-    env,
-    `/rest/v1/admin_users?select=user_id,role&user_id=eq.${encodeURIComponent(
-      user.id
-    )}&role=eq.owner&limit=1`
-  );
-
-  if (!ownerResponse.ok) {
-    return {
-      ok: false,
-      response: await supabaseErrorResponse(ownerResponse)
-    };
-  }
-
-  const owners = await ownerResponse.json();
-
-  if (!owners.length) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Owner access required." },
-        403
-      )
-    };
-  }
-
-  return { ok: true, user };
-}
-
-async function requireAdmin(request, env) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Server authentication is not configured." },
-        500
-      )
-    };
-  }
-
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Authentication required." },
-        401
-      )
-    };
-  }
-
-  const userResponse = await fetch(
-    `${SUPABASE_PROJECT_URL}/auth/v1/user`,
-    {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
-
-  if (!userResponse.ok) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Authentication required." },
-        401
-      )
-    };
-  }
-
-  const user = await userResponse.json();
-
-  const adminResponse = await supabaseAdminFetch(
-    env,
-    `/rest/v1/admin_users?select=user_id,role&user_id=eq.${encodeURIComponent(
-      user.id
-    )}&limit=1`
-  );
-
-  if (!adminResponse.ok) {
-    return {
-      ok: false,
-      response: await supabaseErrorResponse(adminResponse)
-    };
-  }
-
-  const admins = await adminResponse.json();
-
-  if (!admins.length) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Administrator access required." },
-        403
-      )
-    };
-  }
-
-  return { ok: true, user };
-}
-
-async function supabaseAdminFetch(env, path, options = {}) {
-  return fetch(`${SUPABASE_PROJECT_URL}${path}`, {
-    ...options,
-    headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization:
-        `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    }
-  });
-}
-
-async function supabaseErrorResponse(response) {
-  const data = await response
-    .json()
-    .catch(() => ({}));
-
-  return json(
-    {
-      error:
-        data?.message ||
-        data?.details ||
-        data?.hint ||
-        "Database request failed."
-    },
-    response.status || 500
-  );
-}
-
-async function handleAdminMe(request, env) {
-  const auth = await requireAdmin(request, env);
-
-  if (!auth.ok) {
-    return auth.response;
-  }
-
-  const response = await supabaseAdminFetch(
-    env,
-    `/rest/v1/admin_users?select=user_id,role,display_name,email,created_at&user_id=eq.${encodeURIComponent(
-      auth.user.id
-    )}&limit=1`
-  );
-
-  if (!response.ok) {
-    return supabaseErrorResponse(response);
-  }
-
-  const admins = await response.json();
-
-  if (!admins.length) {
-    return json(
-      { error: "Administrator access required." },
-      403
-    );
-  }
-
-  return json({
-    user_id: admins[0].user_id,
-    role: admins[0].role,
-    display_name: admins[0].display_name,
-    email: admins[0].email,
-    created_at: admins[0].created_at
-  });
-}
-
-async function handleAdminUsers(request, env) {
-  const auth = await requireOwner(request, env);
-
-  if (!auth.ok) return auth.response;
-
-  const response = await supabaseAdminFetch(
-    env,
-    "/rest/v1/admin_users" +
-      "?select=user_id,role,display_name,email,created_at" +
-      "&order=created_at.asc"
-  );
-
-  if (!response.ok) {
-    return supabaseErrorResponse(response);
-  }
-
-  return json(await response.json());
-}
-
-async function handleCreateAdmin(request, env) {
-  const auth = await requireOwner(request, env);
-
-  if (!auth.ok) return auth.response;
-
-  let body;
-
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "Invalid request body." }, 400);
-  }
-
-  const displayName =
-    String(body?.display_name || "").trim();
-
-  const email =
-    String(body?.email || "")
-      .trim()
-      .toLowerCase();
-
-  const password =
-    String(body?.password || "");
-
-  if (displayName.length < 2 || displayName.length > 80) {
-    return json(
-      { error: "Name must be between 2 and 80 characters." },
-      400
-    );
-  }
-
-  if (
-    email.length > 254 ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-  ) {
-    return json(
-      { error: "Enter a valid email address." },
-      400
-    );
-  }
-
-  if (password.length < 12 || password.length > 128) {
-    return json(
-      {
-        error:
-          "Initial password must be between 12 and 128 characters."
-      },
-      400
-    );
-  }
-
-  const existingAdmin =
-    await supabaseAdminFetch(
-      env,
-      `/rest/v1/admin_users?select=user_id` +
-        `&email=eq.${encodeURIComponent(email)}` +
-        `&limit=1`
-    );
-
-  if (!existingAdmin.ok) {
-    return supabaseErrorResponse(existingAdmin);
-  }
-
-  if ((await existingAdmin.json()).length) {
-    return json(
-      { error: "That email is already a Cricketive administrator." },
-      409
-    );
-  }
-
-  const authResponse = await fetch(
-    `${SUPABASE_PROJECT_URL}/auth/v1/admin/users`,
-    {
-      method: "POST",
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization:
-          `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          display_name: displayName
-        }
-      })
-    }
-  );
-
-  const authData =
-    await authResponse.json().catch(() => ({}));
-
-  if (!authResponse.ok) {
-    return json(
-      {
-        error:
-          authData?.msg ||
-          authData?.message ||
-          "Unable to create the account."
-      },
-      authResponse.status === 422 ? 409 : 502
-    );
-  }
-
-  const userId = authData?.id;
-
-  if (!userId) {
-    return json(
-      { error: "Supabase Auth did not return a user ID." },
-      502
-    );
-  }
-
-  const adminResponse =
-    await supabaseAdminFetch(
-      env,
-      "/rest/v1/admin_users",
-      {
-        method: "POST",
-        headers: {
-          Prefer: "return=representation"
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          role: "admin",
-          display_name: displayName,
-          email
-        })
-      }
-    );
-
-  if (!adminResponse.ok) {
-    await fetch(
-      `${SUPABASE_PROJECT_URL}/auth/v1/admin/users/${encodeURIComponent(
-        userId
-      )}`,
-      {
-        method: "DELETE",
-        headers: {
-          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization:
-            `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`
-        }
-      }
-    ).catch(() => {});
-
-    return supabaseErrorResponse(adminResponse);
-  }
-
-  const created =
-    (await adminResponse.json())[0];
-
-  await writeAdminAudit(env, {
-    actor_user_id: auth.user.id,
-    actor_type: "admin",
-    action: "INSERT",
-    table_name: "admin_users",
-    record_id: userId,
-    old_data: null,
-    new_data: {
-      user_id: userId,
-      role: "admin",
-      display_name: displayName,
-      email
-    }
-  });
-
-  return json(
-    {
-      user: {
-        user_id: created.user_id,
-        role: created.role,
-        display_name: created.display_name,
-        email: created.email,
-        created_at: created.created_at
-      }
-    },
-    201
-  );
-}
-
-async function handleDeleteAdmin(request, env) {
-  const auth = await requireOwner(request, env);
-
-  if (!auth.ok) return auth.response;
-
-  let body;
-
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "Invalid request body." }, 400);
-  }
-
-  const userId =
-    String(body?.user_id || "").trim();
-
-  const uuidPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-  if (!uuidPattern.test(userId)) {
-    return json({ error: "Invalid administrator ID." }, 400);
-  }
-
-  if (userId === auth.user.id) {
-    return json(
-      { error: "The owner account cannot be removed." },
-      403
-    );
-  }
-
-  const lookup =
-    await supabaseAdminFetch(
-      env,
-      `/rest/v1/admin_users?select=user_id,role,display_name,email,created_at` +
-        `&user_id=eq.${encodeURIComponent(userId)}` +
-        `&limit=1`
-    );
-
-  if (!lookup.ok) {
-    return supabaseErrorResponse(lookup);
-  }
-
-  const rows = await lookup.json();
-
-  if (!rows.length) {
-    return json({ error: "Administrator not found." }, 404);
-  }
-
-  const admin = rows[0];
-
-  if (admin.role === "owner") {
-    return json(
-      { error: "The owner account cannot be removed." },
-      403
-    );
-  }
-
-  const dbDelete =
-    await supabaseAdminFetch(
-      env,
-      `/rest/v1/admin_users?user_id=eq.${encodeURIComponent(userId)}`,
-      { method: "DELETE" }
-    );
-
-  if (!dbDelete.ok) {
-    return supabaseErrorResponse(dbDelete);
-  }
-
-  await writeAdminAudit(env, {
-    actor_user_id: auth.user.id,
-    actor_type: "admin",
-    action: "DELETE",
-    table_name: "admin_users",
-    record_id: userId,
-    old_data: admin,
-    new_data: null
-  });
-
-  const authDelete =
-    await fetch(
-      `${SUPABASE_PROJECT_URL}/auth/v1/admin/users/${encodeURIComponent(
-        userId
-      )}`,
-      {
-        method: "DELETE",
-        headers: {
-          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization:
-            `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`
-        }
-      }
-    );
-
-  if (!authDelete.ok && authDelete.status !== 404) {
-    return json(
-      {
-        error:
-          "Administrator access was revoked, but the Auth account could not be cleaned up."
-      },
-      502
-    );
-  }
-
-  return json({ ok: true });
-}
-
-async function handlePasswordAudit(request, env) {
-  const auth = await requireAdmin(request, env);
-
-  if (!auth.ok) return auth.response;
-
-  await writeAdminAudit(env, {
-    actor_user_id: auth.user.id,
-    actor_type: "admin",
-    action: "UPDATE",
-    table_name: "auth.users",
-    record_id: auth.user.id,
-    old_data: { event: "password_change" },
-    new_data: { event: "password_change" }
-  });
-
-  return json({ ok: true });
-}
-
-async function writeAdminAudit(env, entry) {
-  return supabaseAdminFetch(
-    env,
-    "/rest/v1/admin_audit_log",
-    {
-      method: "POST",
-      headers: {
-        Prefer: "return=minimal"
-      },
-      body: JSON.stringify(entry)
-    }
-  );
-}
-
 
 /* =========================================================
    FETCH / RESILIENCE
@@ -699,23 +96,16 @@ async function mapWithConcurrency(items, limit, mapper) {
 }
 
 /* =========================================================
-   SPORT SCORE MATCH PAGES
+   MAIN MATCH FEED
 ========================================================= */
 
-
-async function fetchSportScoreMatches() {
-  const allMatches = [];
-  let latestUpdated = null;
-
-  for (let page = 1; page <= SPORTSCORE_MATCH_PAGES; page++) {
-    const url =
-      `${SPORTSCORE_MATCHES_URL}&page=${page}`;
-
+async function handleCricketMatches() {
+  try {
     const payload = await fetchJsonWithRetry(
-      url,
+      SPORTSCORE_MATCHES_URL,
       {
         cf: {
-          cacheTtl: 10,
+          cacheTtl: 60,
           cacheEverything: true
         }
       },
@@ -723,63 +113,7 @@ async function fetchSportScoreMatches() {
       8000
     );
 
-    if (payload?.updated) {
-      latestUpdated = payload.updated;
-    }
-
-    const pageMatches =
-      Array.isArray(payload?.matches)
-        ? payload.matches
-        : [];
-
-    allMatches.push(...pageMatches);
-
-    /*
-     * If SportScore returns fewer than the requested page size,
-     * there is no reason to request another page.
-     */
-    if (pageMatches.length < SPORTSCORE_MATCH_PAGE_SIZE) {
-      break;
-    }
-  }
-
-  /*
-   * Deduplicate pages. If an older SportScore deployment ignores
-   * the page parameter, page 1 and page 2 can contain the same rows.
-   */
-  const seen = new Set();
-  const matches = [];
-
-  for (const match of allMatches) {
-    const key =
-      normalizeUrl(match?.url) ||
-      [
-        normalizeTeamText(match?.home),
-        normalizeTeamText(match?.away),
-        String(match?.time || "")
-      ].join("|");
-
-    if (!key || seen.has(key)) continue;
-
-    seen.add(key);
-    matches.push(match);
-  }
-
-  return {
-    matches,
-    updated: latestUpdated || new Date().toISOString()
-  };
-}
-
-/* =========================================================
-   MAIN MATCH FEED
-========================================================= */
-
-async function handleCricketMatches() {
-  try {
-    const payload = await fetchSportScoreMatches();
-
-    const matches = payload.matches;
+    const matches = Array.isArray(payload?.matches) ? payload.matches : [];
 
     /*
      * The list endpoint is the first source of truth.
@@ -1143,89 +477,44 @@ function isExplicitNonLiveStatus(status, statusText = "") {
 }
 
 function normalizeSportScoreStatus(status, statusText = "", matchTime = null, withConfidence = false) {
-  const result = (value, confidence) =>
-    withConfidence ? { status: value, confidence } : value;
+  const start = getMatchStartTime(matchTime);
+  const result = (value, confidence) => withConfidence ? { status: value, confidence } : value;
 
-  /*
-   * SportScore is authoritative. Never let the scheduled timestamp
-   * override an explicit provider status. This is important because
-   * provider timestamps can be displayed/stored in a different timezone
-   * from the browser.
-   */
-
-  /* Explicit terminal state. */
-  if (isExplicitFinishedStatus(status, statusText)) {
-    return result("Finished", "confirmed");
-  }
-
-  /* Explicit live/in-play state from the SportScore LIST record. */
-  if (isStrongLiveStatus(status, statusText)) {
-    return result("Live", "confirmed");
-  }
-
-  /* Explicit scheduled/non-live state. */
-  if (isExplicitNonLiveStatus(status, statusText)) {
+  /* A future fixture can never be live, even if a provider payload is
+     contradictory. */
+  if (Number.isFinite(start) && start > Date.now()) {
     return result("Upcoming", "confirmed");
   }
 
-  /*
-   * If SportScore gives an unclassified but clearly in-progress cricket
-   * status such as "1st innings", "2nd innings", "batting", etc.,
-   * treat that as live. This still comes from the provider payload;
-   * we never infer live from the clock or the score.
-   */
-  const text = normalizeStatusValue(statusText);
-  if (
-    /\b\d+(?:st|nd|rd|th)_innings?\b/.test(text) ||
-    text.includes("innings") ||
-    text.includes("batting") ||
-    text.includes("in_play") ||
-    text.includes("inplay")
-  ) {
-    return result("Live", "confirmed");
+  /* Explicit terminal state wins. */
+  if (isExplicitFinishedStatus(status, statusText)) return result("Finished", "confirmed");
+
+  /* Live is accepted ONLY from the SportScore list record. */
+  if (isStrongLiveStatus(status, statusText)) return result("Live", "confirmed");
+
+  /* A past match must NEVER be rendered as Upcoming. If SportScore still
+     reports Scheduled/Upcoming after the scheduled time (this genuinely
+     happens — SportScore sometimes leaves status_text: "Abnormal" on a
+     record whose status never flips), we do not have enough evidence to
+     call it Live or Finished either — guessing either one is exactly the
+     class of bug this project keeps hitting. Surface it honestly as
+     "Unknown" so a human can check, instead of silently mislabeling it. */
+  if (Number.isFinite(start) && start <= Date.now()) {
+    return result("Unknown", "inferred");
   }
 
-  /* Unknown stays unknown. Never invent Finished or Live from time. */
-  return result("Unknown", "unknown");
+  if (isExplicitNonLiveStatus(status, statusText)) return result("Upcoming", "confirmed");
+
+  /* Conservative fallback: never manufacture LIVE. */
+  return result("Upcoming", "unknown");
 }
 
 function isStrongLiveStatus(status, statusText = "") {
   const value = normalizeStatusValue(status);
   const text = normalizeStatusValue(statusText);
-
-  if ([
-    "live",
-    "in_progress",
-    "started",
-    "playing",
-    "ongoing",
-    "inplay",
-    "in_play",
-    "1st_inn",
-    "2nd_inn",
-    "1st_innings",
-    "2nd_innings"
-  ].includes(value)) {
-    return true;
-  }
-
-  if ([
-    "live",
-    "in_progress",
-    "started",
-    "playing",
-    "ongoing",
-    "inplay",
-    "in_play"
-  ].includes(text)) {
-    return true;
-  }
-
   return (
-    text.includes("innings") ||
-    text.includes("batting") ||
-    text.includes("in_play") ||
-    text.includes("inplay")
+    ["live", "in_progress", "inplay", "in_play"].includes(value) ||
+    ["live", "in_progress", "inplay", "in_play"].includes(text)
   );
 }
 
@@ -1491,9 +780,19 @@ async function handleLiveScores(request) {
     const requestUrl = new URL(request.url);
     const requestedSource = requestUrl.searchParams.get("url") || "";
 
-    const payload = await fetchSportScoreMatches();
+    const payload = await fetchJsonWithRetry(
+      SPORTSCORE_MATCHES_URL,
+      {
+        cf: {
+          cacheTtl: 60,
+          cacheEverything: true
+        }
+      },
+      3,
+      8000
+    );
 
-    const matches = payload.matches;
+    const matches = Array.isArray(payload?.matches) ? payload.matches : [];
 
     if (requestedSource) {
       const normalizedRequested = normalizeUrl(requestedSource);
