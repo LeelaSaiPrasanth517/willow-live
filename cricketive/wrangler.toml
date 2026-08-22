@@ -1,0 +1,7 @@
+name = "cricketive"
+main = "worker.js"
+compatibility_date = "2026-08-22"
+
+[[durable_objects.bindings]]
+name = "MATCH"
+class_name = "MatchDurableObject"
