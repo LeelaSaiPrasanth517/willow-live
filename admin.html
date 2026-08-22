@@ -1574,7 +1574,8 @@ async function refreshScheduleFromSportScore() {
             team2_logo: source.away_logo || source.team2_logo || "",
             sportscore_url: item.sportscoreUrl || null,
             team1_score: getSourceScore(source, 1),
-            team2_score: getSourceScore(source, 2)
+            team2_score: getSourceScore(source, 2),
+            embed_url: existingMatch?.embed_url || ""
         };
 
         if (existingMatch?.id) {
@@ -1827,7 +1828,8 @@ async function upsertFeedForAdmin(rawMatches) {
             team2_logo: raw.away_logo || raw.team2_logo || "",
             sportscore_url: item.sportscoreUrl || null,
             team1_score: getSourceScore(raw, 1),
-            team2_score: getSourceScore(raw, 2)
+            team2_score: getSourceScore(raw, 2),
+            embed_url: existingMatch?.embed_url || ""
         };
 
         if (existingMatch?.id) {
@@ -1928,7 +1930,7 @@ async function renderCurrentSportScoreSchedule(rawMatches, stale = false) {
             ...(storedMatch || {}),
             ...raw,
             source: raw,
-            id: storedMatch?.id || "",
+            id: storedMatch?.id || null,
             team1: item.team1,
             team2: item.team2,
             start_time: item.startTime,
@@ -2174,49 +2176,62 @@ function renderMatchList(
                     </strong>
 
 
-                    <div
-                        id="streams-${match.id}"
-                        class="stream-list"
-                    >
-                        Loading streams...
-                    </div>
+                    ${
+                        match.id
+                            ? `
+                                <div
+                                    id="streams-${escapeHtml(match.id)}"
+                                    class="stream-list"
+                                >
+                                    Loading streams...
+                                </div>
+                            `
+                            : `
+                                <div class="empty">
+                                    Match is not yet stored in Cricketive.
+                                    Please sync again.
+                                </div>
+                            `
+                    }
 
 
-                    <div class="toolbar">
+                    ${
+                        match.id
+                            ? `
+                                <div class="toolbar">
 
-                        <button
-                            class="secondary"
-                            onclick="addStreamForm(
-                                '${match.id}'
-                            )"
-                        >
-                            + ADD STREAM
-                        </button>
-
-
-                        ${
-                            !match.api_match_id
-
-                                ? `
                                     <button
-                                        class="danger"
-                                        onclick="deleteManualMatch(
-                                            '${match.id}'
+                                        class="secondary"
+                                        onclick="addStreamForm(
+                                            '${escapeHtml(match.id)}'
                                         )"
                                     >
-                                        DELETE MANUAL MATCH
+                                        + ADD STREAM
                                     </button>
-                                  `
 
-                                : ""
-                        }
+                                    ${
+                                        !match.api_match_id
+                                            ? `
+                                                <button
+                                                    class="danger"
+                                                    onclick="deleteManualMatch(
+                                                        '${escapeHtml(match.id)}'
+                                                    )"
+                                                >
+                                                    DELETE MANUAL MATCH
+                                                </button>
+                                              `
+                                            : ""
+                                    }
 
-                    </div>
+                                </div>
 
-
-                    <div
-                        id="add-stream-${match.id}"
-                    ></div>
+                                <div
+                                    id="add-stream-${escapeHtml(match.id)}"
+                                ></div>
+                            `
+                            : ""
+                    }
 
                 </div>
 
@@ -2228,9 +2243,9 @@ function renderMatchList(
             );
 
 
-            loadStreams(
-                match.id
-            );
+            if (match.id) {
+                loadStreams(match.id);
+            }
 
         }
     );
@@ -2338,18 +2353,20 @@ async function loadStreams(
     matchId
 ) {
 
+    // Never query streams with an empty/invalid UUID.
+    if (!matchId || typeof matchId !== "string") {
+        console.warn("Skipping stream load: invalid match ID.", matchId);
+        return;
+    }
+
     const container =
         document.getElementById(
             `streams-${matchId}`
         );
 
-
     if (!container) {
-
         return;
-
     }
-
 
     const {
         data,
