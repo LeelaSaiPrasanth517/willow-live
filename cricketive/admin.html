@@ -1,0 +1,3295 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Cricketive Admin</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #070707;
+            color: white;
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            margin: auto;
+            padding: 30px 18px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        button {
+            border: none;
+            cursor: pointer;
+        }
+
+        .logout {
+            padding: 9px 14px;
+            border-radius: 7px;
+            background: #222;
+            color: white;
+        }
+
+        .card {
+            background: #111;
+            border: 1px solid #242424;
+            border-radius: 12px;
+            padding: 22px;
+            margin-bottom: 25px;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: #bbb;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 12px;
+            background: #080808;
+            color: white;
+            border: 1px solid #333;
+            border-radius: 7px;
+            outline: none;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: #5865f2;
+        }
+
+        .primary {
+            margin-top: 20px;
+            padding: 12px 18px;
+            background: #5865f2;
+            color: white;
+            border-radius: 7px;
+            font-weight: bold;
+        }
+
+        .primary:hover {
+            background: #4752c4;
+        }
+
+        .secondary {
+            padding: 9px 13px;
+            background: #222;
+            color: white;
+            border-radius: 6px;
+        }
+
+        .danger {
+            padding: 9px 13px;
+            background: #b42323;
+            color: white;
+            border-radius: 6px;
+        }
+
+        .match {
+            background: #0a0a0a;
+            border: 1px solid #292929;
+            border-radius: 10px;
+            padding: 18px;
+            margin-top: 12px;
+        }
+
+        .match-title {
+            font-size: 17px;
+            font-weight: bold;
+        }
+
+        .match-meta {
+            color: #999;
+            font-size: 13px;
+            margin-top: 7px;
+            line-height: 1.6;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .status {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 5px 9px;
+            border-radius: 20px;
+            background: #222;
+            font-size: 11px;
+        }
+
+        .message {
+            margin-top: 12px;
+            font-size: 13px;
+        }
+
+        #adminPanel {
+            display: none;
+        }
+
+        #loginPanel {
+            max-width: 450px;
+            margin: 80px auto;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .stream-box {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid #292929;
+        }
+
+        .stream-row {
+            display: grid;
+            grid-template-columns:
+                120px
+                1fr
+                150px
+                auto;
+            gap: 8px;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .stream-row input,
+        .stream-row select {
+            margin: 0;
+        }
+
+        .stream-list {
+            margin-top: 12px;
+        }
+
+        .empty {
+            color: #888;
+            padding: 10px 0;
+        }
+
+        .badge-live {
+            background: #8b1e1e;
+        }
+
+        .badge-upcoming {
+            background: #234d2d;
+        }
+
+        .badge-unknown {
+            background: #5a4a12;
+        }
+
+        .badge-finished {
+            background: #333;
+        }
+
+        .sync-note {
+            color: #999;
+            font-size: 12px;
+            line-height: 1.5;
+            margin-top: 8px;
+        }
+
+        .api-id {
+            color: #555;
+            font-size: 10px;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+
+        @media (max-width: 700px) {
+
+            .stream-row {
+                grid-template-columns: 1fr;
+            }
+
+            .match-header {
+                flex-direction: column;
+            }
+
+        }
+
+        @media (max-width: 600px) {
+
+            .container {
+                padding: 20px 12px;
+            }
+
+            .header {
+                align-items: flex-start;
+            }
+
+            .logo {
+                font-size: 20px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+
+    <!-- =====================================================
+         LOGIN
+         ===================================================== -->
+
+    <div
+        id="loginPanel"
+        class="card"
+    >
+
+        <h2>
+            🏏 Cricketive Admin
+        </h2>
+
+        <p style="color:#999;font-size:13px;">
+            Sign in to manage cricket matches
+            and streams.
+        </p>
+
+        <label>
+            Email
+        </label>
+
+        <input
+            id="email"
+            type="email"
+            placeholder="Admin email"
+        >
+
+        <label>
+            Password
+        </label>
+
+        <input
+            id="password"
+            type="password"
+            placeholder="Admin password"
+        >
+
+        <button
+            class="primary"
+            onclick="login()"
+        >
+            LOGIN
+        </button>
+
+        <div
+            id="loginMessage"
+            class="message"
+        ></div>
+
+    </div>
+
+
+    <!-- =====================================================
+         ADMIN PANEL
+         ===================================================== -->
+
+    <div id="adminPanel">
+
+
+        <div class="header">
+
+            <div class="logo">
+                CRICKETIVE 🏏
+            </div>
+
+            <button
+                class="logout"
+                onclick="logout()"
+            >
+                LOGOUT
+            </button>
+
+        </div>
+
+
+        <!-- =================================================
+             SYNC
+             ================================================= -->
+
+        <div class="card">
+
+            <h2>
+                Match Schedule
+            </h2>
+
+            <p class="sync-note">
+
+                Matches are loaded automatically from
+                SportScore.
+
+                You only need to add stream
+                links.
+
+            </p>
+
+            <button
+                id="syncButton"
+                class="primary"
+                onclick="syncMatches()"
+            >
+                SYNC MATCHES
+            </button>
+
+            <div
+                id="syncMessage"
+                class="message"
+            ></div>
+
+        </div>
+
+
+        <!-- =================================================
+             LIVE MATCHES
+             ================================================= -->
+
+        <div class="card">
+
+            <h2>
+                🔴 Live Matches
+            </h2>
+
+            <div id="liveMatches">
+                Loading...
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             UNKNOWN / NEEDS REVIEW
+             SportScore's status was ambiguous for a match whose
+             scheduled start time has already passed. We refuse to
+             guess Live or Finished here — an admin should check.
+             ================================================= -->
+
+        <div class="card">
+
+            <h2>
+                ❓ Needs Review
+            </h2>
+
+            <div id="unknownMatches">
+                Loading...
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             UPCOMING MATCHES
+             ================================================= -->
+
+        <div class="card">
+
+            <h2>
+                📅 Upcoming Matches
+            </h2>
+
+            <div id="upcomingMatches">
+                Loading...
+            </div>
+
+        </div>
+
+
+    </div>
+
+</div>
+
+
+<script>
+
+
+/* =========================================================
+   SUPABASE
+   ========================================================= */
+
+const SUPABASE_URL =
+    "https://qkzwzdyahwzcwtqgcbud.supabase.co";
+
+
+const SUPABASE_ANON_KEY =
+    "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
+
+
+const client =
+    supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+    );
+
+
+let adminRefreshTimer = null;
+let lastSportScoreMatches = [];
+let lastSportScoreSuccessAt = 0;
+
+const SPORT_SCORE_CACHE_MS =
+    5 * 60 * 1000;
+
+async function fetchJsonWithRetry(
+    url,
+    options = {},
+    attempts = 3,
+    delayMs = 700
+) {
+    let lastError = null;
+
+    for (
+        let attempt = 1;
+        attempt <= attempts;
+        attempt++
+    ) {
+        try {
+            const response =
+                await fetch(
+                    url,
+                    options
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    `HTTP ${response.status}`
+                );
+            }
+
+            const payload =
+                await response.json();
+
+            if (payload.error) {
+                throw new Error(
+                    payload.error
+                );
+            }
+
+            return payload;
+
+        } catch (error) {
+            lastError = error;
+
+            if (
+                attempt < attempts
+            ) {
+                await new Promise(
+                    resolve =>
+                        setTimeout(
+                            resolve,
+                            delayMs *
+                            attempt
+                        )
+                );
+            }
+        }
+    }
+
+    throw lastError ||
+        new Error(
+            "Request failed."
+        );
+}
+
+
+/* =========================================================
+   LOGIN
+   ========================================================= */
+
+async function login() {
+
+    const email =
+        document
+            .getElementById("email")
+            .value
+            .trim();
+
+
+    const password =
+        document
+            .getElementById("password")
+            .value;
+
+
+    const message =
+        document
+            .getElementById("loginMessage");
+
+
+    if (!email || !password) {
+
+        message.textContent =
+            "Enter your email and password.";
+
+        return;
+    }
+
+
+    message.textContent =
+        "Signing in...";
+
+
+    const { error } =
+        await client.auth.signInWithPassword({
+            email,
+            password
+        });
+
+
+    if (error) {
+
+        message.textContent =
+            error.message;
+
+        return;
+    }
+
+
+    showAdmin();
+
+}
+
+
+/* =========================================================
+   LOGOUT
+   ========================================================= */
+
+async function logout() {
+
+    if (adminRefreshTimer) {
+        clearInterval(
+            adminRefreshTimer
+        );
+        adminRefreshTimer = null;
+    }
+
+    await client.auth.signOut();
+
+
+    document
+        .getElementById("adminPanel")
+        .style.display = "none";
+
+
+    document
+        .getElementById("loginPanel")
+        .classList
+        .remove("hidden");
+
+}
+
+
+/* =========================================================
+   CHECK SESSION
+   ========================================================= */
+
+async function checkSession() {
+
+    const { data } =
+        await client.auth.getSession();
+
+
+    if (data.session) {
+
+        showAdmin();
+
+    }
+
+}
+
+
+/* =========================================================
+   SHOW ADMIN
+   ========================================================= */
+
+function showAdmin() {
+
+    document
+        .getElementById("loginPanel")
+        .classList
+        .add("hidden");
+
+
+    document
+        .getElementById("adminPanel")
+        .style.display = "block";
+
+
+    loadMatches();
+
+    if (adminRefreshTimer) {
+        clearInterval(
+            adminRefreshTimer
+        );
+    }
+
+    adminRefreshTimer =
+        setInterval(
+            loadMatches,
+            60000
+        );
+
+}
+
+
+/* =========================================================
+   SYNC MATCHES
+   ========================================================= */
+
+
+/* =========================================================
+   SYNC IDENTITY HELPERS
+   ========================================================= */
+
+function makeFixtureKey(
+    team1,
+    team2,
+    startTime
+) {
+
+    if (
+        !team1 ||
+        !team2 ||
+        !startTime
+    ) {
+
+        return "";
+
+    }
+
+
+    const teams =
+        [
+            String(team1)
+                .trim()
+                .toLowerCase(),
+
+            String(team2)
+                .trim()
+                .toLowerCase()
+        ]
+            .sort()
+            .join("|");
+
+
+    return (
+        `${teams}|${String(startTime)}`
+    );
+
+}
+
+
+function getExistingStream(
+    match
+) {
+
+    if (!match) {
+
+        return "";
+
+    }
+
+
+    /*
+     * Current schema uses embed_url
+     * for the saved stream.
+     */
+
+    if (
+        match.embed_url
+    ) {
+
+        return String(
+            match.embed_url
+        );
+
+    }
+
+
+    return "";
+
+}
+
+
+function hasStream(
+    match
+) {
+
+    return Boolean(
+        getExistingStream(
+            match
+        )
+    );
+
+}
+
+
+async function syncMatches() {
+
+    const message =
+        document.getElementById(
+            "syncMessage"
+        );
+
+
+    const button =
+        document.getElementById(
+            "syncButton"
+        );
+
+
+    message.textContent =
+        "Syncing SportScore matches...";
+
+
+    button.disabled = true;
+
+    button.textContent =
+        "SYNCING...";
+
+
+    try {
+
+
+        /* -----------------------------------------------
+           Fetch SportScore matches
+           ----------------------------------------------- */
+
+        const payload =
+            await fetchJsonWithRetry(
+                "/api/cricket-matches?mode=matches",
+                {
+                    cache: "no-store"
+                },
+                3,
+                700
+            );
+
+        const matches =
+            Array.isArray(
+                payload.matches
+            )
+                ? payload.matches
+                : [];
+
+
+        if (!matches.length) {
+
+            message.textContent =
+                "SportScore returned 0 matches.";
+
+
+            await loadMatches();
+
+            return;
+
+        }
+
+
+        /* -----------------------------------------------
+           Load existing Supabase matches
+           ----------------------------------------------- */
+
+        const {
+            data: existingMatches,
+            error: existingError
+        } = await client
+
+            .from("Matches")
+
+            .select("*");
+
+
+        if (existingError) {
+
+            throw existingError;
+
+        }
+
+
+        const existing =
+            existingMatches || [];
+
+
+        /*
+         * Build lookup maps.
+         *
+         * api_match_id is the strongest identity.
+         * SportScore URL is next.
+         * Team + scheduled start time is fallback.
+         */
+
+        const byApiMatchId =
+            new Map();
+
+
+        const bySportScoreUrl =
+            new Map();
+
+
+        const byFixture =
+            new Map();
+
+
+        for (
+            const match of existing
+        ) {
+
+            if (
+                match.api_match_id
+            ) {
+
+                byApiMatchId.set(
+                    String(
+                        match.api_match_id
+                    ),
+                    match
+                );
+
+            }
+
+
+            if (
+                match.sportscore_url
+            ) {
+
+                bySportScoreUrl.set(
+                    normalizeUrl(
+                        match.sportscore_url
+                    ),
+                    match
+                );
+
+            }
+
+
+            const fixtureKey =
+                makeFixtureKey(
+                    match.team1,
+                    match.team2,
+                    match.start_time ||
+                        match.match_time
+                );
+
+
+            if (fixtureKey) {
+
+                /*
+                 * If duplicate database rows already exist,
+                 * prefer the row that has a stream.
+                 */
+
+                const previous =
+                    byFixture.get(
+                        fixtureKey
+                    );
+
+
+                if (
+                    !previous ||
+                    (
+                        hasStream(match) &&
+                        !hasStream(previous)
+                    )
+                ) {
+
+                    byFixture.set(
+                        fixtureKey,
+                        match
+                    );
+
+                }
+
+            }
+
+        }
+
+
+        /* -----------------------------------------------
+           Deduplicate SportScore response
+           ----------------------------------------------- */
+
+        const uniqueSportScoreMatches =
+            [];
+
+
+        const seenIncoming =
+            new Set();
+
+
+        for (
+            const match of matches
+        ) {
+
+            const team1 =
+                String(
+                    match.home ??
+                    match.team1 ??
+                    ""
+                ).trim();
+
+
+            const team2 =
+                String(
+                    match.away ??
+                    match.team2 ??
+                    ""
+                ).trim();
+
+
+            const startTime =
+                match.time ??
+                match.start_time ??
+                match.match_time ??
+                null;
+
+
+            if (
+                !team1 ||
+                !team2 ||
+                !startTime ||
+                isPlaceholder(team1) ||
+                isPlaceholder(team2)
+            ) {
+
+                continue;
+
+            }
+
+
+            const rawUrl =
+                match.url ??
+                match.sportscore_url ??
+                null;
+
+
+            const sportscoreUrl =
+                rawUrl
+                    ? normalizeUrl(rawUrl)
+                    : null;
+
+
+            const fixtureKey =
+                makeFixtureKey(
+                    team1,
+                    team2,
+                    startTime
+                );
+
+
+            /*
+             * Prefer URL identity when available;
+             * otherwise use fixture key.
+             */
+
+            const incomingKey =
+                sportscoreUrl
+                    ? `url:${sportscoreUrl}`
+                    : `fixture:${fixtureKey}`;
+
+
+            if (
+                seenIncoming.has(
+                    incomingKey
+                )
+            ) {
+
+                continue;
+
+            }
+
+
+            seenIncoming.add(
+                incomingKey
+            );
+
+
+            uniqueSportScoreMatches.push({
+
+                match,
+
+                team1,
+
+                team2,
+
+                startTime,
+
+                sportscoreUrl,
+
+                fixtureKey
+
+            });
+
+        }
+
+
+        /* -----------------------------------------------
+           Process each fixture exactly once
+           ----------------------------------------------- */
+
+        let inserted = 0;
+
+        let updated = 0;
+
+        let merged = 0;
+
+
+        for (
+            const item of uniqueSportScoreMatches
+        ) {
+
+            const {
+                match,
+                team1,
+                team2,
+                startTime,
+                sportscoreUrl,
+                fixtureKey
+            } = item;
+
+
+            /*
+             * Stable ID used for future syncs.
+             */
+
+            const apiMatchId =
+                sportscoreUrl
+                    ? `sportscore:${sportscoreUrl}`
+                    : `sportscore:${fixtureKey}`;
+
+
+            /*
+             * Find the existing row.
+             *
+             * Order:
+             * 1. Exact API ID
+             * 2. Exact SportScore URL
+             * 3. Same fixture
+             */
+
+            let existingMatch =
+                byApiMatchId.get(
+                    apiMatchId
+                ) ||
+
+                (
+                    sportscoreUrl
+                        ? bySportScoreUrl.get(
+                            sportscoreUrl
+                        )
+                        : null
+                ) ||
+
+                byFixture.get(
+                    fixtureKey
+                ) ||
+
+                null;
+
+
+            /*
+             * If the exact API ID is different but a fixture
+             * match exists, update that existing row instead
+             * of creating a second record.
+             */
+
+            const currentStream =
+                existingMatch
+                    ? getExistingStream(
+                        existingMatch
+                    )
+                    : "";
+
+
+            const row = {
+
+                api_match_id:
+                    apiMatchId,
+
+                title:
+                    match.title ||
+                    `${team1} vs ${team2}`,
+
+                team1:
+                    team1,
+
+                team2:
+                    team2,
+
+                competition:
+                    match.competition ||
+                    "Cricket",
+
+                match_time:
+                    startTime,
+
+                start_time:
+                    startTime,
+
+                venue:
+                    match.venue ||
+                    "",
+
+                /*
+                 * Keep SportScore status for reference.
+                 * Admin display status is calculated separately.
+                 */
+
+                status:
+                    normalizeSportScoreStatus(
+                        match.status
+                    ),
+
+                /*
+                 * NEVER erase a stream during sync.
+                 */
+
+                embed_url:
+                    currentStream,
+
+                team1_logo:
+                    match.home_logo ||
+                    match.team1_logo ||
+                    "",
+
+                team2_logo:
+                    match.away_logo ||
+                    match.team2_logo ||
+                    ""
+
+            };
+
+
+            if (
+                existingMatch &&
+                existingMatch.id
+            ) {
+
+                const {
+                    error: updateError
+                } = await client
+
+                    .from("Matches")
+
+                    .update(row)
+
+                    .eq(
+                        "id",
+                        existingMatch.id
+                    );
+
+
+                if (updateError) {
+
+                    throw updateError;
+
+                }
+
+
+                updated++;
+
+
+                /*
+                 * Keep lookup maps pointed at
+                 * surviving record.
+                 */
+
+                const surviving = {
+
+                    ...existingMatch,
+
+                    ...row
+
+                };
+
+
+                byApiMatchId.set(
+                    apiMatchId,
+                    surviving
+                );
+
+
+                if (sportscoreUrl) {
+
+                    bySportScoreUrl.set(
+                        sportscoreUrl,
+                        surviving
+                    );
+
+                }
+
+
+                byFixture.set(
+                    fixtureKey,
+                    surviving
+                );
+
+
+            } else {
+
+                const {
+                    data: insertedRows,
+                    error: insertError
+                } = await client
+
+                    .from("Matches")
+
+                    .insert(row)
+
+                    .select();
+
+
+                if (insertError) {
+
+                    throw insertError;
+
+                }
+
+
+                inserted++;
+
+
+                const insertedMatch =
+                    insertedRows &&
+                    insertedRows[0];
+
+
+                if (insertedMatch) {
+
+                    byApiMatchId.set(
+                        apiMatchId,
+                        insertedMatch
+                    );
+
+
+                    if (sportscoreUrl) {
+
+                        bySportScoreUrl.set(
+                            sportscoreUrl,
+                            insertedMatch
+                        );
+
+                    }
+
+
+                    byFixture.set(
+                        fixtureKey,
+                        insertedMatch
+                    );
+
+                }
+
+            }
+
+        }
+
+
+        /*
+         * Reload actual database schedule.
+         */
+
+        message.innerHTML =
+            `Sync complete. ` +
+            `Updated <strong>${updated}</strong>, ` +
+            `inserted <strong>${inserted}</strong>.`;
+
+
+        await loadMatches();
+
+
+    } catch (error) {
+
+        console.error(
+            "Cricketive sync error:",
+            error
+        );
+
+
+        message.textContent =
+            `Sync failed: ${
+                error?.message ||
+                "Unknown error"
+            }`;
+
+        /*
+         * Keep the existing schedule visible even when
+         * the upstream sync is temporarily unavailable.
+         */
+        await loadMatches();
+
+
+    } finally {
+
+        button.disabled = false;
+
+        button.textContent =
+            "SYNC MATCHES";
+
+    }
+
+}
+
+
+/* =========================================================
+   SPORTScore STATUS
+   ========================================================= */
+
+function normalizeSportScoreStatus(
+    status
+) {
+
+    const value =
+        String(
+            status || ""
+        )
+            .trim()
+            .toLowerCase();
+
+
+    if (
+        value === "live" ||
+        value === "in_progress" ||
+        value === "in progress" ||
+        value === "started" ||
+        value === "playing" ||
+        value === "ongoing"
+    ) {
+
+        return "Live";
+
+    }
+
+
+    if (
+        value === "finished" ||
+        value === "ended" ||
+        value === "completed" ||
+        value === "complete" ||
+        value === "ft"
+    ) {
+
+        return "Finished";
+
+    }
+
+
+    return "Upcoming";
+
+}
+
+
+/* =========================================================
+   NEW DISPLAY STATUS LOGIC
+   ========================================================= */
+
+/*
+ * A real Supabase Matches.id is a UUID. Anything else (undefined,
+ * empty string, "sportscore:...") must never reach a
+ * .eq("match_id", ...) / .eq("id", ...) query.
+ */
+function isValidUuid(value) {
+    return (
+        typeof value === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+    );
+}
+
+/*
+ * How long a match can plausibly still be "in play" before we're
+ * confident it's over, even with zero provider confirmation. Needs
+ * to be format-aware: a T20 is done in ~4 hours, but Tests and
+ * County Championship matches legitimately run up to 4-5 days —
+ * using one flat threshold would either misclassify a still-live
+ * Test as Finished, or leave every T20 from 2 days ago sitting in
+ * "Needs Review" forever (this is exactly what happened with a flat
+ * "always Unknown" rule: 98 of 137 matches ended up there, most of
+ * them ordinary T20s from the day before).
+ */
+const MULTI_DAY_FORMAT_PATTERN =
+    /\btest\b|county championship|sheffield shield|ranji trophy|duleep trophy|first[- ]class|four[- ]day|three[- ]day|county cup/i;
+
+function maxPlausibleMatchDurationMs(competition, title) {
+    const text = `${competition || ""} ${title || ""}`;
+    if (MULTI_DAY_FORMAT_PATTERN.test(text)) {
+        return 6 * 24 * 60 * 60 * 1000; // 6 days — covers a 5-day Test plus buffer
+    }
+    return 24 * 60 * 60 * 1000; // 24 hours — covers ODIs/rain delays with a big margin over a T20
+}
+
+function canonicalStatus(status, startTime, competition, title) {
+
+    if (status === "Live") {
+        return "Live";
+    }
+
+    if (status === "Finished") {
+        return "Finished";
+    }
+
+    /*
+     * status is either undefined (this match wasn't found in
+     * SportScore's *current* feed — it likely rolled off the
+     * feed's rolling time window) or "Unknown" (found, but SportScore
+     * itself couldn't confirm Live/Finished). Either way, we don't
+     * have a definite answer for this row right now.
+     *
+     * If the match's own scheduled start_time is still in the
+     * future, "Upcoming" is still a safe, correct answer.
+     *
+     * If it's started but still within a plausible match duration for
+     * its format, we genuinely don't know — surface that honestly as
+     * "Unknown" rather than guessing Live or Finished.
+     *
+     * If it's well past any plausible duration for its format with
+     * still no confirmation, a live match would almost certainly
+     * still be showing up in SportScore's feed — its absence is
+     * itself strong evidence the match ended. Call it Finished rather
+     * than leaving genuinely-over matches sitting in "Needs Review"
+     * indefinitely.
+     */
+    if (startTime) {
+        const start = new Date(startTime).getTime();
+        if (Number.isFinite(start)) {
+            const elapsed = Date.now() - start;
+            if (elapsed < 0) {
+                return "Upcoming";
+            }
+            if (elapsed <= maxPlausibleMatchDurationMs(competition, title)) {
+                return "Unknown";
+            }
+            return "Finished";
+        }
+    }
+
+    return "Upcoming";
+}
+
+function canonicalStoredStatus(status, startTime, competition, title) {
+    const value = String(status || "").trim().toLowerCase();
+    if (value === "live" || value === "in_progress" || value === "started" || value === "playing" || value === "ongoing") {
+        return "Live";
+    }
+    if (value === "finished" || value === "ended" || value === "completed" || value === "complete" || value === "ft") {
+        return "Finished";
+    }
+
+    /*
+     * SportScore itself is unreachable right now, so this is a
+     * pure DB-fallback read. Same rule as above: never let a
+     * stored "Upcoming" survive past its own start_time, and use
+     * the same format-aware staleness window before settling on
+     * Finished rather than leaving it stuck on "Unknown" forever.
+     */
+    if (startTime) {
+        const start = new Date(startTime).getTime();
+        if (Number.isFinite(start)) {
+            const elapsed = Date.now() - start;
+            if (elapsed >= 0) {
+                return elapsed <= maxPlausibleMatchDurationMs(competition, title)
+                    ? "Unknown"
+                    : "Finished";
+            }
+        }
+    }
+
+    return "Upcoming";
+}
+
+
+/* =========================================================
+   TEAM KEY
+   ========================================================= */
+
+function makeTeamKey(
+    team1,
+    team2
+) {
+
+    if (
+        !team1 ||
+        !team2
+    ) {
+
+        return "";
+
+    }
+
+
+    return (
+        String(team1)
+            .trim()
+            .toLowerCase()
+
+        +
+
+        "|" +
+
+        String(team2)
+            .trim()
+            .toLowerCase()
+    );
+
+}
+
+
+/* =========================================================
+   URL NORMALIZATION
+   ========================================================= */
+
+function normalizeUrl(
+    value
+) {
+
+    if (!value) {
+
+        return "";
+
+    }
+
+
+    const url =
+        String(value)
+            .trim();
+
+
+    if (
+        url.startsWith("http")
+    ) {
+
+        return url.replace(
+            /\/+$/,
+            ""
+        );
+
+    }
+
+
+    return (
+        "https://sportscore.com" +
+
+        (
+            url.startsWith("/")
+                ? url
+                : `/${url}`
+        )
+
+    ).replace(
+        /\/+$/,
+        ""
+    );
+
+}
+
+
+/* =========================================================
+   CLEAN STALE LIVE MATCHES
+   ========================================================= */
+
+async function cleanStaleMatches() {
+
+    const cutoff =
+        new Date(
+            Date.now() -
+            24 * 60 * 60 * 1000
+        ).toISOString();
+
+
+    const { error } =
+        await client
+
+            .from("Matches")
+
+            .update({
+                status: "Finished"
+            })
+
+            .eq(
+                "status",
+                "Live"
+            )
+
+            .lt(
+                "start_time",
+                cutoff
+            );
+
+
+    if (error) {
+
+        console.error(
+            "Could not clean stale live matches:",
+            error
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   LOAD MATCHES
+   ========================================================= */
+
+async function loadMatches() {
+
+    const liveContainer =
+        document.getElementById(
+            "liveMatches"
+        );
+
+
+    const unknownContainer =
+        document.getElementById(
+            "unknownMatches"
+        );
+
+
+    const upcomingContainer =
+        document.getElementById(
+            "upcomingMatches"
+        );
+
+
+    if (
+        !liveContainer.dataset.loaded
+    ) {
+        liveContainer.innerHTML =
+            "Loading...";
+    }
+
+    if (
+        unknownContainer &&
+        !unknownContainer.dataset.loaded
+    ) {
+        unknownContainer.innerHTML =
+            "Loading...";
+    }
+
+    if (
+        !upcomingContainer.dataset.loaded
+    ) {
+        upcomingContainer.innerHTML =
+            "Loading...";
+    }
+
+
+    /*
+     * Supabase is persistent storage.
+     * SportScore is the current source of truth for status.
+     *
+     * We:
+     *
+     * 1. Load Cricketive matches.
+     * 2. Fetch latest SportScore feed.
+     * 3. Match SportScore fixtures to Cricketive rows.
+     * 4. Use SportScore status when explicitly available.
+     * 5. Use start_time to prevent stale Upcoming states.
+     */
+
+
+    const {
+        data,
+        error
+    } = await client
+
+        .from("Matches")
+
+        .select("*")
+
+        .order(
+            "start_time",
+            {
+                ascending: true
+            }
+        );
+
+
+    if (error) {
+
+        const msg =
+            `
+                <p style="color:#ff6666;">
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </p>
+            `;
+
+
+        liveContainer.innerHTML =
+            msg;
+
+
+        if (unknownContainer) {
+            unknownContainer.innerHTML =
+                msg;
+        }
+
+
+        upcomingContainer.innerHTML =
+            msg;
+
+
+        return;
+
+    }
+
+
+    const storedMatches =
+        (data || [])
+            .filter(
+                match =>
+                    match.team1 &&
+                    match.team2 &&
+                    !isPlaceholder(
+                        match.team1
+                    ) &&
+                    !isPlaceholder(
+                        match.team2
+                    )
+            );
+
+
+    /*
+     * Fetch fresh SportScore status.
+     */
+
+    let sportScoreMatches = [];
+
+    let sportScoreAvailable =
+        false;
+
+
+    let sportScoreStale =
+        false;
+
+    try {
+
+        const payload =
+            await fetchJsonWithRetry(
+                "/api/cricket-matches?mode=matches",
+                {
+                    cache: "no-store"
+                },
+                3,
+                700
+            );
+
+        if (
+            Array.isArray(
+                payload.matches
+            ) &&
+            payload.matches.length
+        ) {
+
+            sportScoreMatches =
+                payload.matches;
+
+            lastSportScoreMatches =
+                payload.matches;
+
+            lastSportScoreSuccessAt =
+                Date.now();
+
+            sportScoreAvailable =
+                true;
+
+            sportScoreStale =
+                Boolean(
+                    payload.stale
+                );
+
+        } else {
+            throw new Error(
+                "SportScore returned an empty match feed."
+            );
+        }
+
+    } catch (error) {
+
+        console.warn(
+            "SportScore refresh failed:",
+            error
+        );
+
+        if (
+            lastSportScoreMatches.length &&
+            (
+                Date.now() -
+                lastSportScoreSuccessAt
+            ) <= SPORT_SCORE_CACHE_MS
+        ) {
+
+            sportScoreMatches =
+                lastSportScoreMatches;
+
+            sportScoreAvailable =
+                true;
+
+            sportScoreStale =
+                true;
+
+        }
+
+    }
+
+
+    /*
+     * Index fresh SportScore feed.
+     */
+
+    const bySportScoreUrl =
+        new Map();
+
+
+    const byFixture =
+        new Map();
+
+
+    for (
+        const source of
+        sportScoreMatches
+    ) {
+
+        const team1 =
+            String(
+                source.home ||
+                source.team1 ||
+                ""
+            ).trim();
+
+
+        const team2 =
+            String(
+                source.away ||
+                source.team2 ||
+                ""
+            ).trim();
+
+
+        const sourceTime =
+            source.time ||
+            source.start_time ||
+            source.match_time ||
+            null;
+
+
+        const sourceUrl =
+            source.url
+                ? normalizeUrl(
+                    source.url
+                )
+                : "";
+
+
+        if (
+            sourceUrl
+        ) {
+
+            bySportScoreUrl.set(
+                sourceUrl,
+                source
+            );
+
+        }
+
+
+        const fixtureKey =
+            makeFixtureKey(
+                team1,
+                team2,
+                sourceTime
+            );
+
+
+        if (
+            fixtureKey
+        ) {
+
+            byFixture.set(
+                fixtureKey,
+                source
+            );
+
+        }
+
+    }
+
+
+    /*
+     * Match each Cricketive row to latest SportScore row.
+     */
+
+    const normalized =
+        storedMatches.map(
+            match => {
+
+                const storedUrl =
+                    match.sportscore_url
+                        ? normalizeUrl(
+                            match.sportscore_url
+                        )
+                        : "";
+
+
+                const fixtureKey =
+                    makeFixtureKey(
+                        match.team1,
+                        match.team2,
+                        match.start_time ||
+                            match.match_time
+                    );
+
+
+                const source =
+                    (
+                        storedUrl
+                            ? bySportScoreUrl.get(
+                                storedUrl
+                            )
+                            : null
+                    ) ||
+
+                    byFixture.get(
+                        fixtureKey
+                    ) ||
+
+                    null;
+
+
+                /*
+                 * SportScore is authoritative when it explicitly
+                 * reports Live or Finished.
+                 *
+                 * Otherwise start_time is used so old database
+                 * Upcoming values cannot survive past their time.
+                 */
+
+                const currentStatus =
+                    sportScoreAvailable
+                        ? canonicalStatus(
+                            source?.status,
+                            match.start_time || match.match_time,
+                            match.competition,
+                            match.title
+                          )
+                        : canonicalStoredStatus(
+                            match.status,
+                            match.start_time || match.match_time,
+                            match.competition,
+                            match.title
+                          );
+
+
+                return {
+
+                    ...match,
+
+                    source,
+
+                    currentStatus
+
+                };
+
+            }
+        );
+
+
+    /*
+     * Remove duplicate fixtures from display.
+     * Prefer row containing saved stream.
+     */
+
+    const uniqueMatches =
+        new Map();
+
+
+    for (
+        const match of normalized
+    ) {
+
+        const fixtureKey =
+            makeFixtureKey(
+                match.team1,
+                match.team2,
+                match.start_time ||
+                    match.match_time
+            );
+
+
+        if (!fixtureKey) {
+
+            continue;
+
+        }
+
+
+        const previous =
+            uniqueMatches.get(
+                fixtureKey
+            );
+
+
+        if (!previous) {
+
+            uniqueMatches.set(
+                fixtureKey,
+                match
+            );
+
+            continue;
+
+        }
+
+
+        const previousHasStream =
+            Boolean(
+                previous.embed_url
+            );
+
+
+        const currentHasStream =
+            Boolean(
+                match.embed_url
+            );
+
+
+        if (
+            currentHasStream &&
+            !previousHasStream
+        ) {
+
+            uniqueMatches.set(
+                fixtureKey,
+                match
+            );
+
+        }
+
+    }
+
+
+    const currentMatches =
+        Array.from(
+            uniqueMatches.values()
+        );
+
+
+    /*
+     * Categorize.
+     */
+
+    const liveMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus ===
+                "Live"
+        );
+
+
+    const unknownMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus ===
+                "Unknown"
+        );
+
+
+    const upcomingMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus ===
+                "Upcoming"
+        );
+
+
+    const finishedMatches =
+        currentMatches.filter(
+            match =>
+                match.currentStatus ===
+                "Finished"
+        );
+
+
+    /*
+     * Counters use exact same arrays.
+     */
+
+    const syncMessage =
+        document.getElementById(
+            "syncMessage"
+        );
+
+
+    if (
+        syncMessage
+    ) {
+
+        const sourceLabel =
+            sportScoreAvailable
+                ? (
+                    sportScoreStale
+                        ? "SportScore temporarily unavailable — showing the last successful live feed."
+                        : "Live status from SportScore + time-based fallback."
+                )
+                : "SportScore unavailable — status calculated from schedule time.";
+
+
+        syncMessage.innerHTML =
+            `Current schedule: ` +
+            `<strong>${currentMatches.length}</strong> matches.` +
+
+            `<br>🔴 Live: ${liveMatches.length}` +
+
+            ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingMatches.length}` +
+
+            ` &nbsp;·&nbsp; ✅ Finished: ${finishedMatches.length}` +
+
+            ` &nbsp;·&nbsp; ❓ Unknown: ${unknownMatches.length}` +
+
+            `<br><small>${sourceLabel}</small>`;
+
+    }
+
+
+    /*
+     * Render live.
+     */
+
+    renderMatchList(
+        liveContainer,
+        liveMatches,
+        "live"
+    );
+
+
+    /*
+     * Render unknown / needs review.
+     */
+
+    if (unknownContainer) {
+        renderMatchList(
+            unknownContainer,
+            unknownMatches,
+            "unknown"
+        );
+
+        unknownContainer.dataset.loaded =
+            "true";
+    }
+
+
+    /*
+     * Render upcoming.
+     */
+
+    renderMatchList(
+        upcomingContainer,
+        upcomingMatches,
+        "upcoming"
+    );
+
+    liveContainer.dataset.loaded =
+        "true";
+
+    upcomingContainer.dataset.loaded =
+        "true";
+
+}
+
+
+/* =========================================================
+   RENDER MATCH LIST
+   ========================================================= */
+
+function renderMatchList(
+    container,
+    matches,
+    type
+) {
+
+    if (
+        !matches.length
+    ) {
+
+        container.innerHTML =
+            `
+                <div class="empty">
+                    No ${type} matches.
+                </div>
+            `;
+
+        return;
+
+    }
+
+
+    container.innerHTML =
+        "";
+
+
+    matches.forEach(
+        match => {
+
+            const div =
+                document.createElement(
+                    "div"
+                );
+
+
+            div.className =
+                "match";
+
+
+            div.innerHTML = `
+
+                <div class="match-header">
+
+                    <div>
+
+                        <div class="match-title">
+
+                            ${escapeHtml(
+                                match.title ||
+                                `${match.team1} vs ${match.team2}`
+                            )}
+
+                        </div>
+
+
+                        <div class="match-meta">
+
+                            ${escapeHtml(
+                                match.team1
+                            )}
+
+                            vs
+
+                            ${escapeHtml(
+                                match.team2
+                            )}
+
+                            ${
+                                match.competition
+                                    ? `
+                                        <br>
+                                        ${escapeHtml(
+                                            match.competition
+                                        )}
+                                      `
+                                    : ""
+                            }
+
+
+                            ${
+                                match.start_time
+                                    ? `
+                                        <br>
+                                        ${formatDate(
+                                            match.start_time
+                                        )}
+                                      `
+                                    : ""
+                            }
+
+
+                            ${
+                                match.venue
+                                    ? `
+                                        <br>
+                                        ${escapeHtml(
+                                            match.venue
+                                        )}
+                                      `
+                                    : ""
+                            }
+
+                        </div>
+
+
+                        ${
+                            match.api_match_id
+
+                                ? `
+                                    <div class="api-id">
+
+                                        API ID:
+
+                                        ${escapeHtml(
+                                            match.api_match_id
+                                        )}
+
+                                    </div>
+                                  `
+
+                                : ""
+                        }
+
+                    </div>
+
+
+                    <span
+                        class="status ${
+                            type === "live"
+                                ? "badge-live"
+                                : type === "unknown"
+                                    ? "badge-unknown"
+                                    : type === "finished"
+                                        ? "badge-finished"
+                                        : "badge-upcoming"
+                        }"
+                    >
+
+                        ${escapeHtml(
+                            match.currentStatus ||
+                            match.status ||
+                            "Upcoming"
+                        )}
+
+                    </span>
+
+                </div>
+
+
+                <!-- STREAMS -->
+
+                <div class="stream-box">
+
+                    <strong>
+                        Streams
+                    </strong>
+
+
+                    ${
+                        isValidUuid(match.id)
+                            ? `
+                                <div
+                                    id="streams-${match.id}"
+                                    class="stream-list"
+                                >
+                                    Loading streams...
+                                </div>
+
+
+                                <div class="toolbar">
+
+                                    <button
+                                        class="secondary"
+                                        onclick="addStreamForm(
+                                            '${match.id}'
+                                        )"
+                                    >
+                                        + ADD STREAM
+                                    </button>
+
+
+                                    ${
+                                        !match.api_match_id
+
+                                            ? `
+                                                <button
+                                                    class="danger"
+                                                    onclick="deleteManualMatch(
+                                                        '${match.id}'
+                                                    )"
+                                                >
+                                                    DELETE MANUAL MATCH
+                                                </button>
+                                              `
+
+                                            : ""
+                                    }
+
+                                </div>
+
+
+                                <div
+                                    id="add-stream-${match.id}"
+                                ></div>
+                              `
+                            : `
+                                <p style="color:#999;font-size:13px;">
+                                    Match is not yet stored in Cricketive.
+                                    Please sync again.
+                                </p>
+                              `
+                    }
+
+                </div>
+
+            `;
+
+
+            container.appendChild(
+                div
+            );
+
+
+            if (
+                isValidUuid(match.id)
+            ) {
+                loadStreams(
+                    match.id
+                );
+            }
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   DELETE MANUAL MATCH
+   ========================================================= */
+
+async function deleteManualMatch(
+    matchId
+) {
+
+    if (
+        !isValidUuid(matchId)
+    ) {
+
+        alert(
+            "Cannot delete: invalid match ID."
+        );
+
+        return;
+
+    }
+
+
+    const {
+        data: match,
+        error: fetchError
+    } = await client
+
+        .from("Matches")
+
+        .select(
+            "id, api_match_id, title"
+        )
+
+        .eq(
+            "id",
+            matchId
+        )
+
+        .single();
+
+
+    if (fetchError) {
+
+        alert(
+            fetchError.message
+        );
+
+        return;
+
+    }
+
+
+    if (
+        match.api_match_id
+    ) {
+
+        alert(
+            "API-synced matches cannot be deleted manually."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        !confirm(
+            `Delete manual match "${match.title}"?`
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    const {
+        error
+    } = await client
+
+        .from("Matches")
+
+        .delete()
+
+        .eq(
+            "id",
+            matchId
+        );
+
+
+    if (error) {
+
+        alert(
+            error.message
+        );
+
+        return;
+
+    }
+
+
+    await loadMatches();
+
+}
+
+
+/* =========================================================
+   LOAD STREAMS
+   ========================================================= */
+
+async function loadStreams(
+    matchId
+) {
+
+    /*
+     * Never query the streams table with an invalid/missing UUID —
+     * this used to reach .eq("match_id", "") for matches that
+     * hadn't been (or weren't yet) successfully stored, which
+     * Supabase rejects with "invalid input syntax for type uuid".
+     */
+    if (
+        !isValidUuid(matchId)
+    ) {
+
+        console.warn(
+            "Skipping stream load: invalid match ID.",
+            matchId
+        );
+
+        return;
+
+    }
+
+
+    const container =
+        document.getElementById(
+            `streams-${matchId}`
+        );
+
+
+    if (!container) {
+
+        return;
+
+    }
+
+
+    const {
+        data,
+        error
+    } = await client
+
+        .from("streams")
+
+        .select("*")
+
+        .eq(
+            "match_id",
+            matchId
+        )
+
+        .order(
+            "created_at",
+            {
+                ascending: true
+            }
+        );
+
+
+    if (error) {
+
+        container.innerHTML =
+            `
+                <span style="color:#ff6666;">
+
+                    ${escapeHtml(
+                        error.message
+                    )}
+
+                </span>
+            `;
+
+        return;
+
+    }
+
+
+    if (
+        !data ||
+        !data.length
+    ) {
+
+        container.innerHTML =
+            `
+                <span style="color:#888;">
+
+                    No streams added yet.
+
+                </span>
+            `;
+
+        return;
+
+    }
+
+
+    container.innerHTML =
+        data
+
+            .map(
+                stream => `
+
+                    <div class="stream-row">
+
+                        <select
+                            id="lang-${stream.id}"
+                        >
+
+                            ${languageOption(
+                                "English",
+                                stream.language
+                            )}
+
+                            ${languageOption(
+                                "Hindi",
+                                stream.language
+                            )}
+
+                            ${languageOption(
+                                "Telugu",
+                                stream.language
+                            )}
+
+                            ${languageOption(
+                                "Tamil",
+                                stream.language
+                            )}
+
+                            ${languageOption(
+                                "Malayalam",
+                                stream.language
+                            )}
+
+                            ${languageOption(
+                                "Kannada",
+                                stream.language
+                            )}
+
+                            ${languageOption(
+                                "Other",
+                                stream.language
+                            )}
+
+                        </select>
+
+
+                        <input
+                            id="url-${stream.id}"
+                            type="url"
+                            value="${escapeHtml(
+                                stream.embed_url
+                            )}"
+                            placeholder="https://..."
+                        >
+
+
+                        <input
+                            id="name-${stream.id}"
+                            type="text"
+                            value="${escapeHtml(
+                                stream.stream_name
+                            )}"
+                            placeholder="Stream name"
+                        >
+
+
+                        <div
+                            class="toolbar"
+                            style="margin:0;"
+                        >
+
+                            <button
+                                class="secondary"
+                                onclick="updateStream(
+                                    '${stream.id}'
+                                )"
+                            >
+                                SAVE
+                            </button>
+
+
+                            <button
+                                class="danger"
+                                onclick="deleteStream(
+                                    '${stream.id}',
+                                    '${matchId}'
+                                )"
+                            >
+                                DELETE
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                `
+            )
+
+            .join("");
+
+}
+
+
+/* =========================================================
+   ADD STREAM FORM
+   ========================================================= */
+
+function addStreamForm(
+    matchId
+) {
+
+    if (
+        !isValidUuid(matchId)
+    ) {
+
+        console.warn(
+            "Refusing to open add-stream form: invalid match ID.",
+            matchId
+        );
+
+        return;
+
+    }
+
+
+    const container =
+        document.getElementById(
+            `add-stream-${matchId}`
+        );
+
+
+    container.innerHTML = `
+
+        <div class="stream-row">
+
+            <select
+                id="new-lang-${matchId}"
+            >
+
+                ${languageOption(
+                    "English",
+                    "English"
+                )}
+
+                ${languageOption(
+                    "Hindi",
+                    ""
+                )}
+
+                ${languageOption(
+                    "Telugu",
+                    ""
+                )}
+
+                ${languageOption(
+                    "Tamil",
+                    ""
+                )}
+
+                ${languageOption(
+                    "Malayalam",
+                    ""
+                )}
+
+                ${languageOption(
+                    "Kannada",
+                    ""
+                )}
+
+                ${languageOption(
+                    "Other",
+                    ""
+                )}
+
+            </select>
+
+
+            <input
+                id="new-url-${matchId}"
+                type="url"
+                placeholder="https://your-embed-url..."
+            >
+
+
+            <input
+                id="new-name-${matchId}"
+                type="text"
+                placeholder="Stream 1"
+            >
+
+
+            <button
+                class="primary"
+                style="margin-top:0;"
+                onclick="createStream(
+                    '${matchId}'
+                )"
+            >
+                ADD
+            </button>
+
+        </div>
+
+    `;
+
+}
+
+
+/* =========================================================
+   CREATE STREAM
+   ========================================================= */
+
+async function createStream(
+    matchId
+) {
+
+    const language =
+        document
+            .getElementById(
+                `new-lang-${matchId}`
+            )
+            .value;
+
+
+    const embed_url =
+        document
+            .getElementById(
+                `new-url-${matchId}`
+            )
+            .value
+            .trim();
+
+
+    const stream_name =
+        document
+            .getElementById(
+                `new-name-${matchId}`
+            )
+            .value
+            .trim()
+
+        ||
+
+        "Stream";
+
+
+    if (!embed_url) {
+
+        alert(
+            "Enter a stream embed URL."
+        );
+
+        return;
+
+    }
+
+
+    const {
+        error
+    } = await client
+
+        .from("streams")
+
+        .insert([{
+
+            match_id:
+                matchId,
+
+            language:
+                language,
+
+            stream_name:
+                stream_name,
+
+            embed_url:
+                embed_url,
+
+            active:
+                true
+
+        }]);
+
+
+    if (error) {
+
+        alert(
+            error.message
+        );
+
+        return;
+
+    }
+
+
+    await loadStreams(
+        matchId
+    );
+
+
+    document
+        .getElementById(
+            `add-stream-${matchId}`
+        )
+        .innerHTML = "";
+
+}
+
+
+/* =========================================================
+   UPDATE STREAM
+   ========================================================= */
+
+async function updateStream(
+    streamId
+) {
+
+    const language =
+        document
+            .getElementById(
+                `lang-${streamId}`
+            )
+            .value;
+
+
+    const embed_url =
+        document
+            .getElementById(
+                `url-${streamId}`
+            )
+            .value
+            .trim();
+
+
+    const stream_name =
+        document
+            .getElementById(
+                `name-${streamId}`
+            )
+            .value
+            .trim()
+
+        ||
+
+        "Stream";
+
+
+    const {
+        error
+    } = await client
+
+        .from("streams")
+
+        .update({
+
+            language,
+
+            embed_url,
+
+            stream_name
+
+        })
+
+        .eq(
+            "id",
+            streamId
+        );
+
+
+    if (error) {
+
+        alert(
+            error.message
+        );
+
+        return;
+
+    }
+
+
+    alert(
+        "Stream updated."
+    );
+
+}
+
+
+/* =========================================================
+   DELETE STREAM
+   ========================================================= */
+
+async function deleteStream(
+    streamId,
+    matchId
+) {
+
+    if (
+        !confirm(
+            "Delete this stream?"
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    const {
+        error
+    } = await client
+
+        .from("streams")
+
+        .delete()
+
+        .eq(
+            "id",
+            streamId
+        );
+
+
+    if (error) {
+
+        alert(
+            error.message
+        );
+
+        return;
+
+    }
+
+
+    await loadStreams(
+        matchId
+    );
+
+}
+
+
+/* =========================================================
+   LANGUAGE OPTION
+   ========================================================= */
+
+function languageOption(
+    value,
+    selected
+) {
+
+    return `
+
+        <option
+            value="${escapeHtml(value)}"
+
+            ${
+                value === selected
+                    ? "selected"
+                    : ""
+            }
+        >
+
+            ${escapeHtml(value)}
+
+        </option>
+
+    `;
+
+}
+
+
+/* =========================================================
+   DATE FORMAT
+   ========================================================= */
+
+function formatDate(
+    value
+) {
+
+    const date =
+        new Date(
+            value
+        );
+
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return "";
+
+    }
+
+
+    return date.toLocaleString(
+        [],
+        {
+            dateStyle:
+                "medium",
+
+            timeStyle:
+                "short"
+        }
+    );
+
+}
+
+
+/* =========================================================
+   PLACEHOLDER CHECK
+   ========================================================= */
+
+function isPlaceholder(
+    value
+) {
+
+    if (!value) {
+
+        return true;
+
+    }
+
+
+    return /^(tbc|tbd|to be confirmed|to be decided)$/i
+        .test(
+            String(value).trim()
+        );
+
+}
+
+
+/* =========================================================
+   ESCAPE HTML
+   ========================================================= */
+
+function escapeHtml(
+    value
+) {
+
+    return String(
+        value ?? ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
+}
+
+
+/* =========================================================
+   START
+   ========================================================= */
+
+checkSession();
+
+
+</script>
+
+
+</body>
+
+</html>
