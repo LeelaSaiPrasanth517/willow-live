@@ -1,0 +1,1 @@
+export function unavailableCricbuzzAdapter(){return{provider:"cricbuzz",available:false,observations:[],reason:"No Cricbuzz upstream endpoint is configured in this repository."};}export function normalizeCricbuzzObservation(raw){if(!raw||typeof raw!=="object")return null;return{provider:"cricbuzz",available:true,...raw};}
