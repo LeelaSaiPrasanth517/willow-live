@@ -30,7 +30,7 @@ export default {
       url.pathname === "/api/live-scores"
     ) {
 
-      return handleLiveScores();
+      return handleLiveScores(url);
 
     }
 
@@ -1629,7 +1629,7 @@ function normalizeSportScoreStatus(
    LIVE SCORES ENDPOINT
 ========================================================= */
 
-async function handleLiveScores() {
+async function handleLiveScores(requestUrl) {
 
   try {
 
@@ -1782,13 +1782,23 @@ async function handleLiveScores() {
     );
 
 
+    const updated = new Date().toISOString();
+    const requestedUrl =
+      requestUrl instanceof URL
+        ? requestUrl.searchParams.get("url")
+        : "";
+
+    if (requestedUrl) {
+      const score = scores[normalizeUrl(requestedUrl)] || null;
+      return json({
+        score,
+        updated
+      });
+    }
+
     return json({
-
       scores,
-
-      updated:
-        new Date().toISOString()
-
+      updated
     });
 
 
@@ -1824,51 +1834,24 @@ async function handleLiveScores() {
    URL NORMALIZATION
 ========================================================= */
 
-function normalizeUrl(
-  value
-) {
+function normalizeUrl(value) {
+  if (!value) return "";
 
-  if (!value) {
+  // Convert relative and absolute provider links to the same canonical key.
+  const clean = String(value)
+    .trim()
+    .split(/[?#]/)[0]
+    .replace(/\/+$/, "");
 
-    return "";
+  if (!clean) return "";
 
+  const absolute = clean.match(/^https?:\/\/([^/]+)(\/.*)?$/i);
+  if (absolute) {
+    return "https://" + absolute[1].toLowerCase() + (absolute[2] || "");
   }
 
-
-  const url =
-    String(
-      value
-    ).trim();
-
-
-  if (
-    url.startsWith(
-      "http"
-    )
-  ) {
-
-    return url.replace(
-      /\/+$/,
-      ""
-    );
-
-  }
-
-
-  return (
-    "https://sportscore.com" +
-
-    (
-      url.startsWith("/")
-        ? url
-        : `/${url}`
-    )
-
-  ).replace(
-    /\/+$/,
-    ""
-  );
-
+  return "https://sportscore.com" +
+    (clean.startsWith("/") ? clean : "/" + clean);
 }
 
 
