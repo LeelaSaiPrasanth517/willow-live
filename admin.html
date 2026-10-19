@@ -1508,7 +1508,7 @@ function isValidUuid(value) {
  * them ordinary T20s from the day before).
  */
 const MULTI_DAY_FORMAT_PATTERN =
-    /\btest\b|county championship|sheffield shield|ranji trophy|duleep trophy|first[- ]class|four[- ]day|three[- ]day|county cup/i;
+    /\btest\b|the ashes|presidents? trophy|plunket shield|west indies championship|quaid[- ]e[- ]azam trophy|county championship|sheffield shield|ranji trophy|duleep trophy|first[- ]class|four[- ]day|three[- ]day|county cup/i;
 
 function maxPlausibleMatchDurationMs(competition, title) {
     const text = `${competition || ""} ${title || ""}`;

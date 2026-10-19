@@ -30,7 +30,7 @@ export default {
       url.pathname === "/api/live-scores"
     ) {
 
-      return handleLiveScores();
+      return handleLiveScores(url);
 
     }
 
@@ -71,6 +71,48 @@ export default {
 
   }
 };
+
+
+function isProviderUpcomingStatus(status, statusText = "") {
+  const normalize = value => String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, "_");
+
+  const upcomingStates = new Set([
+    "scheduled", "upcoming", "not_started", "notstarted",
+    "pre_match", "prematch", "pending", "ns", "not_started_yet",
+    "yet_to_start", "delayed", "postponed", "rescheduled"
+  ]);
+
+  return upcomingStates.has(normalize(status)) ||
+    upcomingStates.has(normalize(statusText));
+}
+
+const MULTI_DAY_MATCH_PATTERN =
+  /\btest\b|the ashes|presidents? trophy|plunket shield|west indies championship|quaid[- ]e[- ]azam trophy|county championship|sheffield shield|ranji trophy|duleep trophy|first[- ]class|four[- ]day|three[- ]day|county cup/i;
+
+function maxPlausibleMatchDurationMs(competition, title) {
+  const text = String(competition || "") + " " + String(title || "");
+  return MULTI_DAY_MATCH_PATTERN.test(text)
+    ? 6 * 24 * 60 * 60 * 1000
+    : 24 * 60 * 60 * 1000;
+}
+
+function isStaleUpcomingCandidate(match) {
+  if (!isProviderUpcomingStatus(match?.status, match?.status_text)) {
+    return false;
+  }
+
+  const rawTime = match?.time || match?.start_time || match?.match_time;
+  const scheduledAt = rawTime ? new Date(rawTime).getTime() : Number.NaN;
+  if (!Number.isFinite(scheduledAt) || scheduledAt > Date.now()) {
+    return false;
+  }
+
+  return Date.now() - scheduledAt <=
+    maxPlausibleMatchDurationMs(match?.competition, match?.title);
+}
 
 
 /* =========================================================
@@ -722,6 +764,18 @@ async function handleCricketAPI() {
               match.status_text ||
               "";
 
+            let providerStatus =
+              match.status ||
+              "";
+
+            let matchTime =
+              match.time ||
+              match.start_time ||
+              match.match_time ||
+              null;
+
+            let statusSource =
+              "sportscore-match-list";
 
             let battingTeam =
               match.batting_team ||
@@ -745,13 +799,20 @@ async function handleCricketAPI() {
 
             const isLive =
               isLiveStatus(
-                match.status,
-                match.status_text
+                providerStatus,
+                statusText
               );
 
+            const needsStatusRefresh =
+              isStaleUpcomingCandidate({
+                ...match,
+                status: providerStatus,
+                status_text: statusText,
+                time: matchTime
+              });
 
             if (
-              isLive &&
+              (isLive || needsStatusRefresh) &&
               match.url
             ) {
 
@@ -808,13 +869,20 @@ async function handleCricketAPI() {
                   }
 
 
-                  if (
-                    details.status_text
-                  ) {
+                  if (details.status) {
+                    providerStatus = details.status;
+                  }
 
-                    statusText =
-                      details.status_text;
+                  if (details.status_text) {
+                    statusText = details.status_text;
+                  }
 
+                  if (details.time || details.start_time) {
+                    matchTime = details.time || details.start_time;
+                  }
+
+                  if (details.status || details.status_text || details.time || details.start_time) {
+                    statusSource = "sportscore-match-detail";
                   }
 
 
@@ -895,19 +963,19 @@ async function handleCricketAPI() {
 
               status:
                 normalizeSportScoreStatus(
-                  match.status,
+                  providerStatus,
                   statusText,
-                  match.time,
+                  matchTime,
                   match.competition
                 ),
 
 
               status_source:
-                "sportscore-match-list",
+                statusSource,
 
 
               provider_status:
-                match.status || null,
+                providerStatus || null,
 
 
               status_text:
@@ -923,7 +991,7 @@ async function handleCricketAPI() {
 
 
               time:
-                match.time ||
+                matchTime ||
                 null,
 
 
@@ -1008,7 +1076,7 @@ async function handleCricketAPI() {
         ).length,
 
       status_authority:
-        "sportscore-match-list",
+        "sportscore-match-list+match-detail",
 
       updated:
         payload.updated ||
@@ -1264,7 +1332,8 @@ function isLiveStatus(
     liveStates.has(text) ||
     text.includes("innings") ||
     text.includes("in_progress") ||
-    text.includes("inplay")
+    text.includes("inplay") ||
+    text.includes("batting")
   );
 }
 
@@ -1465,123 +1534,81 @@ function normalizeSportScoreStatus(
   matchTime = null,
   competition = ""
 ) {
-  /*
-   * SportScore is the authoritative status source.
-   *
-   * IMPORTANT:
-   * - Do not infer LIVE or FINISHED from match time.
-   * - Do not infer status from score, innings or batting team.
-   * - Recognize provider status/status_text when possible.
-   * - If the provider state is unfamiliar, a future start time may
-   *   identify an Upcoming fixture; past ambiguous matches stay Unknown.
-   */
-
-  const value = String(status || "")
+  const normalize = value => String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[-\s]+/g, "_");
 
-  const text = String(statusText || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[-\s]+/g, "_");
+  const value = normalize(status);
+  const text = normalize(statusText);
 
   const liveStates = new Set([
-    "live",
-    "in_progress",
-    "inprogress",
-    "inplay",
-    "in_play",
-    "started",
-    "playing",
-    "ongoing",
-    "innings",
-    "1st_inn",
-    "2nd_inn",
-    "3rd_inn",
-    "4th_inn",
-    "batting"
+    "live", "in_progress", "inprogress", "inplay", "in_play",
+    "started", "playing", "ongoing", "innings", "1st_inn",
+    "2nd_inn", "3rd_inn", "4th_inn", "batting"
   ]);
-
-  if (
-    liveStates.has(value) ||
-    liveStates.has(text) ||
-    text.includes("innings") ||
-    text.includes("in_progress") ||
-    text.includes("inplay")
-  ) {
-    return "Live";
-  }
 
   const finishedStates = new Set([
-    "finished",
-    "finish",
-    "ended",
-    "end",
-    "completed",
-    "complete",
-    "ft",
-    "full_time",
-    "fulltime",
-    "after_match",
-    "post_match",
-    "postmatch"
+    "finished", "finish", "ended", "end", "completed", "complete",
+    "ft", "full_time", "fulltime", "after_match", "post_match", "postmatch"
   ]);
 
-  if (
-    finishedStates.has(value) ||
+  const closedStates = new Set([
+    "cancelled", "canceled", "abandoned"
+  ]);
+
+  const upcomingStates = new Set([
+    "scheduled", "upcoming", "not_started", "notstarted",
+    "pre_match", "prematch", "pending", "ns", "not_started_yet",
+    "yet_to_start", "delayed", "postponed", "rescheduled"
+  ]);
+
+  const textSaysFinished =
     finishedStates.has(text) ||
     text.includes("match_finished") ||
     text.includes("match_ended") ||
-    text.includes("won_by")
-  ) {
+    text.includes("won_by");
+
+  const textSaysLive =
+    liveStates.has(text) ||
+    text.includes("innings") ||
+    text.includes("in_progress") ||
+    text.includes("inplay") ||
+    text.includes("batting");
+
+  // Prefer an explicit provider status over potentially stale descriptive text.
+  if (finishedStates.has(value) || closedStates.has(value)) {
     return "Finished";
   }
 
-  const upcomingStates = new Set([
-    "scheduled",
-    "upcoming",
-    "not_started",
-    "notstarted",
-    "pre_match",
-    "prematch",
-    "pending",
-    "ns",
-    "not_started_yet",
-    "yet_to_start",
-    "delayed",
-    "postponed",
-    "rescheduled"
-  ]);
+  if (liveStates.has(value)) {
+    return "Live";
+  }
 
-  if (
-    upcomingStates.has(value) ||
-    upcomingStates.has(text)
-  ) {
+  if (textSaysFinished || closedStates.has(text)) {
+    return "Finished";
+  }
+
+  if (textSaysLive) {
+    return "Live";
+  }
+
+  if (upcomingStates.has(value) || upcomingStates.has(text)) {
+    const scheduledAt = matchTime
+      ? new Date(matchTime).getTime()
+      : Number.NaN;
+
+    // A stale scheduled label must not keep a match in Upcoming after its start.
+    if (
+      Number.isFinite(scheduledAt) &&
+      scheduledAt <= Date.now()
+    ) {
+      return "Unknown";
+    }
+
     return "Upcoming";
   }
 
-  const closedStates = new Set([
-    "cancelled",
-    "canceled",
-    "abandoned"
-  ]);
-
-  if (
-    closedStates.has(value) ||
-    closedStates.has(text)
-  ) {
-    return "Finished";
-  }
-
-  /*
-   * If SportScore's status is unfamiliar but the fixture time is
-   * clearly in the future, treat it as Upcoming. SportScore's widget
-   * sometimes supplies schedule text/statuses outside the known list.
-   *
-   * Do not infer Finished from an old time: past ambiguous fixtures
-   * remain Unknown unless SportScore explicitly marks them complete.
-   */
   const scheduledAt = matchTime
     ? new Date(matchTime).getTime()
     : Number.NaN;
@@ -1593,14 +1620,16 @@ function normalizeSportScoreStatus(
     return "Upcoming";
   }
 
+  // Do not guess Live or Finished from the scheduled time alone.
   return "Unknown";
 }
+
 
 /* =========================================================
    LIVE SCORES ENDPOINT
 ========================================================= */
 
-async function handleLiveScores() {
+async function handleLiveScores(requestUrl) {
 
   try {
 
@@ -1642,8 +1671,8 @@ async function handleLiveScores() {
 
 
     /*
-     * Only query individual
-     * endpoints for live matches.
+     * Query individual endpoints for live matches and recent fixtures
+     * whose scheduled start has passed but provider status may be stale.
      */
 
     await Promise.all(
@@ -1654,7 +1683,8 @@ async function handleLiveScores() {
             isLiveStatus(
               match.status,
               match.status_text
-            )
+            ) ||
+            isStaleUpcomingCandidate(match)
         )
         .map(
           async match => {
@@ -1673,6 +1703,20 @@ async function handleLiveScores() {
 
               }
 
+              const detailStatus =
+                normalizeSportScoreStatus(
+                  details.status,
+                  details.status_text,
+                  details.time || details.start_time || match.time,
+                  match.competition
+                );
+
+              // This endpoint feeds the "Live Score" panel on stream pages.
+              // Do not show a stale scoreboard if the detail endpoint says
+              // the fixture is finished or cannot confirm that it is live.
+              if (detailStatus !== "Live") {
+                return;
+              }
 
               const key =
                 normalizeUrl(
@@ -1752,13 +1796,23 @@ async function handleLiveScores() {
     );
 
 
+    const updated = new Date().toISOString();
+    const requestedUrl =
+      requestUrl instanceof URL
+        ? requestUrl.searchParams.get("url")
+        : "";
+
+    if (requestedUrl) {
+      const score = scores[normalizeUrl(requestedUrl)] || null;
+      return json({
+        score,
+        updated
+      });
+    }
+
     return json({
-
       scores,
-
-      updated:
-        new Date().toISOString()
-
+      updated
     });
 
 
@@ -1794,51 +1848,24 @@ async function handleLiveScores() {
    URL NORMALIZATION
 ========================================================= */
 
-function normalizeUrl(
-  value
-) {
+function normalizeUrl(value) {
+  if (!value) return "";
 
-  if (!value) {
+  // Convert relative and absolute provider links to the same canonical key.
+  const clean = String(value)
+    .trim()
+    .split(/[?#]/)[0]
+    .replace(/\/+$/, "");
 
-    return "";
+  if (!clean) return "";
 
+  const absolute = clean.match(/^https?:\/\/([^/]+)(\/.*)?$/i);
+  if (absolute) {
+    return "https://" + absolute[1].toLowerCase() + (absolute[2] || "");
   }
 
-
-  const url =
-    String(
-      value
-    ).trim();
-
-
-  if (
-    url.startsWith(
-      "http"
-    )
-  ) {
-
-    return url.replace(
-      /\/+$/,
-      ""
-    );
-
-  }
-
-
-  return (
-    "https://sportscore.com" +
-
-    (
-      url.startsWith("/")
-        ? url
-        : `/${url}`
-    )
-
-  ).replace(
-    /\/+$/,
-    ""
-  );
-
+  return "https://sportscore.com" +
+    (clean.startsWith("/") ? clean : "/" + clean);
 }
 
 
