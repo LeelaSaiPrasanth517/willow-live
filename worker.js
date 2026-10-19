@@ -685,6 +685,251 @@ async function writeAdminAudit(env, entry) {
   );
 }
 
+
+/* =========================================================
+   SUPPLEMENTAL DATE-BASED FIXTURE FEED
+========================================================= */
+
+function utcDateOffset(offsetDays) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  return date.toISOString().slice(0, 10);
+}
+
+function firstDefined(...values) {
+  return values.find(value => value !== undefined && value !== null && value !== "");
+}
+
+function fixtureDisplayName(value) {
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (value && typeof value === "object") {
+    return firstDefined(value.name, value.title, value.display_name, value.displayName, value.short_name, value.shortName) || "";
+  }
+  return "";
+}
+
+function extractFixtureArray(payload) {
+  const candidates = [
+    payload?.matches,
+    payload?.fixtures,
+    payload?.events,
+    payload?.results,
+    payload?.data,
+    payload?.data?.matches,
+    payload?.data?.fixtures,
+    payload?.data?.events,
+    payload?.data?.results
+  ];
+  return candidates.find(Array.isArray) || [];
+}
+
+function normalizeDateFixture(rawFixture) {
+  const fixture = rawFixture?.match && typeof rawFixture.match === "object"
+    ? { ...rawFixture, ...rawFixture.match }
+    : rawFixture;
+
+  const teams = fixture?.teams || {};
+  const homeSource = firstDefined(
+    fixture?.home, fixture?.home_team, fixture?.homeTeam,
+    fixture?.home_name, fixture?.homeName, teams?.home,
+    fixture?.localteam
+  );
+  const awaySource = firstDefined(
+    fixture?.away, fixture?.away_team, fixture?.awayTeam,
+    fixture?.away_name, fixture?.awayName, teams?.away,
+    fixture?.awayteam, fixture?.visitorteam
+  );
+  const home = fixtureDisplayName(homeSource);
+  const away = fixtureDisplayName(awaySource);
+  if (!home || !away) return null;
+
+  const rawStatus = fixture?.status;
+  const status = rawStatus && typeof rawStatus === "object"
+    ? firstDefined(rawStatus.code, rawStatus.name, rawStatus.value, rawStatus.raw, rawStatus.status)
+    : rawStatus;
+
+  const slug = firstDefined(
+    fixture?.slug, fixture?.match_slug, fixture?.matchSlug,
+    fixture?.seo_slug, fixture?.seoSlug
+  );
+  let url = firstDefined(
+    fixture?.url, fixture?.match_url, fixture?.matchUrl,
+    fixture?.site_url, fixture?.siteUrl, fixture?.match?.url
+  ) || "";
+
+  if (!url && slug) {
+    const cleanSlug = String(slug).replace(/^\/+|\/+$/g, "");
+    url = /^https?:\/\//i.test(cleanSlug)
+      ? cleanSlug
+      : "/cricket/match/" + cleanSlug + "/";
+  }
+
+  const competition = fixtureDisplayName(firstDefined(
+    fixture?.competition, fixture?.competition_name,
+    fixture?.competitionName, fixture?.league,
+    fixture?.league_name, fixture?.leagueName, fixture?.tournament
+  )) || "Cricket";
+
+  return {
+    home,
+    away,
+    home_logo: fixtureDisplayName(firstDefined(
+      fixture?.home_logo, fixture?.homeLogo, fixture?.home_team_logo,
+      fixture?.homeTeamLogo, teams?.home?.logo, homeSource?.logo
+    )),
+    away_logo: fixtureDisplayName(firstDefined(
+      fixture?.away_logo, fixture?.awayLogo, fixture?.away_team_logo,
+      fixture?.awayTeamLogo, teams?.away?.logo, awaySource?.logo
+    )),
+    home_score: extractScore(firstDefined(
+      fixture?.home_score, fixture?.homeScore,
+      fixture?.score?.home, fixture?.scores?.home
+    )),
+    away_score: extractScore(firstDefined(
+      fixture?.away_score, fixture?.awayScore,
+      fixture?.score?.away, fixture?.scores?.away
+    )),
+    status: status || "",
+    status_text: firstDefined(
+      fixture?.status_text, fixture?.statusText,
+      fixture?.status?.description, fixture?.status?.label,
+      fixture?.status?.text
+    ) || "",
+    time: firstDefined(
+      fixture?.time, fixture?.start_time, fixture?.startTime,
+      fixture?.utc_start_time, fixture?.start_time_utc,
+      fixture?.match_time, fixture?.matchTime,
+      fixture?.scheduled_at, fixture?.scheduledAt,
+      fixture?.kickoff, fixture?.kickoff_time,
+      fixture?.date_time, fixture?.dateTime, fixture?.date,
+      fixture?.start
+    ) || null,
+    competition,
+    url,
+    slug: slug || null,
+    batting_team: fixtureDisplayName(firstDefined(
+      fixture?.batting_team, fixture?.battingTeam
+    )) || null,
+    overs: extractOvers(firstDefined(fixture?.overs, fixture?.current_overs)),
+    _feed_source: "sportscore-date-fixtures"
+  };
+}
+
+async function fetchFixtureDay(date, status) {
+  const apiUrl = new URL("https://sportscore.com/api/v1/fixtures/");
+  apiUrl.searchParams.set("sport", "cricket");
+  apiUrl.searchParams.set("date", date);
+  apiUrl.searchParams.set("status", status);
+  apiUrl.searchParams.set("limit", "200");
+
+  try {
+    const response = await fetch(apiUrl.toString(), {
+      cf: { cacheTtl: 60, cacheEverything: true }
+    });
+
+    if (!response.ok) {
+      console.warn("SportScore date-fixtures HTTP", response.status, date, status);
+      return [];
+    }
+
+    const payload = await response.json();
+    return extractFixtureArray(payload).map(normalizeDateFixture).filter(Boolean);
+  } catch (error) {
+    console.warn("SportScore date-fixtures failed:", date, status, error);
+    return [];
+  }
+}
+
+async function fetchSupplementalFixtures() {
+  const requests = [];
+
+  // Multi-day cricket fixtures can remain live for five days after starting.
+  for (let offset = -4; offset <= 0; offset += 1) {
+    requests.push(fetchFixtureDay(utcDateOffset(offset), "live"));
+  }
+
+  // Supplement the limited live/recent list with near-term upcoming fixtures.
+  for (let offset = 0; offset <= 2; offset += 1) {
+    requests.push(fetchFixtureDay(utcDateOffset(offset), "upcoming"));
+  }
+
+  return (await Promise.all(requests)).flat();
+}
+
+function normalizeTeamKey(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function sameFixture(a, b) {
+  const urlA = normalizeUrl(a?.url);
+  const urlB = normalizeUrl(b?.url);
+  if (urlA && urlB && urlA === urlB) return true;
+
+  const aHome = normalizeTeamKey(a?.home);
+  const aAway = normalizeTeamKey(a?.away);
+  const bHome = normalizeTeamKey(b?.home);
+  const bAway = normalizeTeamKey(b?.away);
+
+  const sameTeams = aHome && aAway && bHome && bAway && (
+    (aHome === bHome && aAway === bAway) ||
+    (aHome === bAway && aAway === bHome)
+  );
+  if (!sameTeams) return false;
+
+  const timeA = a?.time ? new Date(a.time).getTime() : Number.NaN;
+  const timeB = b?.time ? new Date(b.time).getTime() : Number.NaN;
+  return Number.isFinite(timeA) && Number.isFinite(timeB) &&
+    Math.abs(timeA - timeB) <= 18 * 60 * 60 * 1000;
+}
+
+function mergeSportScoreMatches(widgetMatches, dateFixtures) {
+  const merged = (Array.isArray(widgetMatches) ? widgetMatches : []).map(match => ({ ...match }));
+
+  for (const fixture of (Array.isArray(dateFixtures) ? dateFixtures : [])) {
+    const existingIndex = merged.findIndex(match => sameFixture(match, fixture));
+    if (existingIndex < 0) {
+      merged.push(fixture);
+      continue;
+    }
+
+    const existing = merged[existingIndex];
+    const combined = { ...fixture, ...existing };
+
+    // A confirmed state from the date feed should override a stale list label.
+    if (isLiveStatus(fixture.status, fixture.status_text)) {
+      combined.status = fixture.status;
+      combined.status_text = fixture.status_text || existing.status_text || "";
+    } else if (
+      ["finished", "finish", "complete", "completed", "ended", "abandoned", "cancelled", "canceled"]
+        .includes(String(fixture.status || "").trim().toLowerCase())
+    ) {
+      combined.status = fixture.status;
+      combined.status_text = fixture.status_text || existing.status_text || "";
+    }
+
+    for (const key of [
+      "home_score", "away_score", "home_logo", "away_logo",
+      "batting_team", "overs", "competition", "url", "time"
+    ]) {
+      if (
+        (combined[key] === null || combined[key] === undefined || combined[key] === "") &&
+        fixture[key] !== null && fixture[key] !== undefined && fixture[key] !== ""
+      ) {
+        combined[key] = fixture[key];
+      }
+    }
+
+    merged[existingIndex] = combined;
+  }
+
+  return merged;
+}
+
+
 async function handleCricketAPI() {
 
   try {
@@ -697,7 +942,7 @@ async function handleCricketAPI() {
 
     const response =
       await fetch(
-        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=150",
+        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
         {
           cf: {
             cacheTtl: 5,
@@ -723,12 +968,30 @@ async function handleCricketAPI() {
       await response.json();
 
 
-    const matches =
+    const widgetMatches =
       Array.isArray(
         payload.matches
       )
         ? payload.matches
         : [];
+
+    const supplementalFixtures =
+      await fetchSupplementalFixtures();
+
+    const matches =
+      mergeSportScoreMatches(
+        widgetMatches,
+        supplementalFixtures
+      );
+
+    console.log(
+      "SportScore fixture coverage:",
+      JSON.stringify({
+        widget: widgetMatches.length,
+        dateFixtures: supplementalFixtures.length,
+        merged: matches.length
+      })
+    );
 
 
     /*
@@ -775,6 +1038,7 @@ async function handleCricketAPI() {
               null;
 
             let statusSource =
+              match._feed_source ||
               "sportscore-match-list";
 
             let battingTeam =
@@ -1635,7 +1899,7 @@ async function handleLiveScores(requestUrl) {
 
     const response =
       await fetch(
-        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=150",
+        "https://sportscore.com/api/widget/matches/?sport=cricket&limit=50",
         {
           cf: {
             cacheTtl: 5,
@@ -1658,12 +1922,21 @@ async function handleLiveScores(requestUrl) {
       await response.json();
 
 
-    const matches =
+    const widgetMatches =
       Array.isArray(
         payload.matches
       )
         ? payload.matches
         : [];
+
+    const supplementalFixtures =
+      await fetchSupplementalFixtures();
+
+    const matches =
+      mergeSportScoreMatches(
+        widgetMatches,
+        supplementalFixtures
+      );
 
 
     const scores =
