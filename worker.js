@@ -1469,10 +1469,11 @@ function normalizeSportScoreStatus(
    * SportScore is the authoritative status source.
    *
    * IMPORTANT:
-   * - Do not infer LIVE from match time.
-   * - Do not infer FINISHED from match time.
+   * - Do not infer LIVE or FINISHED from match time.
    * - Do not infer status from score, innings or batting team.
-   * - Only normalize the explicit SportScore status/status_text.
+   * - Recognize provider status/status_text when possible.
+   * - If the provider state is unfamiliar, a future start time may
+   *   identify an Upcoming fixture; past ambiguous matches stay Unknown.
    */
 
   const value = String(status || "")
@@ -1546,7 +1547,11 @@ function normalizeSportScoreStatus(
     "prematch",
     "pending",
     "ns",
-    "not_started_yet"
+    "not_started_yet",
+    "yet_to_start",
+    "delayed",
+    "postponed",
+    "rescheduled"
   ]);
 
   if (
@@ -1570,9 +1575,24 @@ function normalizeSportScoreStatus(
   }
 
   /*
-   * Unknown provider state stays Unknown.
-   * Never guess based on matchTime.
+   * If SportScore's status is unfamiliar but the fixture time is
+   * clearly in the future, treat it as Upcoming. SportScore's widget
+   * sometimes supplies schedule text/statuses outside the known list.
+   *
+   * Do not infer Finished from an old time: past ambiguous fixtures
+   * remain Unknown unless SportScore explicitly marks them complete.
    */
+  const scheduledAt = matchTime
+    ? new Date(matchTime).getTime()
+    : Number.NaN;
+
+  if (
+    Number.isFinite(scheduledAt) &&
+    scheduledAt > Date.now()
+  ) {
+    return "Upcoming";
+  }
+
   return "Unknown";
 }
 
