@@ -1997,6 +1997,8 @@ function createCard(
     let actionText =
         "VIEW MATCH";
 
+    let openExternalMatch = false;
+
 
     if (
         item.storedMatch &&
@@ -2015,6 +2017,31 @@ function createCard(
             item.streamCount > 0
                 ? "▶ WATCH MATCH"
                 : "VIEW MATCH";
+
+    } else {
+
+        /*
+         * If this feed fixture has no local Cricketive record yet,
+         * link to its SportScore scorecard instead of a dead "#".
+         * Only accept match pages from the expected SportScore host.
+         */
+        try {
+            const providerMatchUrl = new URL(
+                String(source.url || ""),
+                "https://sportscore.com"
+            );
+
+            if (
+                providerMatchUrl.origin === "https://sportscore.com" &&
+                /^\/cricket\/match\/[a-z0-9-]+\/?$/i.test(providerMatchUrl.pathname)
+            ) {
+                actionUrl = providerMatchUrl.href;
+                actionText = "VIEW SCORECARD";
+                openExternalMatch = true;
+            }
+        } catch (_) {
+            /* Keep the safe "#" fallback for invalid provider URLs. */
+        }
 
     }
 
@@ -2200,6 +2227,7 @@ function createCard(
             <a
                 class="watch-button"
                 href="${esc(actionUrl)}"
+            ${openExternalMatch ? 'target="_blank" rel="noopener noreferrer"' : ""}
             >
 
                 ${actionText}
