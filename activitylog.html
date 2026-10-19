@@ -38,6 +38,7 @@ select{padding:10px;background:#080808;color:#fff;border:1px solid #333;border-r
   <h2>🏏 Cricketive Admin Activity</h2>
   <p class="sync-note">Owner-only administrator activity.</p>
   <button class="secondary" onclick="window.location.href='admin.html'">← BACK TO ADMIN</button>
+  <div id="accessMessage" class="message"></div>
 </div>
 
 <div id="activityPanel" class="hidden">
@@ -45,6 +46,7 @@ select{padding:10px;background:#080808;color:#fff;border:1px solid #333;border-r
     <div class="logo">CRICKETIVE 🏏 <span class="badge">OWNER</span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="secondary" onclick="window.location.href='admin.html'">← ADMIN</button>
+      <button class="secondary" onclick="window.location.href='admin-users.html'">MANAGE ADMINS</button>
       <button class="logout" onclick="logout()">LOGOUT</button>
     </div>
   </div>
@@ -96,7 +98,10 @@ function formatDate(value) {
 }
 
 function setMessage(text, error=false) {
-  const el = document.getElementById("message");
+  const activityPanel = document.getElementById("activityPanel");
+  const isActivityVisible = activityPanel && !activityPanel.classList.contains("hidden");
+  const el = document.getElementById(isActivityVisible ? "message" : "accessMessage");
+  if (!el) return;
   el.textContent = text || "";
   el.style.color = error ? "#ff6666" : "#999";
 }
@@ -180,7 +185,7 @@ function renderAudit() {
         </div>
 
         <div class="audit-meta" style="margin-top:7px">
-          Admin: ${escapeHtml(entry.actor_user_id || "System")}
+          Admin: ${escapeHtml((entry.actor && (entry.actor.display_name || entry.actor.email)) || entry.actor_user_id || "System")}
           · Record: ${escapeHtml(entry.record_id || "")}
           ${entry.actor_type ? ` · Type: ${escapeHtml(entry.actor_type)}` : ""}
         </div>

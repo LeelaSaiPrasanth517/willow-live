@@ -73,30 +73,6 @@
             margin-top: 0;
         }
 
-        .audit-entry {
-            background: #0a0a0a;
-            border: 1px solid #292929;
-            border-radius: 10px;
-            padding: 14px;
-            margin-top: 10px;
-        }
-
-        .audit-details {
-            margin-top: 10px;
-            color: #bbb;
-            font-size: 12px;
-        }
-
-        .audit-details pre {
-            white-space: pre-wrap;
-            overflow-wrap: anywhere;
-            padding: 10px;
-            border-radius: 6px;
-            background: #050505;
-            border: 1px solid #222;
-            color: #bbb;
-        }
-
         label {
             display: block;
             margin-top: 15px;
@@ -398,19 +374,13 @@
                 Match Schedule
             </h2>
 
-            <p class="sync-note">
-
-                Matches are loaded automatically from
-                SportScore.
-
-                You only need to add stream
-                links.
-
+            <p id="syncNote" class="sync-note">
+                Matches are loaded automatically from SportScore.
             </p>
 
             <button
                 id="syncButton"
-                class="primary"
+                class="primary hidden"
                 onclick="syncMatches()"
             >
                 SYNC MATCHES
@@ -421,49 +391,23 @@
                 class="message"
             ></div>
 
-            <div class="toolbar">
+            <div id="ownerTools" class="toolbar hidden">
                 <button
-                    id="adminLogsToggle"
                     class="secondary"
                     type="button"
-                    onclick="toggleAdminLogs()"
+                    onclick="window.location.href='activitylog.html'"
                 >
-                    VIEW ADMIN LOGS
+                    VIEW AUDIT LOGS
+                </button>
+                <button
+                    class="secondary"
+                    type="button"
+                    onclick="window.location.href='admin-users.html'"
+                >
+                    MANAGE ADMINS
                 </button>
             </div>
 
-        </div>
-
-
-        <div
-            id="adminLogsPanel"
-            class="card hidden"
-            aria-live="polite"
-        >
-            <div class="match-header">
-                <h2>🧾 Admin Logs</h2>
-                <div class="toolbar">
-                    <button
-                        class="secondary"
-                        type="button"
-                        onclick="loadAdminLogs()"
-                    >
-                        REFRESH
-                    </button>
-                    <button
-                        class="secondary"
-                        type="button"
-                        onclick="toggleAdminLogs(false)"
-                    >
-                        CLOSE
-                    </button>
-                </div>
-            </div>
-
-            <div id="adminLogsMessage" class="message"></div>
-            <div id="adminLogsList">
-                <div class="empty">Open Admin Logs to load audit history.</div>
-            </div>
         </div>
 
 
@@ -547,6 +491,35 @@ const client =
 let adminRefreshTimer = null;
 let lastSportScoreMatches = [];
 let lastSportScoreSuccessAt = 0;
+let currentAdminRole = null;
+
+function isOwner() {
+    return currentAdminRole === "owner";
+}
+
+async function getAdminProfile() {
+    const { data, error } = await client.auth.getSession();
+    if (error || !data?.session?.access_token) {
+        throw new Error("Please sign in to continue.");
+    }
+
+    const response = await fetch("/api/admin/me", {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+            "Authorization": `Bearer ${data.session.access_token}`,
+            "Accept": "application/json"
+        }
+    });
+    const profile = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(profile?.error || "Administrator access could not be verified.");
+    }
+    if (!profile || !["owner", "admin"].includes(profile.role)) {
+        throw new Error("Administrator access required.");
+    }
+    return profile;
+}
 
 const SPORT_SCORE_CACHE_MS =
     5 * 60 * 1000;
@@ -676,8 +649,8 @@ async function login() {
    ========================================================= */
 
 async function logout() {
-
-    if (adminRefreshTimer) {
+    currentAdminRole = null;
+if (adminRefreshTimer) {
         clearInterval(
             adminRefreshTimer
         );
@@ -723,153 +696,36 @@ async function checkSession() {
    SHOW ADMIN
    ========================================================= */
 
-function showAdmin() {
-
-    document
-        .getElementById("loginPanel")
-        .classList
-        .add("hidden");
-
-
-    document
-        .getElementById("adminPanel")
-        .style.display = "block";
-
-
-    loadMatches();
-
-    if (adminRefreshTimer) {
-        clearInterval(
-            adminRefreshTimer
-        );
-    }
-
-    adminRefreshTimer =
-        setInterval(
-            loadMatches,
-            60000
-        );
-
-}
-
-
-/* =========================================================
-   ADMIN AUDIT LOGS
-   ========================================================= */
-
-async function toggleAdminLogs(forceOpen) {
-    const panel = document.getElementById("adminLogsPanel");
-    const button = document.getElementById("adminLogsToggle");
-
-    const shouldOpen =
-        typeof forceOpen === "boolean"
-            ? forceOpen
-            : panel.classList.contains("hidden");
-
-    panel.classList.toggle("hidden", !shouldOpen);
-    button.textContent = shouldOpen
-        ? "HIDE ADMIN LOGS"
-        : "VIEW ADMIN LOGS";
-
-    if (shouldOpen) {
-        await loadAdminLogs();
-    }
-}
-
-async function loadAdminLogs() {
-    const message = document.getElementById("adminLogsMessage");
-    const list = document.getElementById("adminLogsList");
-
-    message.textContent = "Loading audit history...";
-    list.innerHTML = "";
+async function showAdmin() {
+    const loginMessage = document.getElementById("loginMessage");
 
     try {
-        const { data, error: sessionError } =
-            await client.auth.getSession();
+        loginMessage.textContent = "Verifying administrator access...";
+        const profile = await getAdminProfile();
+        currentAdminRole = profile.role;
+        const owner = isOwner();
 
-        if (sessionError) {
-            throw sessionError;
+        document.getElementById("loginPanel").classList.add("hidden");
+        document.getElementById("adminPanel").style.display = "block";
+        document.getElementById("ownerTools").classList.toggle("hidden", !owner);
+        document.getElementById("syncButton").classList.toggle("hidden", !owner);
+        document.getElementById("syncNote").textContent = owner
+            ? "Matches load automatically from SportScore. Owner controls include syncing fixtures and managing admins."
+            : "Your access is limited to adding and maintaining stream links for matches.";
+
+        loginMessage.textContent = "";
+
+        await loadMatches();
+
+        if (adminRefreshTimer) {
+            clearInterval(adminRefreshTimer);
         }
-
-        const session = data?.session;
-
-        if (!session?.access_token) {
-            throw new Error("Your session has expired. Please sign in again.");
-        }
-
-        const response = await fetch("/api/admin/audit", {
-            method: "GET",
-            cache: "no-store",
-            headers: {
-                "Authorization": `Bearer ${session.access_token}`,
-                "Accept": "application/json"
-            }
-        });
-
-        const payload = await response.json().catch(() => null);
-
-        if (!response.ok) {
-            throw new Error(
-                payload?.error ||
-                (response.status === 403
-                    ? "Owner access is required to view audit logs."
-                    : `Unable to load audit logs (HTTP ${response.status}).`)
-            );
-        }
-
-        if (!Array.isArray(payload)) {
-            throw new Error(payload?.error || "The audit log response was invalid.");
-        }
-
-        message.textContent = `${payload.length} audit entries.`;
-
-        if (!payload.length) {
-            list.innerHTML = '<div class="empty">No audit entries have been recorded yet.</div>';
-            return;
-        }
-
-        list.innerHTML = payload.map(entry => {
-            const actor =
-                entry.actor?.display_name ||
-                entry.actor?.email ||
-                entry.actor_type ||
-                "Unknown actor";
-
-            const metadata = [
-                entry.created_at ? formatDate(entry.created_at) : "",
-                `Actor: ${actor}`,
-                entry.table_name ? `Table: ${entry.table_name}` : "",
-                entry.record_id ? `Record: ${entry.record_id}` : ""
-            ].filter(Boolean).join(" · ");
-
-            const details = [];
-            if (entry.old_data !== null && entry.old_data !== undefined) {
-                details.push(`Before:\n${JSON.stringify(entry.old_data, null, 2)}`);
-            }
-            if (entry.new_data !== null && entry.new_data !== undefined) {
-                details.push(`After:\n${JSON.stringify(entry.new_data, null, 2)}`);
-            }
-
-            return `
-                <article class="audit-entry">
-                    <div class="match-title">
-                        ${escapeHtml(entry.action || "AUDIT EVENT")}
-                        ${entry.table_name ? ` · ${escapeHtml(entry.table_name)}` : ""}
-                    </div>
-                    <div class="match-meta">${escapeHtml(metadata)}</div>
-                    ${details.length
-                        ? `<details class="audit-details">
-                              <summary>View record details</summary>
-                              <pre>${escapeHtml(details.join("\n\n"))}</pre>
-                           </details>`
-                        : ""}
-                </article>
-            `;
-        }).join("");
-
+        adminRefreshTimer = setInterval(loadMatches, 60000);
     } catch (error) {
-        message.textContent = error.message || "Unable to load audit history.";
-        list.innerHTML = '<div class="empty">Audit history could not be loaded.</div>';
+        currentAdminRole = null;
+        document.getElementById("adminPanel").style.display = "none";
+        document.getElementById("loginPanel").classList.remove("hidden");
+        loginMessage.textContent = error?.message || "Unable to verify administrator access.";
     }
 }
 
@@ -967,8 +823,12 @@ function hasStream(
 
 
 async function syncMatches() {
+    if (!isOwner()) {
+        alert("Only the owner can sync or change match records.");
+        return;
+    }
 
-    const message =
+const message =
         document.getElementById(
             "syncMessage"
         );
@@ -2642,7 +2502,7 @@ function renderMatchList(
 
 
                                     ${
-                                        !match.api_match_id
+                                        !match.api_match_id && isOwner()
 
                                             ? `
                                                 <button
@@ -2704,8 +2564,12 @@ function renderMatchList(
 async function deleteManualMatch(
     matchId
 ) {
+    if (!isOwner()) {
+        alert("Only the owner can delete manual match records.");
+        return;
+    }
 
-    if (
+if (
         !isValidUuid(matchId)
     ) {
 
@@ -2799,6 +2663,48 @@ async function deleteManualMatch(
 
     await loadMatches();
 
+}
+
+
+/* =========================================================
+   LOAD STREAMS
+   ========================================================= */
+
+function renderStreamEntry(stream, matchId) {
+    const safeStreamId = escapeHtml(stream.id);
+    const safeMatchId = escapeHtml(matchId);
+    const editableByOwner = isOwner();
+
+    let html = '<div class="stream-row">';
+    html += '<select id="lang-' + safeStreamId + '"' + (editableByOwner ? '' : ' disabled') + '>';
+    html += languageOption("English", stream.language);
+    html += languageOption("Hindi", stream.language);
+    html += languageOption("Telugu", stream.language);
+    html += languageOption("Tamil", stream.language);
+    html += languageOption("Malayalam", stream.language);
+    html += languageOption("Kannada", stream.language);
+    html += languageOption("Other", stream.language);
+    html += '</select>';
+
+    html += '<input id="url-' + safeStreamId + '" type="url" value="' +
+        escapeHtml(stream.embed_url) + '" placeholder="https://" ' +
+        (editableByOwner ? '' : 'readonly') + '>';
+
+    html += '<input id="name-' + safeStreamId + '" type="text" value="' +
+        escapeHtml(stream.stream_name) + '" placeholder="Stream name" ' +
+        (editableByOwner ? '' : 'readonly') + '>';
+
+    if (editableByOwner) {
+        html += '<div class="toolbar" style="margin:0;">' +
+            '<button class="secondary" data-stream-id="' + safeStreamId + '" onclick="updateStream(this.dataset.streamId)">SAVE</button>' +
+            '<button class="danger" data-stream-id="' + safeStreamId + '" data-match-id="' + safeMatchId + '" onclick="deleteStream(this.dataset.streamId, this.dataset.matchId)">DELETE</button>' +
+            '</div>';
+    } else {
+        html += '<div class="note" style="font-size:12px;">Saved stream · admin accounts cannot edit or delete existing links.</div>';
+    }
+
+    html += '</div>';
+    return html;
 }
 
 
@@ -2904,106 +2810,7 @@ async function loadStreams(
 
     container.innerHTML =
         data
-
-            .map(
-                stream => `
-
-                    <div class="stream-row">
-
-                        <select
-                            id="lang-${stream.id}"
-                        >
-
-                            ${languageOption(
-                                "English",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Hindi",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Telugu",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Tamil",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Malayalam",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Kannada",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Other",
-                                stream.language
-                            )}
-
-                        </select>
-
-
-                        <input
-                            id="url-${stream.id}"
-                            type="url"
-                            value="${escapeHtml(
-                                stream.embed_url
-                            )}"
-                            placeholder="https://..."
-                        >
-
-
-                        <input
-                            id="name-${stream.id}"
-                            type="text"
-                            value="${escapeHtml(
-                                stream.stream_name
-                            )}"
-                            placeholder="Stream name"
-                        >
-
-
-                        <div
-                            class="toolbar"
-                            style="margin:0;"
-                        >
-
-                            <button
-                                class="secondary"
-                                onclick="updateStream(
-                                    '${stream.id}'
-                                )"
-                            >
-                                SAVE
-                            </button>
-
-
-                            <button
-                                class="danger"
-                                onclick="deleteStream(
-                                    '${stream.id}',
-                                    '${matchId}'
-                                )"
-                            >
-                                DELETE
-                            </button>
-
-                        </div>
-
-                    </div>
-
-                `
-            )
-
+            .map(stream => renderStreamEntry(stream, matchId))
             .join("");
 
 }
@@ -3016,6 +2823,10 @@ async function loadStreams(
 function addStreamForm(
     matchId
 ) {
+    if (!["owner", "admin"].includes(currentAdminRole)) {
+        alert("Please sign in with a Cricketive administrator account.");
+        return;
+    }
 
     if (
         !isValidUuid(matchId)
@@ -3121,6 +2932,12 @@ function addStreamForm(
 async function createStream(
     matchId
 ) {
+    if (!["owner", "admin"].includes(currentAdminRole)) {
+        alert("Please sign in with a Cricketive administrator account.");
+        return;
+    }
+
+
 
     const language =
         document
@@ -3221,6 +3038,12 @@ async function createStream(
 async function updateStream(
     streamId
 ) {
+    if (!isOwner()) {
+        alert("Only the owner can edit existing stream links.");
+        return;
+    }
+
+
 
     const language =
         document
@@ -3300,6 +3123,12 @@ async function deleteStream(
     streamId,
     matchId
 ) {
+    if (!isOwner()) {
+        alert("Only the owner can delete existing stream links.");
+        return;
+    }
+
+
 
     if (
         !confirm(
