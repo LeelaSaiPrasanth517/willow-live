@@ -1332,7 +1332,8 @@ function isLiveStatus(
     liveStates.has(text) ||
     text.includes("innings") ||
     text.includes("in_progress") ||
-    text.includes("inplay")
+    text.includes("inplay") ||
+    text.includes("batting")
   );
 }
 
@@ -1533,105 +1534,71 @@ function normalizeSportScoreStatus(
   matchTime = null,
   competition = ""
 ) {
-  /*
-   * SportScore is the authoritative status source.
-   *
-   * IMPORTANT:
-   * - Do not infer LIVE or FINISHED from match time.
-   * - Do not infer status from score, innings or batting team.
-   * - Recognize provider status/status_text when possible.
-   * - If the provider state is unfamiliar, a future start time may
-   *   identify an Upcoming fixture; past ambiguous matches stay Unknown.
-   */
-
-  const value = String(status || "")
+  const normalize = value => String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[-\s]+/g, "_");
 
-  const text = String(statusText || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[-\s]+/g, "_");
+  const value = normalize(status);
+  const text = normalize(statusText);
 
   const liveStates = new Set([
-    "live",
-    "in_progress",
-    "inprogress",
-    "inplay",
-    "in_play",
-    "started",
-    "playing",
-    "ongoing",
-    "innings",
-    "1st_inn",
-    "2nd_inn",
-    "3rd_inn",
-    "4th_inn",
-    "batting"
+    "live", "in_progress", "inprogress", "inplay", "in_play",
+    "started", "playing", "ongoing", "innings", "1st_inn",
+    "2nd_inn", "3rd_inn", "4th_inn", "batting"
   ]);
-
-  if (
-    liveStates.has(value) ||
-    liveStates.has(text) ||
-    text.includes("innings") ||
-    text.includes("in_progress") ||
-    text.includes("inplay")
-  ) {
-    return "Live";
-  }
 
   const finishedStates = new Set([
-    "finished",
-    "finish",
-    "ended",
-    "end",
-    "completed",
-    "complete",
-    "ft",
-    "full_time",
-    "fulltime",
-    "after_match",
-    "post_match",
-    "postmatch"
+    "finished", "finish", "ended", "end", "completed", "complete",
+    "ft", "full_time", "fulltime", "after_match", "post_match", "postmatch"
   ]);
 
-  if (
-    finishedStates.has(value) ||
+  const closedStates = new Set([
+    "cancelled", "canceled", "abandoned"
+  ]);
+
+  const upcomingStates = new Set([
+    "scheduled", "upcoming", "not_started", "notstarted",
+    "pre_match", "prematch", "pending", "ns", "not_started_yet",
+    "yet_to_start", "delayed", "postponed", "rescheduled"
+  ]);
+
+  const textSaysFinished =
     finishedStates.has(text) ||
     text.includes("match_finished") ||
     text.includes("match_ended") ||
-    text.includes("won_by")
-  ) {
+    text.includes("won_by");
+
+  const textSaysLive =
+    liveStates.has(text) ||
+    text.includes("innings") ||
+    text.includes("in_progress") ||
+    text.includes("inplay") ||
+    text.includes("batting");
+
+  // Prefer an explicit provider status over potentially stale descriptive text.
+  if (finishedStates.has(value) || closedStates.has(value)) {
     return "Finished";
   }
 
-  const upcomingStates = new Set([
-    "scheduled",
-    "upcoming",
-    "not_started",
-    "notstarted",
-    "pre_match",
-    "prematch",
-    "pending",
-    "ns",
-    "not_started_yet",
-    "yet_to_start",
-    "delayed",
-    "postponed",
-    "rescheduled"
-  ]);
+  if (liveStates.has(value)) {
+    return "Live";
+  }
 
-  if (
-    upcomingStates.has(value) ||
-    upcomingStates.has(text)
-  ) {
+  if (textSaysFinished || closedStates.has(text)) {
+    return "Finished";
+  }
+
+  if (textSaysLive) {
+    return "Live";
+  }
+
+  if (upcomingStates.has(value) || upcomingStates.has(text)) {
     const scheduledAt = matchTime
       ? new Date(matchTime).getTime()
       : Number.NaN;
 
-    // Never keep a past scheduled fixture in Upcoming solely because
-    // the provider's status string has not refreshed yet.
+    // A stale scheduled label must not keep a match in Upcoming after its start.
     if (
       Number.isFinite(scheduledAt) &&
       scheduledAt <= Date.now()
@@ -1642,27 +1609,6 @@ function normalizeSportScoreStatus(
     return "Upcoming";
   }
 
-  const closedStates = new Set([
-    "cancelled",
-    "canceled",
-    "abandoned"
-  ]);
-
-  if (
-    closedStates.has(value) ||
-    closedStates.has(text)
-  ) {
-    return "Finished";
-  }
-
-  /*
-   * If SportScore's status is unfamiliar but the fixture time is
-   * clearly in the future, treat it as Upcoming. SportScore's widget
-   * sometimes supplies schedule text/statuses outside the known list.
-   *
-   * Do not infer Finished from an old time: past ambiguous fixtures
-   * remain Unknown unless SportScore explicitly marks them complete.
-   */
   const scheduledAt = matchTime
     ? new Date(matchTime).getTime()
     : Number.NaN;
@@ -1674,8 +1620,10 @@ function normalizeSportScoreStatus(
     return "Upcoming";
   }
 
+  // Do not guess Live or Finished from the scheduled time alone.
   return "Unknown";
 }
+
 
 /* =========================================================
    LIVE SCORES ENDPOINT
