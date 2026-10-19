@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cricketive · Manage Admins</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#070707;color:#fff;font-family:Arial,Helvetica,sans-serif}
+.container{width:100%;max-width:900px;margin:auto;padding:30px 18px}
+.header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:25px}
+.logo{font-size:24px;font-weight:800}
+.card{background:#111;border:1px solid #242424;border-radius:12px;padding:22px;margin-bottom:20px}
+h1,h2{margin-top:0}
+button{border:0;cursor:pointer;font-weight:700}
+.primary{padding:11px 16px;background:#5865f2;color:#fff;border-radius:7px}
+.secondary{padding:9px 13px;background:#222;color:#fff;border-radius:6px}
+.danger{padding:9px 13px;background:#9f2424;color:#fff;border-radius:6px}
+input{width:100%;padding:12px;background:#080808;color:#fff;border:1px solid #333;border-radius:7px;outline:none}
+input:focus{border-color:#5865f2}
+label{display:block;margin:15px 0 6px;font-size:13px;color:#bbb}
+.meta,.note{color:#999;font-size:13px;line-height:1.55}
+.message{margin-top:12px;font-size:13px;color:#aaa;white-space:pre-wrap}
+.hidden{display:none!important}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.admin-row{background:#0a0a0a;border:1px solid #292929;border-radius:9px;padding:15px;margin-top:10px}
+.row-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#222;color:#bbb;font-size:11px;font-weight:800}
+@media(max-width:600px){.container{padding:20px 12px}.logo{font-size:20px}.card{padding:16px}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div id="gate" class="card">
+    <h2>🏏 Cricketive Admin</h2>
+    <p class="note">Administrator account management is restricted to the owner.</p>
+    <div id="gateMessage" class="message">Verifying owner access...</div>
+    <div class="toolbar">
+      <button class="secondary" type="button" onclick="window.location.href='admin.html'">← BACK TO ADMIN</button>
+    </div>
+  </div>
+
+  <div id="ownerPanel" class="hidden">
+    <div class="header">
+      <div class="logo">CRICKETIVE 🏏 <span class="badge">OWNER</span></div>
+      <div class="toolbar">
+        <button class="secondary" type="button" onclick="window.location.href='activitylog.html'">AUDIT LOGS</button>
+        <button class="secondary" type="button" onclick="window.location.href='admin.html'">BACK TO ADMIN</button>
+        <button class="secondary" type="button" onclick="logout()">LOGOUT</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>➕ Add an Administrator</h2>
+      <p class="note">Only the owner can create or revoke administrator accounts. New accounts get stream-management access, not owner privileges.</p>
+      <form id="createAdminForm" onsubmit="createAdmin(event)">
+        <label for="displayName">Display name</label>
+        <input id="displayName" name="display_name" type="text" minlength="2" maxlength="80" autocomplete="name" required>
+
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" maxlength="254" autocomplete="email" required>
+
+        <label for="password">Initial password (at least 12 characters)</label>
+        <input id="password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+
+        <button id="createButton" class="primary" type="submit">CREATE ADMIN</button>
+      </form>
+      <div id="createMessage" class="message"></div>
+    </div>
+
+    <div class="card">
+      <div class="row-top">
+        <div>
+          <h2>👥 Administrator Accounts</h2>
+          <p class="note">You can revoke an administrator's access here. The owner account is protected.</p>
+        </div>
+        <button class="secondary" type="button" onclick="loadAdmins()">REFRESH</button>
+      </div>
+      <div id="listMessage" class="message"></div>
+      <div id="adminList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://qkzwzdyahwzcwtqgcbud.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_wgba0C-XWm2B6UA-d93Rhw_9aWXKMVC";
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })
+    : String(value);
+}
+
+function setMessage(id, value, isError) {
+  const element = document.getElementById(id);
+  element.textContent = value || "";
+  element.style.color = isError ? "#ff6666" : "#aaa";
+}
+
+async function adminApi(path, options) {
+  const requestOptions = options || {};
+  const result = await client.auth.getSession();
+  const session = result.data && result.data.session;
+  if (result.error || !session || !session.access_token) {
+    throw new Error("Your session has expired. Sign in through the Admin page first.");
+  }
+
+  const headers = Object.assign(
+    { "Authorization": "Bearer " + session.access_token, "Accept": "application/json" },
+    requestOptions.headers || {}
+  );
+  if (requestOptions.body) headers["Content-Type"] = "application/json";
+
+  const response = await fetch(path, Object.assign({}, requestOptions, {
+    method: requestOptions.method || "GET",
+    cache: "no-store",
+    headers: headers
+  }));
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload && payload.error || "Request failed (" + response.status + ").");
+  }
+  return payload;
+}
+
+async function initialize() {
+  try {
+    const profile = await adminApi("/api/admin/me");
+    if (!profile || profile.role !== "owner") {
+      setMessage("gateMessage", "Owner access required. Administrator accounts are not available to regular admins.", true);
+      return;
+    }
+    document.getElementById("gate").classList.add("hidden");
+    document.getElementById("ownerPanel").classList.remove("hidden");
+    await loadAdmins();
+  } catch (error) {
+    setMessage("gateMessage", error.message || "Unable to verify owner access.", true);
+  }
+}
+
+async function loadAdmins() {
+  setMessage("listMessage", "Loading administrator accounts...");
+  const list = document.getElementById("adminList");
+  list.innerHTML = "";
+  try {
+    const admins = await adminApi("/api/admin/users");
+    if (!Array.isArray(admins)) throw new Error("The administrator list response was invalid.");
+    setMessage("listMessage", admins.length + " account(s).");
+    if (!admins.length) {
+      list.innerHTML = '<p class="note">No administrator accounts found.</p>';
+      return;
+    }
+
+    list.innerHTML = admins.map(function(admin) {
+      const name = admin.display_name || "(no display name)";
+      const actor = admin.email || "";
+      const isOwnerAccount = admin.role === "owner";
+      const action = isOwnerAccount
+        ? '<span class="badge">PROTECTED OWNER</span>'
+        : '<button class="danger" type="button" onclick="removeAdmin(\\'' + escapeHtml(admin.user_id) + '\\')">REVOKE ACCESS</button>';
+      return '<article class="admin-row">' +
+        '<div class="row-top">' +
+          '<div><strong>' + escapeHtml(name) + '</strong> <span class="badge">' + escapeHtml(String(admin.role || "admin").toUpperCase()) + '</span>' +
+          '<div class="note">' + escapeHtml(actor) + '</div>' +
+          '<div class="note">Created: ' + escapeHtml(formatDate(admin.created_at)) + '</div></div>' +
+          action +
+        '</div></article>';
+    }).join("");
+  } catch (error) {
+    setMessage("listMessage", error.message || "Unable to load administrator accounts.", true);
+  }
+}
+
+async function createAdmin(event) {
+  event.preventDefault();
+  const button = document.getElementById("createButton");
+  const displayName = document.getElementById("displayName").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+
+  if (password.length < 12) {
+    setMessage("createMessage", "Initial password must be at least 12 characters.", true);
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "CREATING...";
+  setMessage("createMessage", "Creating administrator account...");
+  try {
+    const result = await adminApi("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify({ display_name: displayName, email: email, password: password })
+    });
+    document.getElementById("createAdminForm").reset();
+    setMessage("createMessage", "Administrator created successfully. Share the initial password with them securely.");
+    await loadAdmins();
+  } catch (error) {
+    setMessage("createMessage", error.message || "Unable to create administrator.", true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "CREATE ADMIN";
+  }
+}
+
+async function removeAdmin(userId) {
+  if (!userId || !confirm("Revoke this administrator's access? Their Auth account will also be removed.")) return;
+  setMessage("listMessage", "Revoking administrator access...");
+  try {
+    await adminApi("/api/admin/users", {
+      method: "DELETE",
+      body: JSON.stringify({ user_id: userId })
+    });
+    setMessage("listMessage", "Administrator access revoked.");
+    await loadAdmins();
+  } catch (error) {
+    setMessage("listMessage", error.message || "Unable to revoke access.", true);
+  }
+}
+
+async function logout() {
+  await client.auth.signOut();
+  window.location.href = "admin.html";
+}
+
+initialize();
+</script>
+</body>
+</html>
