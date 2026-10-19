@@ -1076,7 +1076,7 @@ async function handleCricketAPI() {
         ).length,
 
       status_authority:
-        "sportscore-match-list",
+        "sportscore-match-list+match-detail",
 
       updated:
         payload.updated ||
@@ -1723,8 +1723,8 @@ async function handleLiveScores() {
 
 
     /*
-     * Only query individual
-     * endpoints for live matches.
+     * Query individual endpoints for live matches and recent fixtures
+     * whose scheduled start has passed but provider status may be stale.
      */
 
     await Promise.all(
@@ -1735,7 +1735,8 @@ async function handleLiveScores() {
             isLiveStatus(
               match.status,
               match.status_text
-            )
+            ) ||
+            isStaleUpcomingCandidate(match)
         )
         .map(
           async match => {
