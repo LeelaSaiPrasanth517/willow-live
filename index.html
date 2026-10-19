@@ -2528,17 +2528,28 @@ function normalizeName(
 function normalizeUrl(value) {
     if (!value) return "";
 
-    try {
-        const url = new URL(String(value).trim(), "https://sportscore.com");
-        url.search = "";
-        url.hash = "";
-        url.pathname = url.pathname.replace(/\/+$/, "");
-        return url.origin + url.pathname;
-    } catch (_) {
-        return String(value).trim().replace(/\/+$/, "");
+    // Normalize relative and absolute SportScore links without depending on
+    // URL parsing for provider data that can contain query strings.
+    const clean = String(value)
+        .trim()
+        .split(/[?#]/)[0]
+        .replace(/\/+$/, "");
+
+    if (!clean) return "";
+
+    const absolute = clean.match(/^https?:\/\/([^/]+)(\/.*)?$/i);
+    if (absolute) {
+        return "https://" + absolute[1].toLowerCase() + (absolute[2] || "");
     }
+
+    return "https://sportscore.com" +
+        (clean.startsWith("/") ? clean : "/" + clean);
 }
 
+
+/* =========================================================
+   TIME
+========================================================= */
 
 /* =========================================================
    TIME
