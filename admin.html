@@ -73,6 +73,24 @@
             margin-top: 0;
         }
 
+        .finished-summary {
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: 700;
+            list-style-position: inside;
+            user-select: none;
+        }
+
+        .finished-summary:focus-visible {
+            outline: 2px solid #5865f2;
+            outline-offset: 4px;
+            border-radius: 4px;
+        }
+
+        #finishedMatches {
+            margin-top: 12px;
+        }
+
         label {
             display: block;
             margin-top: 15px;
@@ -445,17 +463,18 @@
              UPCOMING MATCHES
              ================================================= -->
 
-        <div class="card">
+        <details class="card" id="finishedSection">
 
-            <h2>
+            <summary class="finished-summary">
                 ✅ Finished Matches
-            </h2>
+                (<span id="finishedCount">0</span>)
+            </summary>
 
             <div id="finishedMatches">
                 Loading...
             </div>
 
-        </div>
+        </details>
 
 
         <div class="card">
@@ -2293,8 +2312,18 @@ async function loadMatches() {
 
 
     /*
-     * Render finished.
+     * Keep finished fixtures out of the way by default.
+     * The <details> section is collapsed on page load, while the
+     * records remain available for historical stream maintenance.
      */
+    const finishedCountLabel =
+        document.getElementById("finishedCount");
+
+    if (finishedCountLabel) {
+        finishedCountLabel.textContent =
+            String(finishedMatches.length);
+    }
+
     if (finishedContainer) {
         renderMatchList(
             finishedContainer,
