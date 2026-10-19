@@ -73,6 +73,48 @@ export default {
 };
 
 
+function isProviderUpcomingStatus(status, statusText = "") {
+  const normalize = value => String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, "_");
+
+  const upcomingStates = new Set([
+    "scheduled", "upcoming", "not_started", "notstarted",
+    "pre_match", "prematch", "pending", "ns", "not_started_yet",
+    "yet_to_start", "delayed", "postponed", "rescheduled"
+  ]);
+
+  return upcomingStates.has(normalize(status)) ||
+    upcomingStates.has(normalize(statusText));
+}
+
+const MULTI_DAY_MATCH_PATTERN =
+  /\btest\b|county championship|sheffield shield|ranji trophy|duleep trophy|first[- ]class|four[- ]day|three[- ]day|county cup/i;
+
+function maxPlausibleMatchDurationMs(competition, title) {
+  const text = String(competition || "") + " " + String(title || "");
+  return MULTI_DAY_MATCH_PATTERN.test(text)
+    ? 6 * 24 * 60 * 60 * 1000
+    : 24 * 60 * 60 * 1000;
+}
+
+function isStaleUpcomingCandidate(match) {
+  if (!isProviderUpcomingStatus(match?.status, match?.status_text)) {
+    return false;
+  }
+
+  const rawTime = match?.time || match?.start_time || match?.match_time;
+  const scheduledAt = rawTime ? new Date(rawTime).getTime() : Number.NaN;
+  if (!Number.isFinite(scheduledAt) || scheduledAt > Date.now()) {
+    return false;
+  }
+
+  return Date.now() - scheduledAt <=
+    maxPlausibleMatchDurationMs(match?.competition, match?.title);
+}
+
+
 /* =========================================================
    MAIN CRICKET API
 ========================================================= */
@@ -722,6 +764,18 @@ async function handleCricketAPI() {
               match.status_text ||
               "";
 
+            let providerStatus =
+              match.status ||
+              "";
+
+            let matchTime =
+              match.time ||
+              match.start_time ||
+              match.match_time ||
+              null;
+
+            let statusSource =
+              "sportscore-match-list";
 
             let battingTeam =
               match.batting_team ||
@@ -745,13 +799,20 @@ async function handleCricketAPI() {
 
             const isLive =
               isLiveStatus(
-                match.status,
-                match.status_text
+                providerStatus,
+                statusText
               );
 
+            const needsStatusRefresh =
+              isStaleUpcomingCandidate({
+                ...match,
+                status: providerStatus,
+                status_text: statusText,
+                time: matchTime
+              });
 
             if (
-              isLive &&
+              (isLive || needsStatusRefresh) &&
               match.url
             ) {
 
@@ -808,13 +869,20 @@ async function handleCricketAPI() {
                   }
 
 
-                  if (
-                    details.status_text
-                  ) {
+                  if (details.status) {
+                    providerStatus = details.status;
+                  }
 
-                    statusText =
-                      details.status_text;
+                  if (details.status_text) {
+                    statusText = details.status_text;
+                  }
 
+                  if (details.time || details.start_time) {
+                    matchTime = details.time || details.start_time;
+                  }
+
+                  if (details.status || details.status_text || details.time || details.start_time) {
+                    statusSource = "sportscore-match-detail";
                   }
 
 
@@ -895,19 +963,19 @@ async function handleCricketAPI() {
 
               status:
                 normalizeSportScoreStatus(
-                  match.status,
+                  providerStatus,
                   statusText,
-                  match.time,
+                  matchTime,
                   match.competition
                 ),
 
 
               status_source:
-                "sportscore-match-list",
+                statusSource,
 
 
               provider_status:
-                match.status || null,
+                providerStatus || null,
 
 
               status_text:
@@ -923,7 +991,7 @@ async function handleCricketAPI() {
 
 
               time:
-                match.time ||
+                matchTime ||
                 null,
 
 
@@ -1558,6 +1626,19 @@ function normalizeSportScoreStatus(
     upcomingStates.has(value) ||
     upcomingStates.has(text)
   ) {
+    const scheduledAt = matchTime
+      ? new Date(matchTime).getTime()
+      : Number.NaN;
+
+    // Never keep a past scheduled fixture in Upcoming solely because
+    // the provider's status string has not refreshed yet.
+    if (
+      Number.isFinite(scheduledAt) &&
+      scheduledAt <= Date.now()
+    ) {
+      return "Unknown";
+    }
+
     return "Upcoming";
   }
 
