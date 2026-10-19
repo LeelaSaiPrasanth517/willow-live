@@ -1,4 +1,5 @@
-name = "willow-live"
+# Production Worker for https://cricketive.livecricket.workers.dev/
+name = "cricketive"
 main = "worker.js"
 compatibility_date = "2026-08-19"
 
