@@ -73,22 +73,28 @@
             margin-top: 0;
         }
 
-        .finished-summary {
-            cursor: pointer;
-            font-size: 20px;
-            font-weight: 700;
-            list-style-position: inside;
-            user-select: none;
+        .audit-entry {
+            background: #0a0a0a;
+            border: 1px solid #292929;
+            border-radius: 10px;
+            padding: 14px;
+            margin-top: 10px;
         }
 
-        .finished-summary:focus-visible {
-            outline: 2px solid #5865f2;
-            outline-offset: 4px;
-            border-radius: 4px;
+        .audit-details {
+            margin-top: 10px;
+            color: #bbb;
+            font-size: 12px;
         }
 
-        #finishedMatches {
-            margin-top: 12px;
+        .audit-details pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            padding: 10px;
+            border-radius: 6px;
+            background: #050505;
+            border: 1px solid #222;
+            color: #bbb;
         }
 
         label {
@@ -253,10 +259,6 @@
             background: #5a4a12;
         }
 
-        .badge-finished {
-            background: #333;
-        }
-
         .sync-note {
             color: #999;
             font-size: 12px;
@@ -419,6 +421,49 @@
                 class="message"
             ></div>
 
+            <div class="toolbar">
+                <button
+                    id="adminLogsToggle"
+                    class="secondary"
+                    type="button"
+                    onclick="toggleAdminLogs()"
+                >
+                    VIEW ADMIN LOGS
+                </button>
+            </div>
+
+        </div>
+
+
+        <div
+            id="adminLogsPanel"
+            class="card hidden"
+            aria-live="polite"
+        >
+            <div class="match-header">
+                <h2>🧾 Admin Logs</h2>
+                <div class="toolbar">
+                    <button
+                        class="secondary"
+                        type="button"
+                        onclick="loadAdminLogs()"
+                    >
+                        REFRESH
+                    </button>
+                    <button
+                        class="secondary"
+                        type="button"
+                        onclick="toggleAdminLogs(false)"
+                    >
+                        CLOSE
+                    </button>
+                </div>
+            </div>
+
+            <div id="adminLogsMessage" class="message"></div>
+            <div id="adminLogsList">
+                <div class="empty">Open Admin Logs to load audit history.</div>
+            </div>
         </div>
 
 
@@ -457,24 +502,6 @@
             </div>
 
         </div>
-
-
-        <!-- =================================================
-             UPCOMING MATCHES
-             ================================================= -->
-
-        <details class="card" id="finishedSection">
-
-            <summary class="finished-summary">
-                ✅ Finished Matches
-                (<span id="finishedCount">0</span>)
-            </summary>
-
-            <div id="finishedMatches">
-                Loading...
-            </div>
-
-        </details>
 
 
         <div class="card">
@@ -723,6 +750,127 @@ function showAdmin() {
             60000
         );
 
+}
+
+
+/* =========================================================
+   ADMIN AUDIT LOGS
+   ========================================================= */
+
+async function toggleAdminLogs(forceOpen) {
+    const panel = document.getElementById("adminLogsPanel");
+    const button = document.getElementById("adminLogsToggle");
+
+    const shouldOpen =
+        typeof forceOpen === "boolean"
+            ? forceOpen
+            : panel.classList.contains("hidden");
+
+    panel.classList.toggle("hidden", !shouldOpen);
+    button.textContent = shouldOpen
+        ? "HIDE ADMIN LOGS"
+        : "VIEW ADMIN LOGS";
+
+    if (shouldOpen) {
+        await loadAdminLogs();
+    }
+}
+
+async function loadAdminLogs() {
+    const message = document.getElementById("adminLogsMessage");
+    const list = document.getElementById("adminLogsList");
+
+    message.textContent = "Loading audit history...";
+    list.innerHTML = "";
+
+    try {
+        const { data, error: sessionError } =
+            await client.auth.getSession();
+
+        if (sessionError) {
+            throw sessionError;
+        }
+
+        const session = data?.session;
+
+        if (!session?.access_token) {
+            throw new Error("Your session has expired. Please sign in again.");
+        }
+
+        const response = await fetch("/api/admin/audit", {
+            method: "GET",
+            cache: "no-store",
+            headers: {
+                "Authorization": `Bearer ${session.access_token}`,
+                "Accept": "application/json"
+            }
+        });
+
+        const payload = await response.json().catch(() => null);
+
+        if (!response.ok) {
+            throw new Error(
+                payload?.error ||
+                (response.status === 403
+                    ? "Owner access is required to view audit logs."
+                    : `Unable to load audit logs (HTTP ${response.status}).`)
+            );
+        }
+
+        if (!Array.isArray(payload)) {
+            throw new Error(payload?.error || "The audit log response was invalid.");
+        }
+
+        message.textContent = `${payload.length} audit entries.`;
+
+        if (!payload.length) {
+            list.innerHTML = '<div class="empty">No audit entries have been recorded yet.</div>';
+            return;
+        }
+
+        list.innerHTML = payload.map(entry => {
+            const actor =
+                entry.actor?.display_name ||
+                entry.actor?.email ||
+                entry.actor_type ||
+                "Unknown actor";
+
+            const metadata = [
+                entry.created_at ? formatDate(entry.created_at) : "",
+                `Actor: ${actor}`,
+                entry.table_name ? `Table: ${entry.table_name}` : "",
+                entry.record_id ? `Record: ${entry.record_id}` : ""
+            ].filter(Boolean).join(" · ");
+
+            const details = [];
+            if (entry.old_data !== null && entry.old_data !== undefined) {
+                details.push(`Before:\n${JSON.stringify(entry.old_data, null, 2)}`);
+            }
+            if (entry.new_data !== null && entry.new_data !== undefined) {
+                details.push(`After:\n${JSON.stringify(entry.new_data, null, 2)}`);
+            }
+
+            return `
+                <article class="audit-entry">
+                    <div class="match-title">
+                        ${escapeHtml(entry.action || "AUDIT EVENT")}
+                        ${entry.table_name ? ` · ${escapeHtml(entry.table_name)}` : ""}
+                    </div>
+                    <div class="match-meta">${escapeHtml(metadata)}</div>
+                    ${details.length
+                        ? `<details class="audit-details">
+                              <summary>View record details</summary>
+                              <pre>${escapeHtml(details.join("\n\n"))}</pre>
+                           </details>`
+                        : ""}
+                </article>
+            `;
+        }).join("");
+
+    } catch (error) {
+        message.textContent = error.message || "Unable to load audit history.";
+        list.innerHTML = '<div class="empty">Audit history could not be loaded.</div>';
+    }
 }
 
 
@@ -1760,12 +1908,6 @@ async function loadMatches() {
         );
 
 
-    const finishedContainer =
-        document.getElementById(
-            "finishedMatches"
-        );
-
-
     const upcomingContainer =
         document.getElementById(
             "upcomingMatches"
@@ -1786,15 +1928,6 @@ async function loadMatches() {
         unknownContainer.innerHTML =
             "Loading...";
     }
-
-    if (
-        finishedContainer &&
-        !finishedContainer.dataset.loaded
-    ) {
-        finishedContainer.innerHTML =
-            "Loading...";
-    }
-
 
     if (
         !upcomingContainer.dataset.loaded
@@ -2235,14 +2368,6 @@ async function loadMatches() {
         );
 
 
-    const finishedMatches =
-        currentMatches.filter(
-            match =>
-                match.currentStatus ===
-                "Finished"
-        );
-
-
     /*
      * Counters use exact same arrays.
      */
@@ -2267,17 +2392,20 @@ async function loadMatches() {
                 : "SportScore unavailable — status calculated from schedule time.";
 
 
+        const activeMatchCount =
+            liveMatches.length +
+            upcomingMatches.length +
+            unknownMatches.length;
+
         syncMessage.innerHTML =
             `Current schedule: ` +
-            `<strong>${currentMatches.length}</strong> matches.` +
+            `<strong>${activeMatchCount}</strong> active matches.` +
 
             `<br>🔴 Live: ${liveMatches.length}` +
 
             ` &nbsp;·&nbsp; 📅 Upcoming: ${upcomingMatches.length}` +
 
-            ` &nbsp;·&nbsp; ✅ Finished: ${finishedMatches.length}` +
-
-            ` &nbsp;·&nbsp; ❓ Unknown: ${unknownMatches.length}` +
+            ` &nbsp;·&nbsp; ❓ Needs review: ${unknownMatches.length}` +
 
             `<br><small>${sourceLabel}</small>`;
 
@@ -2307,31 +2435,6 @@ async function loadMatches() {
         );
 
         unknownContainer.dataset.loaded =
-            "true";
-    }
-
-
-    /*
-     * Keep finished fixtures out of the way by default.
-     * The <details> section is collapsed on page load, while the
-     * records remain available for historical stream maintenance.
-     */
-    const finishedCountLabel =
-        document.getElementById("finishedCount");
-
-    if (finishedCountLabel) {
-        finishedCountLabel.textContent =
-            String(finishedMatches.length);
-    }
-
-    if (finishedContainer) {
-        renderMatchList(
-            finishedContainer,
-            finishedMatches,
-            "finished"
-        );
-
-        finishedContainer.dataset.loaded =
             "true";
     }
 
@@ -2491,9 +2594,7 @@ function renderMatchList(
                                 ? "badge-live"
                                 : type === "unknown"
                                     ? "badge-unknown"
-                                    : type === "finished"
-                                        ? "badge-finished"
-                                        : "badge-upcoming"
+                                    : "badge-upcoming"
                         }"
                     >
 
