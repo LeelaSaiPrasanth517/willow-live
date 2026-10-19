@@ -798,6 +798,9 @@ function normalizeDateFixture(rawFixture) {
     time: firstDefined(
       fixture?.time, fixture?.start_time, fixture?.startTime,
       fixture?.utc_start_time, fixture?.start_time_utc,
+      fixture?.match_time, fixture?.matchTime,
+      fixture?.scheduled_at, fixture?.scheduledAt,
+      fixture?.kickoff, fixture?.kickoff_time,
       fixture?.date_time, fixture?.dateTime, fixture?.date,
       fixture?.start
     ) || null,
@@ -1035,6 +1038,7 @@ async function handleCricketAPI() {
               null;
 
             let statusSource =
+              match._feed_source ||
               "sportscore-match-list";
 
             let battingTeam =
