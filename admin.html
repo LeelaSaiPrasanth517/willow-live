@@ -2670,6 +2670,48 @@ if (
    LOAD STREAMS
    ========================================================= */
 
+function renderStreamEntry(stream, matchId) {
+    const safeStreamId = escapeHtml(stream.id);
+    const safeMatchId = escapeHtml(matchId);
+    const editableByOwner = isOwner();
+
+    let html = '<div class="stream-row">';
+    html += '<select id="lang-' + safeStreamId + '"' + (editableByOwner ? '' : ' disabled') + '>';
+    html += languageOption("English", stream.language);
+    html += languageOption("Hindi", stream.language);
+    html += languageOption("Telugu", stream.language);
+    html += languageOption("Tamil", stream.language);
+    html += languageOption("Malayalam", stream.language);
+    html += languageOption("Kannada", stream.language);
+    html += languageOption("Other", stream.language);
+    html += '</select>';
+
+    html += '<input id="url-' + safeStreamId + '" type="url" value="' +
+        escapeHtml(stream.embed_url) + '" placeholder="https://" ' +
+        (editableByOwner ? '' : 'readonly') + '>';
+
+    html += '<input id="name-' + safeStreamId + '" type="text" value="' +
+        escapeHtml(stream.stream_name) + '" placeholder="Stream name" ' +
+        (editableByOwner ? '' : 'readonly') + '>';
+
+    if (editableByOwner) {
+        html += '<div class="toolbar" style="margin:0;">' +
+            '<button class="secondary" data-stream-id="' + safeStreamId + '" onclick="updateStream(this.dataset.streamId)">SAVE</button>' +
+            '<button class="danger" data-stream-id="' + safeStreamId + '" data-match-id="' + safeMatchId + '" onclick="deleteStream(this.dataset.streamId, this.dataset.matchId)">DELETE</button>' +
+            '</div>';
+    } else {
+        html += '<div class="note" style="font-size:12px;">Saved stream · admin accounts cannot edit or delete existing links.</div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+
+/* =========================================================
+   LOAD STREAMS
+   ========================================================= */
+
 async function loadStreams(
     matchId
 ) {
@@ -2768,106 +2810,7 @@ async function loadStreams(
 
     container.innerHTML =
         data
-
-            .map(
-                stream => `
-
-                    <div class="stream-row">
-
-                        <select
-                            id="lang-${stream.id}"
-                        >
-
-                            ${languageOption(
-                                "English",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Hindi",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Telugu",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Tamil",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Malayalam",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Kannada",
-                                stream.language
-                            )}
-
-                            ${languageOption(
-                                "Other",
-                                stream.language
-                            )}
-
-                        </select>
-
-
-                        <input
-                            id="url-${stream.id}"
-                            type="url"
-                            value="${escapeHtml(
-                                stream.embed_url
-                            )}"
-                            placeholder="https://..."
-                        >
-
-
-                        <input
-                            id="name-${stream.id}"
-                            type="text"
-                            value="${escapeHtml(
-                                stream.stream_name
-                            )}"
-                            placeholder="Stream name"
-                        >
-
-
-                        <div
-                            class="toolbar"
-                            style="margin:0;"
-                        >
-
-                            <button
-                                class="secondary"
-                                onclick="updateStream(
-                                    '${stream.id}'
-                                )"
-                            >
-                                SAVE
-                            </button>
-
-
-                            <button
-                                class="danger"
-                                onclick="deleteStream(
-                                    '${stream.id}',
-                                    '${matchId}'
-                                )"
-                            >
-                                DELETE
-                            </button>
-
-                        </div>
-
-                    </div>
-
-                `
-            )
-
+            .map(stream => renderStreamEntry(stream, matchId))
             .join("");
 
 }
@@ -2880,6 +2823,10 @@ async function loadStreams(
 function addStreamForm(
     matchId
 ) {
+    if (!["owner", "admin"].includes(currentAdminRole)) {
+        alert("Please sign in with a Cricketive administrator account.");
+        return;
+    }
 
     if (
         !isValidUuid(matchId)
@@ -2985,6 +2932,12 @@ function addStreamForm(
 async function createStream(
     matchId
 ) {
+    if (!["owner", "admin"].includes(currentAdminRole)) {
+        alert("Please sign in with a Cricketive administrator account.");
+        return;
+    }
+
+
 
     const language =
         document
@@ -3085,6 +3038,12 @@ async function createStream(
 async function updateStream(
     streamId
 ) {
+    if (!isOwner()) {
+        alert("Only the owner can edit existing stream links.");
+        return;
+    }
+
+
 
     const language =
         document
@@ -3164,6 +3123,12 @@ async function deleteStream(
     streamId,
     matchId
 ) {
+    if (!isOwner()) {
+        alert("Only the owner can delete existing stream links.");
+        return;
+    }
+
+
 
     if (
         !confirm(
