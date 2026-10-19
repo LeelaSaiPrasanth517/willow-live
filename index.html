@@ -1313,7 +1313,8 @@ async function loadMatches() {
 
                         matchStatus:
                             canonicalStatus(
-                                source.status
+                                source.status,
+                                source.time
                             )
 
                     };
@@ -2435,26 +2436,27 @@ function formatScore(
    NORMALIZE STATUS
 ========================================================= */
 
-function canonicalStatus(status) {
-    /*
-     * FIX: this used to collapse anything that wasn't exactly "Live"
-     * or "Finished" into "Upcoming" — including "Unknown", the status
-     * the Worker now returns for a match whose scheduled time has
-     * passed but SportScore never gave a definitive Live/Finished
-     * signal. That collapse is exactly how matches like "Middlesex vs
-     * Kent" ended up showing "UPCOMING" hours after they'd started.
-     *
-     * "Unknown" must pass through as itself. Downstream, the
-     * Live/Upcoming filters only match those two exact strings, so an
-     * "Unknown" match is correctly excluded from both sections rather
-     * than being mislabeled — the same way a "Finished" match already
-     * is. Nothing else needs to change for the public homepage to be
-     * safe.
-     */
+function canonicalStatus(status, matchTime) {
+    // Explicit provider states always win.
     if (status === "Live") return "Live";
     if (status === "Finished") return "Finished";
-    if (status === "Unknown") return "Unknown";
-    return "Upcoming";
+    if (status === "Upcoming") return "Upcoming";
+
+    // The Worker may receive a provider status it does not recognize.
+    // Show it as Upcoming only when the scheduled start is still ahead;
+    // don't promote past/ambiguous fixtures into the public upcoming list.
+    const scheduledAt = matchTime
+        ? new Date(matchTime).getTime()
+        : Number.NaN;
+
+    if (
+        Number.isFinite(scheduledAt) &&
+        scheduledAt > Date.now()
+    ) {
+        return "Upcoming";
+    }
+
+    return "Unknown";
 }
 
 
