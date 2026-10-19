@@ -1570,9 +1570,24 @@ function normalizeSportScoreStatus(
   }
 
   /*
-   * Unknown provider state stays Unknown.
-   * Never guess based on matchTime.
+   * If SportScore's status is unfamiliar but the fixture time is
+   * clearly in the future, treat it as Upcoming. SportScore's widget
+   * sometimes supplies schedule text/statuses outside the known list.
+   *
+   * Do not infer Finished from an old time: past ambiguous fixtures
+   * remain Unknown unless SportScore explicitly marks them complete.
    */
+  const scheduledAt = matchTime
+    ? new Date(matchTime).getTime()
+    : Number.NaN;
+
+  if (
+    Number.isFinite(scheduledAt) &&
+    scheduledAt > Date.now()
+  ) {
+    return "Upcoming";
+  }
+
   return "Unknown";
 }
 
