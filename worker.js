@@ -90,7 +90,7 @@ function isProviderUpcomingStatus(status, statusText = "") {
 }
 
 const MULTI_DAY_MATCH_PATTERN =
-  /\btest\b|county championship|sheffield shield|ranji trophy|duleep trophy|first[- ]class|four[- ]day|three[- ]day|county cup/i;
+  /\btest\b|the ashes|presidents? trophy|plunket shield|west indies championship|quaid[- ]e[- ]azam trophy|county championship|sheffield shield|ranji trophy|duleep trophy|first[- ]class|four[- ]day|three[- ]day|county cup/i;
 
 function maxPlausibleMatchDurationMs(competition, title) {
   const text = String(competition || "") + " " + String(title || "");
@@ -1703,6 +1703,20 @@ async function handleLiveScores(requestUrl) {
 
               }
 
+              const detailStatus =
+                normalizeSportScoreStatus(
+                  details.status,
+                  details.status_text,
+                  details.time || details.start_time || match.time,
+                  match.competition
+                );
+
+              // This endpoint feeds the "Live Score" panel on stream pages.
+              // Do not show a stale scoreboard if the detail endpoint says
+              // the fixture is finished or cannot confirm that it is live.
+              if (detailStatus !== "Live") {
+                return;
+              }
 
               const key =
                 normalizeUrl(
