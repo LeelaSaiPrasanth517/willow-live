@@ -1272,7 +1272,8 @@ async function loadMatches() {
                             stored,
                             team1,
                             team2,
-                            source.url
+                            source.url,
+                            source.time
                         );
 
 
@@ -1337,7 +1338,9 @@ async function loadMatches() {
                 const key =
                     makeSimpleMatchKey(
                         item.team1,
-                        item.team2
+                        item.team2,
+                        item.source.url,
+                        item.source.time
                     );
 
 
@@ -1560,100 +1563,65 @@ function findStoredMatch(
     stored,
     team1,
     team2,
-    sportScoreUrl
+    sportScoreUrl,
+    startTime
 ) {
-
-    /*
-     * First try SportScore URL.
-     */
-
-    if (
-        sportScoreUrl
-    ) {
-
-        const normalizedUrl =
-            normalizeUrl(
-                sportScoreUrl
-            );
-
-
-        const exact =
-            stored.find(
-                match =>
-                    normalizeUrl(
-                        match.sportscore_url
-                    ) ===
-                    normalizedUrl
-            );
-
-
-        if (
-            exact
-        ) {
-
-            return exact;
-
-        }
-
+    // Prefer an exact provider URL.
+    if (sportScoreUrl) {
+        const normalizedUrl = normalizeUrl(sportScoreUrl);
+        const exact = stored.find(match =>
+            match.sportscore_url &&
+            normalizeUrl(match.sportscore_url) === normalizedUrl
+        );
+        if (exact) return exact;
     }
 
+    const a = normalizeName(team1);
+    const b = normalizeName(team2);
+    const candidates = stored.filter(match => {
+        const m1 = normalizeName(match.team1);
+        const m2 = normalizeName(match.team2);
+        return (m1 === a && m2 === b) || (m1 === b && m2 === a);
+    });
 
-    /*
-     * Then try team names.
-     *
-     * No timestamp comparison.
-     */
+    if (!candidates.length) return null;
 
-    const a =
-        normalizeName(
-            team1
-        );
+    const targetTime = startTime
+        ? new Date(startTime).getTime()
+        : Number.NaN;
 
+    if (!Number.isFinite(targetTime)) {
+        // Ambiguous team-only matches must not inherit another fixture's stream.
+        return candidates.length === 1 ? candidates[0] : null;
+    }
 
-    const b =
-        normalizeName(
-            team2
-        );
+    const timedCandidates = candidates
+        .map(match => ({
+            match,
+            time: new Date(match.start_time || match.match_time || "").getTime()
+        }))
+        .filter(candidate => Number.isFinite(candidate.time))
+        .map(candidate => ({
+            match: candidate.match,
+            difference: Math.abs(candidate.time - targetTime)
+        }))
+        .sort((left, right) => left.difference - right.difference);
 
+    if (!timedCandidates.length) {
+        return candidates.length === 1 ? candidates[0] : null;
+    }
 
-    return (
-        stored.find(
-            match => {
+    const closest = timedCandidates[0];
 
-                const m1 =
-                    normalizeName(
-                        match.team1
-                    );
+    // Multiple games between the same teams need a close time match.
+    if (
+        candidates.length > 1 &&
+        closest.difference > 6 * 60 * 60 * 1000
+    ) {
+        return null;
+    }
 
-
-                const m2 =
-                    normalizeName(
-                        match.team2
-                    );
-
-
-                return (
-
-                    (
-                        m1 === a &&
-                        m2 === b
-                    )
-
-                    ||
-
-                    (
-                        m1 === b &&
-                        m2 === a
-                    )
-
-                );
-
-            }
-        )
-
-        || null
-    );
-
+    return closest.match;
 }
 
 
@@ -1663,26 +1631,34 @@ function findStoredMatch(
 
 function makeSimpleMatchKey(
     team1,
-    team2
+    team2,
+    sportScoreUrl,
+    startTime
 ) {
+    if (!team1 || !team2) return "";
 
-    if (
-        !team1 ||
-        !team2
-    ) {
-
-        return "";
-
+    // Provider URL is the best identity for an individual fixture.
+    if (sportScoreUrl) {
+        const normalizedUrl = normalizeUrl(sportScoreUrl);
+        if (normalizedUrl) {
+            return `url:${normalizedUrl.toLowerCase()}`;
+        }
     }
 
-
-    return [
+    const teams = [
         normalizeName(team1),
         normalizeName(team2)
-    ]
-        .sort()
-        .join("|");
+    ].sort().join("|");
 
+    const parsedTime = startTime
+        ? new Date(startTime).getTime()
+        : Number.NaN;
+
+    if (Number.isFinite(parsedTime)) {
+        return `fixture:${teams}|${new Date(parsedTime).toISOString()}`;
+    }
+
+    return `teams:${teams}`;
 }
 
 
@@ -2437,28 +2413,33 @@ function formatScore(
 ========================================================= */
 
 function canonicalStatus(status, matchTime) {
-    // Explicit provider states always win.
+    // Explicit in-play/completed results take priority over the schedule.
     if (status === "Live") return "Live";
     if (status === "Finished") return "Finished";
-    if (status === "Upcoming") return "Upcoming";
 
-    // The Worker may receive a provider status it does not recognize.
-    // Show it as Upcoming only when the scheduled start is still ahead;
-    // don't promote past/ambiguous fixtures into the public upcoming list.
     const scheduledAt = matchTime
         ? new Date(matchTime).getTime()
         : Number.NaN;
 
-    if (
-        Number.isFinite(scheduledAt) &&
-        scheduledAt > Date.now()
-    ) {
+    const hasValidStartTime = Number.isFinite(scheduledAt);
+    const startHasPassed =
+        hasValidStartTime &&
+        scheduledAt <= Date.now();
+
+    // SportScore can retain a scheduled status after the actual start.
+    // Never publish such a fixture as Upcoming once its start time has passed.
+    if (status === "Upcoming") {
+        return startHasPassed ? "Unknown" : "Upcoming";
+    }
+
+    // Unknown provider status + future schedule is likely a valid fixture.
+    if (hasValidStartTime && !startHasPassed) {
         return "Upcoming";
     }
 
+    // Do not guess that a past match is live or finished.
     return "Unknown";
 }
-
 
 function normalizeStatus(
     status
@@ -2544,51 +2525,18 @@ function normalizeName(
    NORMALIZE URL
 ========================================================= */
 
-function normalizeUrl(
-    value
-) {
+function normalizeUrl(value) {
+    if (!value) return "";
 
-    if (!value) {
-
-        return "";
-
+    try {
+        const url = new URL(String(value).trim(), "https://sportscore.com");
+        url.search = "";
+        url.hash = "";
+        url.pathname = url.pathname.replace(/\/+$/, "");
+        return url.origin + url.pathname;
+    } catch (_) {
+        return String(value).trim().replace(/\/+$/, "");
     }
-
-
-    const url =
-        String(
-            value
-        ).trim();
-
-
-    if (
-        url.startsWith(
-            "http"
-        )
-    ) {
-
-        return url.replace(
-            /\/+$/,
-            ""
-        );
-
-    }
-
-
-    return (
-        "https://sportscore.com" +
-
-        (
-            url.startsWith("/")
-                ? url
-                : `/${url}`
-        )
-
-    ).replace(
-        /\/+$/,
-        ""
-    );
-
 }
 
 
